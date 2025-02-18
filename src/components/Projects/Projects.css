@@ -1,0 +1,31 @@
+.project-list {
+    margin-top: 20px;
+  }
+  
+  .project-card {
+    text-align: center;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease-in-out;
+    background: white;
+    padding: 15px;
+  }
+  
+  .project-card:hover {
+    transform: scale(1.05);
+  }
+  
+  .add-project {
+    margin-bottom: 20px;
+    display: block;
+    width: fit-content;
+    padding: 10px 15px;
+    background: #1890ff;
+    color: white;
+    border-radius: 5px;
+  }
+  
+  .add-project:hover {
+    background: #1072d0;
+  }
+  
