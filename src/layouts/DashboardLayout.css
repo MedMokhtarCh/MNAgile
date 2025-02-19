@@ -14,8 +14,8 @@
 
 
 .content {
-    padding: 80px 20px 20px; /* Ajoutez une marge en haut pour éviter que le contenu soit caché sous le header */
+    padding: 80px 20px 20px; 
     background: #fff;
     flex-grow: 1;
-    overflow-y: auto;
+   
 }

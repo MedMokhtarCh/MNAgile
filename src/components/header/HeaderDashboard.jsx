@@ -1,6 +1,6 @@
 import { Input, Avatar, Badge } from "antd";
 import { BellOutlined, UserOutlined } from "@ant-design/icons";
-import "./Header.css";
+import "./HeaderDashboard.css";
 
 const Header = () => {
   return (
