@@ -2,7 +2,7 @@ import { Input, Avatar, Badge } from "antd";
 import { BellOutlined, UserOutlined } from "@ant-design/icons";
 import "./HeaderDashboard.css";
 
-const Header = () => {
+const HeaderDahboard = () => {
   return (
     <header className="header">
       <Input placeholder="Rechercher" className="search" />
@@ -16,4 +16,5 @@ const Header = () => {
   );
 };
 
-export default Header;
+export default HeaderDahboard;
+

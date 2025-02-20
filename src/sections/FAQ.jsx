@@ -64,8 +64,6 @@ const FAQ = () => {
         <p>Lancez-vous dès maintenant</p>
         <p>et profitez de services exceptionnels !</p>
         <button className="cta-button">Commencer</button>
-        
-      
         <div className="cta-deco one"></div>
         <div className="cta-deco two"></div>
         <div className="cta-line top"></div>

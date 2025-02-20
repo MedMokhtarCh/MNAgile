@@ -1,9 +1,12 @@
 :root {
-  --primary-color: #0066FF;
-  --secondary-color: #00A3FF;
-  --text-color: #333333;
-  --background-color: #FFFFFF;
-  --light-gray: #F5F5F5;
-  --border-radius: 8px;
-  --transition: all 0.3s ease;
+  --primary-color: #2196F3;
+  --secondary-color: #1976D2;
+  --background-color: #f8f9ff;
+  --text-color: #333;
+  --heading-color: #2196F3;
+  --button-bg-color: #2196F3;
+  --button-hover-bg-color: #1976D2;
+  --button-text-color: white;
+  --border-radius: 5px;
+  --transition: all 0.3s ease-in-out;
 }

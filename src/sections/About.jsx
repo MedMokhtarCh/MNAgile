@@ -4,8 +4,7 @@ import logo from "../assets/logo.png";
 
 const About = () => {
   return (
-  
-    <section  id="About" className="about-section">
+    <section id="about" className="about-section">
       <div className="about-container">
         <div className="logo-container-about">
           <div className="logo-wrapper">

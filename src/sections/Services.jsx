@@ -1,4 +1,3 @@
-
 import React from "react";
 import { AiOutlineProject, AiOutlineUnorderedList, AiOutlineFundProjectionScreen, AiOutlineFileText, AiOutlineThunderbolt, AiOutlineUser } from "react-icons/ai";
 import "../styles/services.css";
@@ -50,10 +49,7 @@ const Services = () => {
   ];
 
   return (
-    <section id="Services"className="services-section">
-      
-    
-    
+    <section id="services" className="services-section">
       <div className="wave-background">
         <div className="services-container">
           <h2>Services</h2>

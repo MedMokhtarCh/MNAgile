@@ -26,7 +26,7 @@ const Features = () => {
 
   return (
     <div className="features-container">
-      <section id="Features" className="features-header">
+      <section id="features" className="features-header">
         <div className="blue-shapes"></div>
         <motion.h1 initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           Fonctionnalités Clés - Pourquoi choisir AxiaAgile ?

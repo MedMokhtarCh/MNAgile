@@ -1,128 +1,150 @@
+// App.js
 import React, { useState } from 'react';
-import { DndContext, closestCenter, useSensors, useSensor, PointerSensor } from '@dnd-kit/core';
+import { 
+  Box, 
+  Typography, 
+  IconButton, 
+  Paper,
+  Card,
+  CardContent,
+  Avatar,
+  AvatarGroup,
+  Menu,
+  MenuItem,
+ 
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import AddIcon from '@mui/icons-material/Add';
+import { DndContext, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { Card, Typography } from 'antd';
-import { Paper, Grid } from '@mui/material';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-const { Title } = Typography;
 
-// Données initiales pour les colonnes Kanban
-const initialColumns = {
-  'column-1': {
-    id: 'column-1',
-    title: 'To Do',
-    items: ['task-1', 'task-2'],
+
+// Styled Components
+const KanbanColumn = styled(Paper)(({ theme }) => ({
+  backgroundColor: '#f5f5f5',
+  padding: theme.spacing(2),
+  width: 300,
+  minHeight: 500,
+  margin: theme.spacing(1),
+  borderRadius: 8,
+}));
+
+const ColumnHeader = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: theme.spacing(2),
+}));
+
+const TaskCard = styled(Card)(({ theme }) => ({
+  marginBottom: theme.spacing(2),
+  '&:hover': {
+    boxShadow: theme.shadows[3],
   },
-  'column-2': {
-    id: 'column-2',
-    title: 'In Progress',
-    items: ['task-3'],
-  },
-  'column-3': {
-    id: 'column-3',
-    title: 'Done',
-    items: ['task-4', 'task-5'],
-  },
+}));
+
+const initialData = {
+  todo: [
+    { id: 'task-1', title: 'Hero section', description: 'Update hero section for mobile responsiveness.', users: ['#1E90FF', '#FFA500'] },
+    { id: 'task-2', title: 'Typography change', description: 'Implement new typography system.', users: ['#FF69B4'] }
+  ],
+  inProgress: [
+    { id: 'task-3', title: 'Implement design scraps', description: 'Convert Figma designs into React components.', users: ['#1E90FF', '#32CD32'] },
+    { id: 'task-4', title: 'Fix bugs in CSS code', description: 'Address reported CSS issues in production.', users: ['#FF69B4', '#FFA500'] }
+  ]
 };
 
-const initialTasks = {
-  'task-1': { id: 'task-1', content: 'Create a design system for a hero section' },
-  'task-2': { id: 'task-2', content: 'Implement design screens' },
-  'task-3': { id: 'task-3', content: 'Fix bugs in the CSS code' },
-  'task-4': { id: 'task-4', content: 'Proofread final text' },
-  'task-5': { id: 'task-5', content: 'Responsive design' },
-};
+function SortableTask({ task }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: task.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
 
-const Kanban = () => {
-  const [columns, setColumns] = useState(initialColumns);
-  const [tasks, setTasks] = useState(initialTasks);
-
-  // Configurer les capteurs pour le glisser-déposer
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // Délai d'activation pour éviter des déclenchements accidentels
-      },
-    })
+  return (
+    <TaskCard ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <CardContent>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontSize: '0.9rem', fontWeight: 500 }}>{task.title}</Typography>
+          <IconButton size="small"><MoreHorizIcon fontSize="small" /></IconButton>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: '0.8rem' }}>{task.description}</Typography>
+        <AvatarGroup max={3} sx={{ justifyContent: 'flex-start' }}>
+          {task.users.map((color, index) => (
+            <Avatar key={index} sx={{ width: 24, height: 24, bgcolor: color, fontSize: '0.8rem' }} />
+          ))}
+        </AvatarGroup>
+      </CardContent>
+    </TaskCard>
   );
+}
 
-  // Gérer la fin d'un glisser-déposer
+function Kanban() {
+  const [todoTasks, setTodoTasks] = useState(initialData.todo);
+  const [inProgressTasks, setInProgressTasks] = useState(initialData.inProgress);
+  const [anchorEl, setAnchorEl] = useState(null);
+
   const handleDragEnd = (event) => {
     const { active, over } = event;
-
-    if (active.id === over.id) return; // Aucun changement si l'élément est déposé au même endroit
-
-    // Trouver les colonnes source et destination
-    const sourceColumn = Object.values(columns).find((col) => col.items.includes(active.id));
-    const destinationColumn = Object.values(columns).find((col) => col.items.includes(over.id));
-
-    if (!sourceColumn || !destinationColumn) return;
-
-    // Déplacer l'élément dans la même colonne
-    if (sourceColumn.id === destinationColumn.id) {
-      const newItems = arrayMove(sourceColumn.items, sourceColumn.items.indexOf(active.id), sourceColumn.items.indexOf(over.id));
-
-      setColumns({
-        ...columns,
-        [sourceColumn.id]: {
-          ...sourceColumn,
-          items: newItems,
-        },
-      });
-    } else {
-      // Déplacer l'élément entre deux colonnes
-      const sourceItems = [...sourceColumn.items];
-      const destinationItems = [...destinationColumn.items];
-
-      sourceItems.splice(sourceColumn.items.indexOf(active.id), 1);
-      destinationItems.splice(destinationColumn.items.indexOf(over.id), 0, active.id);
-
-      setColumns({
-        ...columns,
-        [sourceColumn.id]: {
-          ...sourceColumn,
-          items: sourceItems,
-        },
-        [destinationColumn.id]: {
-          ...destinationColumn,
-          items: destinationItems,
-        },
+    if (active.id !== over.id) {
+      setTodoTasks((tasks) => {
+        const oldIndex = tasks.findIndex(task => task.id === active.id);
+        const newIndex = tasks.findIndex(task => task.id === over.id);
+        return arrayMove(tasks, oldIndex, newIndex);
       });
     }
   };
 
+  const handleMenuClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <Grid container spacing={2} style={{ padding: '20px', height: '100vh' }}>
-        {Object.values(columns).map((column) => (
-          <Grid item xs={4} key={column.id} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Paper elevation={3} style={{ padding: '16px', background: '#f0f2f5', flex: 1, display: 'flex', flexDirection: 'column' }}>
-              <Title level={4} style={{ marginBottom: '16px' }}>{column.title}</Title>
-              <SortableContext items={column.items} strategy={verticalListSortingStrategy}>
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {column.items.map((taskId) => {
-                    const task = tasks[taskId];
-                    return (
-                      <Card
-                        key={taskId}
-                        id={taskId}
-                        style={{ marginBottom: '8px', cursor: 'grab' }}
-                        {...{
-                          'data-draggable': true,
-                        }}
-                      >
-                        <Typography.Text>{task.content}</Typography.Text>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </Paper>
-          </Grid>
-        ))}
-      </Grid>
-    </DndContext>
+    <Box sx={{ display: 'flex', p: 3, backgroundColor: '#fff', minHeight: '100vh' }}>
+      <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <SortableContext items={todoTasks} strategy={verticalListSortingStrategy}>
+          <KanbanColumn>
+            <ColumnHeader>
+              <Typography variant="h6" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>To do</Typography>
+              <IconButton size="small" onClick={handleMenuClick}><AddIcon fontSize="small" /></IconButton>
+            </ColumnHeader>
+            {todoTasks.map(task => <SortableTask key={task.id} task={task} />)}
+          </KanbanColumn>
+        </SortableContext>
+
+        <SortableContext items={inProgressTasks} strategy={verticalListSortingStrategy}>
+          <KanbanColumn>
+            <ColumnHeader>
+              <Typography variant="h6" sx={{ fontSize: '0.9rem', fontWeight: 600 }}>In Progress</Typography>
+              <IconButton size="small" onClick={handleMenuClick}><AddIcon fontSize="small" /></IconButton>
+            </ColumnHeader>
+            {inProgressTasks.map(task => <SortableTask key={task.id} task={task} />)}
+          </KanbanColumn>
+        </SortableContext>
+      </DndContext>
+
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+        <MenuItem onClick={handleMenuClose}>Add Task</MenuItem>
+        <MenuItem onClick={handleMenuClose}>Add Column</MenuItem>
+      
+      </Menu>
+    
+    
+    </Box>
+    
+   
+   
   );
-};
+
+ 
+}
 
 export default Kanban;

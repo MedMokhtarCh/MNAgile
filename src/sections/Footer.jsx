@@ -11,11 +11,9 @@ const Footer = () => {
             <span className="logo-text">Axia-Agile</span>
           </a>
         </div>
-        
         <div className="footer-copyright">
           <p>© 2025 All rights reserved</p>
         </div>
-
         <div className="footer-social">
           <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="social-link">
             <FaFacebookF />

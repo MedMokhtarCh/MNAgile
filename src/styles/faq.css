@@ -1,9 +1,7 @@
-
 .faq-section {
   padding: 80px 0;
   background-color: white;
 }
-
 
 .faq-container {
   max-width: 800px;
@@ -13,11 +11,10 @@
 
 .faq-container h2 {
   text-align: center;
-  color: #333;
+  color: black;
   font-size: 32px;
   margin-bottom: 40px;
 }
-
 
 .faq-list {
   display: flex;
@@ -39,17 +36,15 @@
   border: none;
   text-align: left;
   font-size: 16px;
-  color: #2196F3;
+  color: var(--primary-color);
   cursor: pointer;
 }
 
-/* Icône + / - */
 .faq-icon {
   font-size: 24px;
-  color: #2196F3;
+  color: var(--primary-color);
 }
 
-/* Réponse */
 .faq-answer {
   max-height: 0;
   overflow: hidden;
@@ -67,9 +62,8 @@
   line-height: 1.6;
 }
 
-
 .cta-container {
-  background-color: #f8f9ff;
+  background-color: var(--background-color);
   padding: 60px 20px;
   text-align: center;
   position: relative;
@@ -77,12 +71,11 @@
   border-radius: 10px;
 }
 
-
 .cta-line {
   position: absolute;
   width: 120px;
   height: 5px;
-  background-color: #2196F3;
+  background-color: var(--primary-color);
   border-radius: 50px;
   opacity: 0.8;
 }
@@ -99,12 +92,11 @@
   transform: rotate(20deg);
 }
 
-
 .cta-deco {
   position: absolute;
   width: 50px;
   height: 50px;
-  background-color: #2196F3;
+  background-color: var(--primary-color);
   border-radius: 50%;
   opacity: 0.3;
 }
@@ -119,9 +111,8 @@
   right: 15%;
 }
 
-
 .cta-container h3 {
-  color: #333;
+  color: var(--heading-color);
   font-size: 28px;
   margin-bottom: 20px;
   position: relative;
@@ -134,11 +125,10 @@
   position: relative;
 }
 
-
 .cta-button {
   margin-top: 30px;
   padding: 15px 40px;
-  background-color: #2196F3;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 5px;
@@ -149,23 +139,22 @@
 }
 
 .cta-button:hover {
-  background-color: #1976D2;
+  background-color: var(--secondary-color);
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .faq-container {
     padding: 0 15px;
   }
-  
+
   .faq-question {
     font-size: 15px;
   }
-  
+
   .cta-line {
     width: 80px;
   }
-  
+
   .cta-deco {
     width: 40px;
     height: 40px;
