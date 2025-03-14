@@ -1,16 +1,23 @@
-import { Outlet } from "react-router-dom"; // Importez Outlet de react-router-dom
+import { Outlet } from "react-router-dom";
 import Sidebar from "../components/sidebar/Sidebar";
-import Header from "../components/header/HeaderDashboard";
+import HeaderDashboard from "../components/header/HeaderDashboard";
+import { useState } from "react";
 import "./DashboardLayout.css";
 
 const DashboardLayout = () => {
+  const [collapsed, setCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setCollapsed(!collapsed);
+  };
+
   return (
     <div className="dashboard-layout">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} />
       <div className="main-content">
-        <Header />
+        <HeaderDashboard collapsed={collapsed} toggleSidebar={toggleSidebar} />
         <div className="content">
-          <Outlet /> {/* Cet Outlet rendra le contenu des sous-routes */}
+          <Outlet /> 
         </div>
       </div>
     </div>

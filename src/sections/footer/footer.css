@@ -1,16 +1,28 @@
-.footer {
-  background-color: white;
-  padding: 30px 0;
-  border-top: 1px solid #e0e0e0;
+.footer-landing {
+  position: relative;
+  bottom: 0;
+  width: 100%;
+  color: white;
+  text-align: center;
+  padding: 15px;
+  overflow-x: hidden; 
+
+}
+.footer-logo img {
+  width: 40px; 
+  height: auto;
+
 }
 
-.footer-container {
-  max-width: 1200px;
+.footer-container-landing {
+  max-width: 1000px;
+  max-height: 10px;
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex: 1;
 }
 
 .footer-logo {

@@ -1,21 +1,105 @@
+/* General Layout Styles */
 .dashboard-layout {
     display: flex;
     height: 100vh;
     margin: 0;
     padding: 0;
-}
-
-.main-content {
+  }
+  
+  .main-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-}
-
-
-
-.content {
-    padding: 80px 20px 20px; 
+  }
+  
+  .content {
+    padding: 80px 20px 20px;
     background: #fff;
     flex-grow: 1;
-   
-}
+  }
+  
+  /* Sidebar Styles */
+  .sidebar {
+    transition: all 0.3s ease-in-out;
+    width: 240px; /* Normal width */
+    background-color: #333;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    overflow: auto;
+  }
+  
+  .sidebar.collapsed {
+    width: 0; /* Sidebar hidden when collapsed */
+  }
+  
+  /* Responsive for small screens */
+  @media screen and (max-width: 768px) {
+    .dashboard-layout {
+      flex-direction: column; /* Stack sidebar and content vertically */
+    }
+  
+    .main-content {
+      padding-left: 0;
+      padding-right: 0;
+    }
+  
+    .content {
+      padding-top: 60px; /* Add padding to avoid header overlap */
+    }
+  
+    /* Sidebar hidden on small screens by default */
+    .sidebar {
+      width: 0;
+      transition: width 0.3s ease-in-out;
+    }
+  
+    .sidebar.collapsed {
+      width: 240px; /* Sidebar expands when collapsed is false */
+    }
+  
+    .sidebar ul {
+      display: flex;
+      flex-direction: column;
+      padding-top: 20px;
+    }
+  
+    .main-content {
+      flex-direction: column; /* Stack content under the header */
+    }
+  
+    .header-dashboard {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 110;
+    }
+  
+    /* Show the menu icon for mobile screens */
+    .sidebar-toggle-btn {
+      display: block;
+      background: none;
+      border: none;
+      color: white;
+      font-size: 30px;
+      cursor: pointer;
+      margin-left: 20px;
+    }
+  }
+  
+  @media screen and (max-width: 480px) {
+    .content {
+      padding-top: 70px; /* More space for mobile header */
+    }
+  
+    .sidebar.collapsed {
+      width: 100%; /* Sidebar takes full screen width on mobile when expanded */
+    }
+  
+    .header-dashboard {
+      padding: 10px 20px;
+    }
+  }
+  

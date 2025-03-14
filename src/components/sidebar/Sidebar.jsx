@@ -1,26 +1,52 @@
-import { Link } from "react-router-dom";
-import { Menu } from "antd";
+import React from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChartOutlined,
-  ProjectOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  UnorderedListOutlined,
-  ScheduleOutlined,
-  CalendarOutlined,
-  MessageOutlined,
-  FileDoneOutlined,
-  ClockCircleOutlined,
-} from "@ant-design/icons";
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
+  Tooltip,
+} from "@mui/material";
+import {
+  FaChartBar,
+  FaProjectDiagram,
+  FaSignOutAlt,
+} from "react-icons/fa";
 import logo from "../../assets/logo.png";
-import { useState } from "react";
 import "./Sidebar.css";
 
-const Sidebar = () => {
-  const [collapsed, setCollapsed] = useState(false);
+const Sidebar = ({ collapsed, onLogout }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const currentUser = JSON.parse(localStorage.getItem("currentUser"));
+  const role = currentUser?.role;
+
+  const isActive = (path) => (location.pathname === path ? "active" : "");
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("currentUser");
+    navigate("/AuthForms");
+  };
 
   return (
-    <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: collapsed ? 80 : 240,
+        transition: "width 0.3s ease-in-out",
+        "& .MuiDrawer-paper": {
+          width: collapsed ? 80 : 240,
+          transition: "width 0.3s ease-in-out",
+          backgroundColor: "#fff",
+          paddingTop: 2,
+          paddingBottom: 2,
+        },
+      }}
+    >
       <div className="logo-container">
         <img
           src={logo}
@@ -29,36 +55,62 @@ const Sidebar = () => {
         />
       </div>
 
-      <div className="menu-container">
-        <Menu mode="inline" theme="light" defaultSelectedKeys={["1"]}>
-          <Menu.Item key="1" icon={<BarChartOutlined />}>
-            <Link to="/dashboard">Tableau de bord</Link>
-          </Menu.Item>
-          <Menu.Item key="2" icon={<ProjectOutlined />}>
-            <Link to="/Projects">Projets</Link>
-          </Menu.Item>
-          <Menu.Item key="3" icon={<ScheduleOutlined />}>
-            <Link to="/Kanban">Kanban</Link>
-          </Menu.Item>
-          {/* Updated Scrum menu */}
-          <Menu.Item key="4" icon={<UnorderedListOutlined />}>
-            <Link to="/Scrum">Scrum</Link>
-          </Menu.Item>
-          <Menu.Item key="5" icon={<ClockCircleOutlined />}>
-            <Link to="/active-sprints">Actifs Sprints</Link>
-          </Menu.Item>
-          <Menu.Item key="6" icon={<CalendarOutlined />}>
-            <Link to="/Calendar">Calendrier</Link>
-          </Menu.Item>
-          <Menu.Item key="7" icon={<MessageOutlined />}>
-            <Link to="/Messages">Messages</Link>
-          </Menu.Item>
-        </Menu>
+      <List>
+        {role === "chef_projet" && (
+          <ListItem
+            button
+            component={Link}
+            to="/dashboard"
+            className={`menu-item ${isActive("/dashboard")}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Tableau de bord" placement="right">
+                <FaChartBar />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && (
+              <ListItemText
+                primary="Tableau de bord"
+                primaryTypographyProps={{ component: "span" }} 
+              />
+            )}
+          </ListItem>
+        )}
+
+        <ListItem
+          button
+          component={Link}
+          to="/projects"
+          className={`menu-item ${isActive("/projects")}`}
+        >
+          <ListItemIcon className="menu-icon">
+            <Tooltip title="Projets" placement="right">
+              <FaProjectDiagram />
+            </Tooltip>
+          </ListItemIcon>
+          {!collapsed && (
+            <ListItemText
+              primary="Projets"
+              primaryTypographyProps={{ component: "span" }} 
+            />
+          )}
+        </ListItem>
+      </List>
+
+      <div className="footer-sidebar">
+        <IconButton
+          onClick={handleLogout}
+          sx={{
+            position: "absolute",
+            bottom: 20,
+            left: "50%",
+            transform: "translateX(-50%)",
+          }}
+        >
+          <FaSignOutAlt />
+        </IconButton>
       </div>
-      <div className="toggle-icon" onClick={() => setCollapsed(!collapsed)}>
-        {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-      </div>
-    </aside>
+    </Drawer>
   );
 };
 

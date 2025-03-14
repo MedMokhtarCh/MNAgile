@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { AiOutlineArrowUp } from "react-icons/ai";
-import Navbar from "../sections/Navbar";
-import Hero from "../sections/Hero";
-import Features from "../sections/Features";
-import Services from "../sections/Services";
-import FAQ from "../sections/FAQ";
-import About from "../sections/About";
-import Values from "../sections/Values";
-import Footer from "../sections/Footer";
+import Navbar from "../sections/navbar/Navbar";
+import Hero from "../sections/hero/Hero";
+import Features from "../sections/features/Features";
+import Services from "../sections/services/Services";
+import FAQ from "../sections/faq/FAQ";
+import About from "../sections/about/About";
+import Values from "../sections/values/Values";
 import "../styles/global.css";
 import "../styles/variable.css";
 import "../styles/LandingPage.css";
-
+import Footer from "../sections/footer/Footer";
 const LandingPage = () => {
   const [showScroll, setShowScroll] = useState(false);
 
@@ -40,7 +39,8 @@ const LandingPage = () => {
       <Features id="Features" />
       <Services id="Services" />
       <FAQ />
-      <Footer />
+      <Footer/>
+      
 
       {showScroll && (
         <div className="scroll-to-top" onClick={scrollToTop}>

@@ -1,15 +1,14 @@
 import React from 'react';
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from 'react-icons/fa';
-import "../styles/Footer.css";
+import "./Footer.css";
+import logo from "../../assets/logo.png";
 
 const Footer = () => {
   return (
-    <footer className="footer">
-      <div className="footer-container">
+    <footer className="footer-landing">
+      <div className="footer-container-landing">
         <div className="footer-logo">
-          <a href="/">
-            <span className="logo-text">Axia-Agile</span>
-          </a>
+           <img src={logo} alt="AxiaAgile Logo" />
         </div>
         <div className="footer-copyright">
           <p>© 2025 All rights reserved</p>

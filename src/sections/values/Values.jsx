@@ -1,6 +1,6 @@
 import React from "react";
 import { AiOutlineTeam, AiOutlineEye, AiOutlineBulb } from "react-icons/ai";
-import "../styles/Values.css";
+import "./Values.css";
 
 const ValueCard = ({ Icon, title, description }) => (
   <div className="value-card">

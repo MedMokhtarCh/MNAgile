@@ -1,9 +1,9 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import "../styles/features.css";
-import kanbanImage from "../assets/Kanban.png";
-import rapportsImage from "../assets/rapports.jpg";
-import messagerieImage from "../assets/messages.jpg";
+import "./features.css";
+import kanbanImage from "../../assets/Kanban.png";
+import rapportsImage from "../../assets/rapports.jpg";
+import messagerieImage from "../../assets/messages.jpg";
 
 const Features = () => {
   const [currentSlide, setCurrentSlide] = useState(0);

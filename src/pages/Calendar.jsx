@@ -3,7 +3,7 @@ import './Calendar.css';
 
 const Calendar = () => {
   const [view, setView] = useState('week');
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 1, 24)); // 24 Février 2025
+  const [currentDate, setCurrentDate] = useState(new Date(2025, 1, 24)); 
 
   const events = [
     { 
@@ -40,7 +40,6 @@ const Calendar = () => {
     }
   ];
 
-  // Helpers pour la gestion des dates
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   };
@@ -115,7 +114,7 @@ const Calendar = () => {
     }
   };
 
-  // Générer les données d'affichage selon la vue
+
   const generateViewData = () => {
     switch(view) {
       case 'day':
@@ -125,7 +124,7 @@ const Calendar = () => {
         };
       
       case 'week':
-        // Trouver le début de la semaine (Dimanche)
+        
         const weekStart = new Date(currentDate);
         weekStart.setDate(currentDate.getDate() - currentDate.getDay());
         

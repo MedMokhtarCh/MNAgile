@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from 'antd';
-import "../styles/hero.css"; 
-import HeroImage from "../assets/Hero.png"; 
+import "./hero.css"; 
+import HeroImage from "../../assets/Hero.png"; 
 
 const Hero = () => {
   return (
@@ -15,8 +15,8 @@ const Hero = () => {
             organiser leur travail et à atteindre leurs objectifs efficacement.
           </p>
        
-          <Button type="primary" className="btn-primary">Inscrivez-vous</Button>
-          <Button className="btn-pro">Découvrez Pro</Button>
+          
+          <Button className="btn-pro">Découvrez Axia-Agile</Button>
         </div>
     
         <div className="hero-image">

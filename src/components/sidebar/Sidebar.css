@@ -1,58 +1,76 @@
 .sidebar {
- 
-    background: #fff;
-    padding: 20px 0px 20px 20px;
-    transition: width 0.3s ease-in-out;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    border-right: 2px solid #ccc;
-   
-  }
-  
-  .sidebar.collapsed {
-    width: 80px;
-  }
-  
-  .menu-container {
-    flex-grow: 1;
-  }
-  
-  .menu-item {
-    padding: 10px 25px;
-    display: flex;
+  background: #fff;
+  padding: 20px 0px 20px 20px;
+  transition: width 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-right: 2px solid #ccc;
+}
 
-    transition: background-color 0.3s ease-in-out;
-    position: relative;
-  }
-  
-  .menu-item:hover {
-    background-color: #1890ff !important;
-    color: white !important;
-  }
-  
-  .menu-item::before {
-    content: '';
-    position: absolute;
+.sidebar.collapsed {
+  width: 90px;
+}
 
-    width: 4px;
-    height: 100%;
-    background-color: #1890ff;
-    opacity: 0;
-    transition: opacity 0.3s ease-in-out;
-  }
-  
-  .menu-item:hover::before {
-    opacity: 1;
-  }
-  
-  .sidebar-bottom {
-    margin-top: auto;
-    padding-bottom: 20px;
-  }
-  
-  
-  
+.menu-container {
+  flex-grow: 1;
+}
+
+.menu-item {
+  padding: 10px 25px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.3s ease-in-out;
+  position: relative;
+}
+
+.menu-item.active,
+.menu-item:hover {
+  background-color: #e5f1fc !important;
+}
+
+.menu-item.active::before {
+  opacity: 1;
+}
+
+.menu-item:hover::before {
+  opacity: 1;
+}
+
+.menu-item::before {
+  content: '';
+  position: absolute;
+  width: 4px;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.3s ease-in-out;
+}
+
+.submenu-item {
+  padding-left: 40px;
+}
+
+.submenu-item:hover {
+  background-color: #e5f1fc !important;
+}
+
+
+
+.footer-sidebar {
+  position: absolute;
+  bottom: 10px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.footer-sidebar.MuiIconButton-root {
+  background-color: #f1f1f1;
+  padding: 5px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
 .logo-container {
   display: flex;
   align-items: center;
@@ -65,17 +83,30 @@
   height: auto;
 }
 
-.menu-container .ant-menu-item,
-.menu-container .ant-menu-submenu-title {
-  font-size: 16px; 
-  
-}
-
-.menu-container .ant-menu-item .anticon,
-.menu-container .ant-menu-submenu-title .anticon {
-  font-size: 20px;
-
-}
 .logo.collapsed-logo {
-    width: 50px;
-  }
+  width: 50px;
+}
+
+.MuiListItemIcon-root {
+  min-width: 40px;
+}
+
+.MuiListItemText-root {
+  font-size: 16px;
+  font-weight: 400;
+}
+
+.MuiListItemText-root .MuiTypography-root {
+  color: #000;
+}
+
+.MuiListItemText-root:hover {
+  color: #1890ff;
+}
+.menu-item:hover .menu-icon {
+  color: blue; 
+}
+
+.scrum-toggle-icon:hover {
+  color: #808080; 
+}

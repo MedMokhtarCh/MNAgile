@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import "../styles/faq.css";
+import "./faq.css";
 
 const FAQItem = ({ question, answer, isOpen, onClick }) => (
   <div className={`faq-item ${isOpen ? 'open' : ''}`}>

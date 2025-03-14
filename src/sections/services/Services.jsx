@@ -1,6 +1,6 @@
 import React from "react";
 import { AiOutlineProject, AiOutlineUnorderedList, AiOutlineFundProjectionScreen, AiOutlineFileText, AiOutlineThunderbolt, AiOutlineUser } from "react-icons/ai";
-import "../styles/services.css";
+import "./services.css";
 
 const ServiceCard = ({ Icon, title, description }) => (
   <div className="service-card">
