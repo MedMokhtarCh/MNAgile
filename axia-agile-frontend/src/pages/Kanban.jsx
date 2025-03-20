@@ -39,7 +39,6 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-ki
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-// Styled Components
 const KanbanColumn = styled(Paper)(({ theme }) => ({
   backgroundColor: theme.palette.grey[50],
   padding: theme.spacing(2),
@@ -146,21 +145,17 @@ function SortableTask({ task, users }) {
     transform: CSS.Transform.toString(transform),
     transition,
   };
-
-  // Generate avatar with initials
   const generateInitials = (email) => {
     const user = users.find(u => u.email === email);
     if (!user) return '?';
     
-    const name = `${user.firstName} ${user.lastName}`;
+    const name = `${user.nom} `;
     const parts = name.split(' ');
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name[0].toUpperCase();
   };
-
-  // Get background color for avatar based on email
   const getAvatarColor = (email) => {
     const colors = ['#1E90FF', '#FFA500', '#FF69B4', '#32CD32', '#8B4513', '#9932CC', '#FF4500'];
     let sum = 0;
@@ -169,8 +164,6 @@ function SortableTask({ task, users }) {
     }
     return colors[sum % colors.length];
   };
-
-  // Get priority label
   const getPriorityLabel = (priority) => {
     switch(priority) {
       case 'high': return 'Haute';
@@ -248,8 +241,6 @@ function SortableTask({ task, users }) {
 function Kanban() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
-  
-  // Use sensors to improve drag and drop experience
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -260,24 +251,58 @@ function Kanban() {
   );
 
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState({
-    email: 'user@example.com',
-    firstName: 'User',
-    lastName: 'Example'
+  const [currentUser, setCurrentUser] = useState(() => {
+    const user = JSON.parse(localStorage.getItem('currentUser')) || {};
+    return user;
   });
-  const [users, setUsers] = useState([
-    { email: 'user@example.com', firstName: 'User', lastName: 'Example' },
-    { email: 'john@example.com', firstName: 'John', lastName: 'Doe' },
-    { email: 'jane@example.com', firstName: 'Jane', lastName: 'Smith' }
-  ]);
-  
-  // Kanban columns
-  const [columns, setColumns] = useState({
-    todo: [],
-    inProgress: []
+  const [users, setUsers] = useState(() => {
+    const storedUsers = JSON.parse(localStorage.getItem('users')) || [];
+    const storedAdmins = JSON.parse(localStorage.getItem('admins')) || [];
+    return [...storedUsers, ...storedAdmins];
   });
-  
-  // Task creation modal
+  const [columns, setColumns] = useState(() => {
+    const storedTasks = JSON.parse(localStorage.getItem('kanban_tasks')) || {
+      todo: [],
+      inProgress: [],
+      done: [],
+    };
+    return storedTasks;
+  });
+
+  const [selectedUser, setSelectedUser] = useState('');
+  const [selectedPriority, setSelectedPriority] = useState('');
+  const [newColumnName, setNewColumnName] = useState('');
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+
+  const getAssignedUsers = () => {
+    const assignedUsers = new Set();
+    Object.values(columns).forEach(tasks => {
+      tasks.forEach(task => {
+        task.assignedUsers.forEach(email => assignedUsers.add(email));
+      });
+    });
+    return Array.from(assignedUsers).map(email => users.find(u => u.email === email)).filter(Boolean);
+  };
+
+  const assignedUsers = getAssignedUsers();
+
+  const handleAddColumn = () => {
+    if (newColumnName.trim()) {
+      const newColumns = { ...columns, [newColumnName.toLowerCase().replace(/\s+/g, '')]: [] };
+      setColumns(newColumns);
+      localStorage.setItem('kanban_tasks', JSON.stringify(newColumns));
+      setNewColumnName('');
+      setIsAddingColumn(false);
+    }
+  };
+  const filteredColumns = Object.keys(columns).reduce((acc, columnId) => {
+    acc[columnId] = columns[columnId].filter(task => {
+      const matchesUser = selectedUser ? task.assignedUsers.includes(selectedUser) : true;
+      const matchesPriority = selectedPriority ? task.priority === selectedPriority : true;
+      return matchesUser && matchesPriority;
+    });
+    return acc;
+  }, {});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [currentColumn, setCurrentColumn] = useState(null);
   const [formValues, setFormValues] = useState({
@@ -286,70 +311,21 @@ function Kanban() {
     assignedUsers: [],
     priority: 'medium'
   });
-  
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
 
-  // Column labels mapping
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const columnLabels = {
     todo: "À faire",
-    inProgress: "En cours"
+    inProgress: "En cours",
+    done: "Terminé"
   };
-
-  // Load tasks data on component mount
   useEffect(() => {
-    // Simulate loading stored tasks
-    setTimeout(() => {
-      // Mock data
-      const mockTasks = {
-        todo: [
-          {
-            id: 'task-1',
-            title: 'Concevoir l\'interface utilisateur',
-            description: 'Créer des maquettes pour l\'interface principale',
-            assignedUsers: ['user@example.com'],
-            priority: 'high',
-            createdAt: new Date().toISOString(),
-            createdBy: 'user@example.com'
-          },
-          {
-            id: 'task-2',
-            title: 'Configurer l\'environnement de développement',
-            description: 'Installer et configurer tous les outils nécessaires',
-            assignedUsers: ['jane@example.com'],
-            priority: 'medium',
-            createdAt: new Date().toISOString(),
-            createdBy: 'user@example.com'
-          }
-        ],
-        inProgress: [
-          {
-            id: 'task-3',
-            title: 'Implémenter l\'authentification',
-            description: 'Mettre en place le système de connexion et d\'inscription',
-            assignedUsers: ['john@example.com', 'user@example.com'],
-            priority: 'high',
-            createdAt: new Date().toISOString(),
-            createdBy: 'john@example.com'
-          }
-        ]
-      };
-      
-      setColumns(mockTasks);
-      setLoading(false);
-    }, 1000);
+    setLoading(false);
   }, []);
-
-  // Handle drag and drop
   const handleDragEnd = (event) => {
-    const { active, over } = event;
-    
+    const { active, over } = event; 
     if (!active || !over) return;
-    
-    // Find the source and destination columns
     let sourceColumn = null;
     let sourceIndex = -1;
-    
-    // Find which column and index the dragged item is from
     Object.keys(columns).forEach(columnId => {
       const taskIndex = columns[columnId].findIndex(task => task.id === active.id);
       if (taskIndex !== -1) {
@@ -360,44 +336,33 @@ function Kanban() {
     
     if (sourceColumn === null) return;
     
-    // If we're dragging within the same column
     if (active.id !== over.id) {
       const destIndex = columns[sourceColumn].findIndex(task => task.id === over.id);
       
       if (destIndex !== -1) {
-        // Create a new array with the new order
         const newColumnTasks = arrayMove(
           columns[sourceColumn], 
           sourceIndex, 
           destIndex
         );
-        
-        // Update the columns state
         const newColumns = {
           ...columns,
           [sourceColumn]: newColumnTasks
         };
         
         setColumns(newColumns);
-        
-        // Save to localStorage (optional)
+  
         localStorage.setItem('kanban_tasks', JSON.stringify(newColumns));
       }
     }
   };
-
-  // Handle column menu open
   const handleColumnMenuOpen = (event, columnId) => {
     setMenuAnchorEl(event.currentTarget);
     setCurrentColumn(columnId);
   };
-
-  // Handle column menu close
   const handleColumnMenuClose = () => {
     setMenuAnchorEl(null);
   };
-
-  // Open the add task dialog
   const handleAddTask = () => {
     setFormValues({
       title: '',
@@ -408,20 +373,14 @@ function Kanban() {
     setDialogOpen(true);
     handleColumnMenuClose();
   };
-
-  // Handle form field changes
   const handleFormChange = (field) => (event) => {
     setFormValues({
       ...formValues,
       [field]: event.target.value
     });
   };
-
-  // Create a new task
   const handleCreateTask = () => {
     if (!currentColumn) return;
-    
-    // Create a new task
     const newTask = {
       id: `task-${Date.now()}`,
       title: formValues.title,
@@ -431,23 +390,15 @@ function Kanban() {
       createdAt: new Date().toISOString(),
       createdBy: currentUser.email
     };
-    
-    // Add the task to the column
     const newColumns = {
       ...columns,
       [currentColumn]: [...columns[currentColumn], newTask]
     };
     
     setColumns(newColumns);
-    
-    // Save to localStorage (optional)
     localStorage.setItem('kanban_tasks', JSON.stringify(newColumns));
-    
-    // Close the dialog
     setDialogOpen(false);
   };
-
-  // If loading
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -455,7 +406,6 @@ function Kanban() {
       </Box>
     );
   }
-
   return (
     <Container maxWidth="xl" sx={{ mt: 3 }}>
       <Box sx={{ mb: 4 }}>
@@ -463,25 +413,78 @@ function Kanban() {
           Tableau Kanban
         </Typography>
       </Box>
-
+      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel id="filter-user-label">Filtrer par utilisateur</InputLabel>
+          <MuiSelect
+            labelId="filter-user-label"
+            value={selectedUser}
+            onChange={(e) => setSelectedUser(e.target.value)}
+            input={<OutlinedInput label="Filtrer par utilisateur" />}
+          >
+            <MenuItem value="">Tous les utilisateurs</MenuItem>
+            {assignedUsers.map((user) => (
+              <MenuItem key={user.email} value={user.email}>
+                {`${user.email} `}
+              </MenuItem>
+            ))}
+          </MuiSelect>
+        </FormControl>
+        <FormControl sx={{ minWidth: 200 }}>
+          <InputLabel id="filter-priority-label">Filtrer par priorité</InputLabel>
+          <MuiSelect
+            labelId="filter-priority-label"
+            value={selectedPriority}
+            onChange={(e) => setSelectedPriority(e.target.value)}
+            input={<OutlinedInput label="Filtrer par priorité" />}
+          >
+            <MenuItem value="">Toutes les priorités</MenuItem>
+            <MenuItem value="high">Haute</MenuItem>
+            <MenuItem value="medium">Moyenne</MenuItem>
+            <MenuItem value="low">Basse</MenuItem>
+          </MuiSelect>
+        </FormControl>
+      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        {isAddingColumn ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <TextField
+              size="small"
+              placeholder="Nom de la colonne"
+              value={newColumnName}
+              onChange={(e) => setNewColumnName(e.target.value)}
+            />
+            <Button onClick={handleAddColumn} variant="contained" size="small">
+              Ajouter
+            </Button>
+            <Button onClick={() => setIsAddingColumn(false)} variant="outlined" size="small">
+              Annuler
+            </Button>
+          </Box>
+        ) : (
+          <Button onClick={() => setIsAddingColumn(true)} variant="outlined" startIcon={<AddIcon />}>
+            Ajouter une colonne
+          </Button>
+        )}
+      </Box>
       <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd} sensors={sensors}>
         <Grid container spacing={1} sx={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
-          {Object.keys(columns).map((columnId) => (
+          {Object.keys(filteredColumns).map((columnId) => (
             <Grid item key={columnId}>
-              <SortableContext items={columns[columnId]} strategy={verticalListSortingStrategy}>
+              <SortableContext items={filteredColumns[columnId]} strategy={verticalListSortingStrategy}>
                 <KanbanColumn>
                   <ColumnHeader>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                        {columnLabels[columnId]}
+                        {columnLabels[columnId] || columnId}
                       </Typography>
                       <Chip 
-                        label={columns[columnId].length} 
+                        label={filteredColumns[columnId].length} 
                         size="small" 
                         sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
                       />
                     </Box>
-                    <Tooltip title={`Ajouter à ${columnLabels[columnId]}`} TransitionComponent={Fade} arrow>
+                    <Tooltip title={`Ajouter à ${columnLabels[columnId] || columnId}`} TransitionComponent={Fade} arrow>
                       <IconButton 
                         size="small" 
                         onClick={(e) => handleColumnMenuOpen(e, columnId)}
@@ -496,7 +499,7 @@ function Kanban() {
                     </Tooltip>
                   </ColumnHeader>
                   <Box sx={{ overflow: 'auto', flex: 1, maxHeight: 'calc(100vh - 200px)' }}>
-                    {columns[columnId].length === 0 ? (
+                    {filteredColumns[columnId].length === 0 ? (
                       <Box sx={{ 
                         p: 2, 
                         textAlign: 'center', 
@@ -508,7 +511,7 @@ function Kanban() {
                         Aucune tâche
                       </Box>
                     ) : (
-                      columns[columnId].map(task => (
+                      filteredColumns[columnId].map(task => (
                         <SortableTask key={task.id} task={task} users={users} />
                       ))
                     )}
@@ -519,8 +522,6 @@ function Kanban() {
           ))}
         </Grid>
       </DndContext>
-
-      {/* Column Menu */}
       <Menu 
         anchorEl={menuAnchorEl}
         open={Boolean(menuAnchorEl)}
@@ -532,8 +533,6 @@ function Kanban() {
       >
         <MenuItem onClick={handleAddTask}>Ajouter une tâche</MenuItem>
       </Menu>
-
-      {/* Add Task Dialog */}
       <Dialog 
         open={dialogOpen} 
         onClose={() => setDialogOpen(false)}
@@ -548,7 +547,7 @@ function Kanban() {
         }}
       >
         <DialogTitle sx={{ fontWeight: 600 }}>
-          Créer une nouvelle tâche dans {currentColumn ? columnLabels[currentColumn] : ''}
+          Créer une nouvelle tâche dans {currentColumn ? columnLabels[currentColumn] || currentColumn : ''}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ my: 2 }}>
@@ -617,7 +616,7 @@ function Kanban() {
                       return (
                         <Chip 
                           key={value} 
-                          label={user ? `${user.firstName} ${user.lastName}` : value} 
+                          label={user ? `${user.nom} ` : value} 
                           size="small" 
                         />
                       );
@@ -627,7 +626,7 @@ function Kanban() {
               >
                 {users.map((user) => (
                   <MenuItem key={user.email} value={user.email}>
-                    {`${user.firstName} ${user.lastName} (${user.email})`}
+                    {`${user.nom} (${user.email})`}
                   </MenuItem>
                 ))}
               </MuiSelect>

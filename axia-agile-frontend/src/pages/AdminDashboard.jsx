@@ -506,7 +506,7 @@ const AdminDashboard = () => {
                 <TableRow>
                   <TableCell>Utilisateur</TableCell>
                   <TableCell>Rôle</TableCell>
-                  <TableCell>Job Title</TableCell> {/* Nouvelle colonne pour le job title */}
+                  <TableCell>Job Title</TableCell>
                   <TableCell>Contact</TableCell>
                   <TableCell>Autorisations</TableCell>
                   <TableCell>Statut</TableCell>

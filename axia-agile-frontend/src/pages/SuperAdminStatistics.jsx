@@ -10,7 +10,7 @@ import {
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
 
-// Enregistrement des composants Chart.js nécessaires
+
 ChartJS.register(ArcElement, ChartTooltip, Legend);
 
 const AdminStatistics = () => {
