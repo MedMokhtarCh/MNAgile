@@ -1,0 +1,46 @@
+{
+    "Routes": [
+        {
+            "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+            "DownstreamScheme": "http",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "localhost",
+                    "Port": 5273
+                }
+            ],
+            "UpstreamPathTemplate": "/swagger/projects/v1/swagger.json",
+            "UpstreamHttpMethod": [ "GET" ],
+            "UpstreamHeaderTransform": {
+                "Accept": "application/json"
+            },
+            "DownstreamHeaderTransform": {
+                "Content-Type": "application/json"
+            },
+            "DangerousAcceptAnyServerCertificateValidator": true
+        },
+        {
+            "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+            "DownstreamScheme": "http",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "localhost",
+                    "Port": 5203
+                }
+            ],
+            "UpstreamPathTemplate": "/swagger/users/v1/swagger.json",
+            "UpstreamHttpMethod": [ "GET" ],
+            "UpstreamHeaderTransform": {
+                "Accept": "application/json"
+            },
+            "DownstreamHeaderTransform": {
+                "Content-Type": "application/json"
+            },
+            "DangerousAcceptAnyServerCertificateValidator": true
+        }
+        
+    ],
+    "GlobalConfiguration": {
+        "BaseUrl": "https://localhost:5000"
+    }
+}
