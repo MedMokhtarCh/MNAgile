@@ -26,7 +26,7 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("currentUser");
-    navigate("/AuthForms");
+    navigate("/Login");
   };
 
   return (
@@ -75,8 +75,8 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
             <ListItem
               button
               component={Link}
-              to="/SuperAdminDashboard"
-              className={`menu-item ${isActive("/SuperAdminDashboard")}`}
+              to="/AdminManagement"
+              className={`menu-item ${isActive("/AdminManagement")}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Utilisateurs" placement="right">
@@ -110,8 +110,8 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
             <ListItem
               button
               component={Link}
-              to="/AdminDashboard"
-              className={`menu-item ${isActive("/AdminDashboard")}`}
+              to="/UserManagement"
+              className={`menu-item ${isActive("/UserManagement")}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Utilisateurs" placement="right">
@@ -120,6 +120,7 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
             </ListItem>
+            
           </>
         )}
       </List>

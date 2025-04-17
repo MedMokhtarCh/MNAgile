@@ -29,7 +29,7 @@ const Sidebar = ({ collapsed, onLogout }) => {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("currentUser");
-    navigate("/AuthForms");
+    navigate("/Login");
   };
 
   return (
@@ -95,6 +95,7 @@ const Sidebar = ({ collapsed, onLogout }) => {
             />
           )}
         </ListItem>
+        
       </List>
 
       <div className="footer-sidebar">

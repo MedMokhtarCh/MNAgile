@@ -1,169 +1,84 @@
-.calendar {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  }
-  
-  .calendar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 24px;
-    padding: 0 16px;
-  }
-  
-  .navigation {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-  
-  .nav-button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    color: #1677ff;
-  }
-  
-  .nav-button:hover {
-    color: #0958d9;
-  }
-  
-  .navigation h2 {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0;
-  }
-  
-  .view-controls {
-    display: flex;
-    gap: 8px;
-    background-color: #f5f5f5;
-    padding: 4px;
-    border-radius: 8px;
-  }
-  
-  .view-button {
-    padding: 4px 16px;
-    border: none;
-    background: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  
-  .view-button:hover {
-    background-color: #e6e6e6;
-  }
-  
-  .view-button.active {
-    background-color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .calendar-grid {
-    display: flex;
-    border: 1px solid #e8e8e8;
-    border-radius: 8px;
-    background-color: white;
-  }
-  
-  .time-column {
-    width: 80px;
-    padding-top: 64px;
-    background-color: white;
-  }
-  
-  .time-slot {
-    height: 60px;
-    margin-top: -12px;
-    padding-left: 16px;
-    color: #666;
-    font-size: 14px;
-  }
-  
-  .days-grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-  }
-  
-  .days-header {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(6, 1fr);
-    border-bottom: 1px solid #e8e8e8;
-  }
-  
-  .day-header {
-    text-align: center;
-    padding: 16px;
-  }
-  
-  .day-name {
-    display: block;
-    color: #666;
-    font-size: 14px;
-  }
-  
-  .day-number {
-    display: block;
-    font-size: 20px;
-    font-weight: 500;
-    margin-top: 4px;
-  }
-  
-  .day-column {
-    position: relative;
-    border-right: 1px solid #e8e8e8;
-    min-height: 720px;
-  }
-  
-  .day-column:last-child {
-    border-right: none;
-  }
-  
-  .hour-slot {
-    height: 60px;
-    border-top: 1px solid #e8e8e8;
-  }
-  
-  .event {
-    position: absolute;
-    left: 4px;
-    right: 4px;
-    padding: 8px;
-    border-radius: 4px;
-    overflow: hidden;
-    transition: box-shadow 0.2s;
-  }
-  
-  .event:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  }
-  
-  .event.primary {
-    background-color: #e6f4ff;
-    border-left: 3px solid #1677ff;
-  }
-  
-  .event.secondary {
-    background-color: #f9f0ff;
-    border-left: 3px solid #722ed1;
-  }
-  
-  .event-title {
-    font-size: 14px;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  
-  .event-time {
-    font-size: 12px;
-    color: #666;
-    margin-top: 2px;
-  }
+/* Calendar CSS - Material Design Inspired */
+.calendar-container {
+  font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+  color: #333;
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f9f9f9;
+}
+
+.calendar-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  background-color: #fff;
+}
+
+/* Header Styles */
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #fff;
+  height: 64px;
+}
+
+.calendar-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.calendar-title {
+  margin-left: 16px;
+}
+
+.calendar-title h2 {
+  margin: 0;
+  font-weight: 400;
+  font-size: 20px;
+}
+
+.subtitle {
+  color: #757575;
+  font-size: 14px;
+  margin-left: 8px;
+}
+
+.calendar-header-center {
+  display: flex;
+  align-items: center;
+}
+
+.navigation {
+  display: flex;
+  align-items: center;
+}
+
+.nav-button {
+  background: none;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #616161;
+}
+
+.nav-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.today-button {
+  background-color: transparent;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px;}

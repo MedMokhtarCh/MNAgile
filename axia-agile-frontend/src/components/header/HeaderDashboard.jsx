@@ -1,20 +1,44 @@
 import React, { useState, useRef } from "react";
-import { InputBase, Popper, Paper, MenuList, MenuItem, Grow, ClickAwayListener } from "@mui/material";
-import { FiBell, FiUser, FiLogOut } from "react-icons/fi";
-import { AiOutlineMenuFold, AiOutlineMenuUnfold } from "react-icons/ai";
+import { 
+  Popper, 
+  Paper, 
+  MenuList, 
+  MenuItem, 
+  Grow, 
+  ClickAwayListener,
+  Typography,
+  Avatar,
+  Tooltip
+} from "@mui/material";
+import { 
+  FiUser, 
+  FiLogOut, 
+  FiHelpCircle
+} from "react-icons/fi";
+import { 
+  AiOutlineMenuFold, 
+  AiOutlineMenuUnfold 
+} from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
 import "./HeaderDashboard.css";
+import NotificationSystem from '../NotificationSystem'; 
 
 const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);
   const navigate = useNavigate();
 
-  // Logout function
+  // Get current user data
+  const currentUser = JSON.parse(localStorage.getItem("currentUser")) || {};
+  const userInitial = currentUser.prenom?.charAt(0) || currentUser.email?.charAt(0) || "U";
+  const fullName = currentUser.prenom && currentUser.nom 
+    ? `${currentUser.prenom} ${currentUser.nom}` 
+    : currentUser.email?.split('@')[0] || "Utilisateur";
+
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("currentUser");
-    navigate("/AuthForms");
+    navigate("/Login");
   };
 
   const handleToggle = () => {
@@ -28,77 +52,92 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     setOpen(false);
   };
 
-  function handleListKeyDown(event) {
-    if (event.key === 'Tab') {
-      event.preventDefault();
-      setOpen(false);
-    } else if (event.key === 'Escape') {
-      setOpen(false);
-    }
-  }
+  const handleProfileNavigate = () => {
+    navigate("/profile");
+    setOpen(false);
+  };
 
-  // Return focus to the button when we transitioned from !open -> open
-  const prevOpen = React.useRef(open);
-  React.useEffect(() => {
-    if (prevOpen.current === true && open === false) {
-      anchorRef.current.focus();
-    }
-    prevOpen.current = open;
-  }, [open]);
+  const handleHelpNavigate = () => {
+    navigate("/help");
+    setOpen(false);
+  };
 
   return (
-    <header className="header">
-      <div className="toggle-button" onClick={toggleSidebar}>
-        {collapsed ? <AiOutlineMenuUnfold size={20} /> : <AiOutlineMenuFold size={20} />}
+    <header className="header-dashboard">
+      <div className="header-left">
+        <div className="toggle-button" onClick={toggleSidebar}>
+          {collapsed ? (
+            <AiOutlineMenuUnfold size={22} className="toggle-icon" />
+          ) : (
+            <AiOutlineMenuFold size={22} className="toggle-icon" />
+          )}
+        </div>
       </div>
 
-      {/* <InputBase placeholder="Rechercher..." className="search" /> */}
+      <div className="header-right">
+        {/* Utiliser le composant NotificationSystem */}
+        <NotificationSystem currentUser={currentUser} />
 
-      <div className="icons">
-        <FiBell size={20} className="icon" />
-        <div 
-          className="avatar-circle" 
-          ref={anchorRef}
-          aria-controls={open ? 'menu-list-grow' : undefined}
-          aria-haspopup="true"
-          onClick={handleToggle}
-        >
-          <FiUser size={20} className="icon" />
+        <div className="user-profile">
+          <div
+            className="user-avatar"
+            ref={anchorRef}
+            aria-controls={open ? "menu-list-grow" : undefined}
+            aria-haspopup="true"
+            onClick={handleToggle}
+          >
+            <Avatar className="avatar">
+              {userInitial}
+            </Avatar>
+            <div className="user-info">
+              <Typography variant="subtitle2" className="user-name">
+                {fullName}
+              </Typography>
+              <Typography variant="caption" className="user-role">
+                {currentUser.role === 'superadmin' ? 'Super Admin' : 
+                 currentUser.role === 'admin' ? 'Admin' : 
+                 currentUser.role === 'chef_projet' ? 'Chef de Projet' : 'Utilisateur'}
+              </Typography>
+            </div>
+          </div>
+
+          <Popper
+            open={open}
+            anchorEl={anchorRef.current}
+            role={undefined}
+            transition
+            disablePortal
+            placement="bottom-end"
+            className="user-menu-popper"
+          >
+            {({ TransitionProps, placement }) => (
+              <Grow
+                {...TransitionProps}
+                style={{ transformOrigin: placement === "bottom" ? "center top" : "center bottom" }}
+              >
+                <Paper elevation={3} className="user-menu-paper">
+                  <ClickAwayListener onClickAway={handleClose}>
+                    <MenuList autoFocusItem={open} id="menu-list-grow" className="user-menu-list">
+                      <MenuItem onClick={handleProfileNavigate} className="menu-item">
+                        <FiUser size={16} className="menu-icon" />
+                        Mon Profil
+                      </MenuItem>
+                   
+                      <MenuItem onClick={handleHelpNavigate} className="menu-item">
+                        <FiHelpCircle size={16} className="menu-icon" />
+                        Aide
+                      </MenuItem>
+                      <MenuItem onClick={handleLogout} className="menu-item logout">
+                        <FiLogOut size={16} className="menu-icon" />
+                        Déconnexion
+                      </MenuItem>
+                    </MenuList>
+                  </ClickAwayListener>
+                </Paper>
+              </Grow>
+            )}
+          </Popper>
         </div>
-        <Popper 
-          open={open} 
-          anchorEl={anchorRef.current} 
-          role={undefined} 
-          transition 
-          disablePortal
-          placement="bottom-end"
-        >
-          {({ TransitionProps, placement }) => (
-            <Grow
-              {...TransitionProps}
-              style={{ transformOrigin: placement === 'bottom' ? 'center top' : 'center bottom' }}
-            >
-              <Paper elevation={3}>
-                <ClickAwayListener onClickAway={handleClose}>
-                  <MenuList
-                    autoFocusItem={open}
-                    id="menu-list-grow"
-                    onKeyDown={handleListKeyDown}
-                  >
-                    <MenuItem onClick={handleClose}>
-                      <FiUser size={16} style={{ marginRight: 8 }} />
-                      Profil
-                    </MenuItem>
-                    <MenuItem onClick={handleLogout}>
-                      <FiLogOut size={16} style={{ marginRight: 8 }} />
-                      Déconnexion
-                    </MenuItem>
-                  </MenuList>
-                </ClickAwayListener>
-              </Paper>
-            </Grow>
-          )}
-        </Popper>
       </div>
     </header>
   );

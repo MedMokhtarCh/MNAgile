@@ -16,12 +16,10 @@ const AdminLayout = () => {
       {/* Sidebar */}
       <AdminSidebar collapsed={collapsed} onLogout={() => console.log("Logout")} />
 
-      {/* Contenu principal */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {/* Header */}
         <HeaderDashboard collapsed={collapsed} toggleSidebar={toggleSidebar} />
 
-        {/* Contenu des routes enfants */}
         <div style={{ flex: 1, padding: "24px", marginTop: "64px" }}>
           <Outlet />
         </div>

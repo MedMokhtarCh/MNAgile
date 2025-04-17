@@ -1,287 +1,166 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Grid, 
-  Card, 
-  CardContent, 
+import React from 'react';
+import { useOutletContext } from 'react-router-dom';
+import {
+  Box,
+  Typography,
   Paper,
+  Grid,
   Divider,
-  Avatar,
-  Chip,
-  LinearProgress,
-  Tooltip
+  
 } from '@mui/material';
-import { useParams } from 'react-router-dom';
-import BusinessIcon from '@mui/icons-material/Business';
+import DescriptionIcon from '@mui/icons-material/Description';
 import PeopleIcon from '@mui/icons-material/People';
-import CodeIcon from '@mui/icons-material/Code';
-import BugReportIcon from '@mui/icons-material/BugReport';
-import SpeedIcon from '@mui/icons-material/Speed';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import SettingsIcon from '@mui/icons-material/Settings';
+import { styled } from '@mui/material/styles';
+import { useAvatar } from '../hooks/useAvatar';
+import { useUsers } from '../hooks/useUsers';
+import UserRoleSection from '../components/common/UserRoleSection';
+
+const StyledPaper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(3),
+  borderRadius: 12,
+  boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+  height: '100%',
+}));
+
+const SectionTitle = styled(Typography)(({ theme }) => ({
+  fontWeight: 600,
+  marginBottom: theme.spacing(2),
+  position: 'relative',
+  paddingBottom: theme.spacing(1),
+  '&:after': {
+    content: '""',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: 40,
+    height: 3,
+    backgroundColor: theme.palette.primary.main,
+  },
+}));
 
 const ProjectOverview = () => {
-  const { projectId } = useParams();
-  const [project, setProject] = useState(null);
-  const [registeredUsers, setRegisteredUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-   
-    const projects = JSON.parse(localStorage.getItem('projects')) || [];
-    const foundProject = projects.find(p => p.id === projectId);
-    
-    if (foundProject) {
-      setProject(foundProject);
-      
-      
-      localStorage.setItem('activeProject', JSON.stringify(foundProject));
-    }
-    
-  
-    const storedUsers = JSON.parse(localStorage.getItem('users')) || [];
-    setRegisteredUsers(storedUsers.map(user => ({
-      id: user.email,
-      name: `${user.firstName} ${user.lastName}`,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      email: user.email,
-      company: user.company
-    })));
-    
-    setLoading(false);
-  }, [projectId]);
-
-  // Generate avatar with initials
-  const generateInitials = (name) => {
-    if (!name) return '?';
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name[0].toUpperCase();
-  };
-
+  const [currentProject] = useOutletContext();
+  const { generateInitials, getAvatarColor } = useAvatar();
+  const { users } = useUsers('users');
 
   const getUserDisplayName = (email) => {
-    const user = registeredUsers.find(u => u.email === email);
-    return user ? user.name : email;
+    const user = users.find((u) => u.email === email);
+    return user ? `${user.nom} ${user.prenom}` : email;
   };
 
-  if (loading) {
-    return <Box sx={{ p: 3 }}>Chargement...</Box>;
-  }
-
-  if (!project) {
+  if (!currentProject) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography>Projet non trouvé.</Typography>
+        <Typography>Chargement des détails du projet...</Typography>
       </Box>
     );
   }
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 'bold' }}>Vue d'ensemble</Typography>
-      
+      <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
+        Aperçu du projet
+      </Typography>
+
       <Grid container spacing={3}>
-       
+        {/* Informations du projet */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
+          <StyledPaper>
+            <SectionTitle variant="h6">
+              <Box display="flex" alignItems="center">
+                <DescriptionIcon color="primary" sx={{ mr: 1 }} />
                 Informations du projet
+              </Box>
+            </SectionTitle>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" color="textSecondary">
+                Titre
               </Typography>
-              
-              <Typography variant="body1" sx={{ mb: 1, fontWeight: 'medium', display: 'flex', alignItems: 'center' }}>
-                <BusinessIcon sx={{ mr: 1 }} />
-                {project.title}
+              <Typography variant="h6">{currentProject.title}</Typography>
+            </Box>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" color="textSecondary">
+                Description
               </Typography>
-              
-              <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                {project.description}
+              <Typography>{currentProject.description}</Typography>
+            </Box>
+
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                <SettingsIcon fontSize="small" sx={{ mr: 1 }} />
+                Méthode Agile
               </Typography>
-              
-              <Typography variant="body2" sx={{ mb: 1, display: 'flex', alignItems: 'center' }}>
-                <CalendarTodayIcon sx={{ fontSize: 'small', mr: 1 }} />
-                Créé le: {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+              <Typography>
+                {currentProject.method ? currentProject.method.charAt(0).toUpperCase() + currentProject.method.slice(1) : 'Non spécifié'}
               </Typography>
-              
-              <Divider sx={{ my: 2 }} />
-              
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>Chef de projet:</Typography>
-              <Chip 
-                avatar={
-                  <Avatar>{generateInitials(getUserDisplayName(project.projectManager))}</Avatar>
-                }
-                label={getUserDisplayName(project.projectManager)}
-                variant="outlined"
-                sx={{ mb: 2 }}
-              />
-            </CardContent>
-          </Card>
+            </Box>
+
+            <Box>
+              <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center' }}>
+                <CalendarTodayIcon fontSize="small" sx={{ mr: 1 }} />
+                Créé le
+              </Typography>
+              <Typography>{new Date(currentProject.createdAt).toLocaleDateString('fr-FR')}</Typography>
+            </Box>
+          </StyledPaper>
         </Grid>
-        
-       
+
+        {/* Équipe du projet */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Équipe
-              </Typography>
-              
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <CodeIcon sx={{ fontSize: 'small', mr: 1 }} />
-                  Développeurs
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {project.users && project.users.length > 0 ? (
-                    project.users.map(email => (
-                      <Chip 
-                        key={email}
-                        size="small"
-                        avatar={<Avatar>{generateInitials(getUserDisplayName(email))}</Avatar>}
-                        label={getUserDisplayName(email)}
-                        variant="outlined"
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Aucun développeur
-                    </Typography>
-                  )}
-                </Box>
+          <StyledPaper>
+            <SectionTitle variant="h6">
+              <Box display="flex" alignItems="center">
+                <PeopleIcon color="primary" sx={{ mr: 1 }} />
+                Équipe du projet
               </Box>
-              
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <BugReportIcon sx={{ fontSize: 'small', mr: 1 }} />
-                  Testeurs
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {project.testers && project.testers.length > 0 ? (
-                    project.testers.map(email => (
-                      <Chip 
-                        key={email}
-                        size="small"
-                        avatar={<Avatar>{generateInitials(getUserDisplayName(email))}</Avatar>}
-                        label={getUserDisplayName(email)}
-                        variant="outlined"
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Aucun testeur
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-              
-              <Box>
-                <Typography variant="subtitle2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                  <SpeedIcon sx={{ fontSize: 'small', mr: 1 }} />
-                  Scrum Masters
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {project.scrumMasters && project.scrumMasters.length > 0 ? (
-                    project.scrumMasters.map(email => (
-                      <Chip 
-                        key={email}
-                        size="small"
-                        avatar={<Avatar>{generateInitials(getUserDisplayName(email))}</Avatar>}
-                        label={getUserDisplayName(email)}
-                        variant="outlined"
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      Aucun Scrum Master
-                    </Typography>
-                  )}
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-       
-        <Grid item xs={12}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            Statistiques du projet
-          </Typography>
-          
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'rgba(33, 150, 243, 0.1)' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#2196f3' }}>
-                  0
-                </Typography>
-                <Typography variant="body2">Tâches en backlog</Typography>
-              </Paper>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'rgba(255, 152, 0, 0.1)' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#ff9800' }}>
-                  0
-                </Typography>
-                <Typography variant="body2">Tâches en cours</Typography>
-              </Paper>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                  0
-                </Typography>
-                <Typography variant="body2">Tâches terminées</Typography>
-              </Paper>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#4caf50' }}>
-                  0
-                </Typography>
-                <Typography variant="body2">Tâches terminées</Typography>
-              </Paper>
-            </Grid>
-            
-            <Grid item xs={12} sm={6} md={3}>
-              <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'rgba(156, 39, 176, 0.1)' }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#9c27b0' }}>
-                  0
-                </Typography>
-                <Typography variant="body2">Bugs identifiés</Typography>
-              </Paper>
-            </Grid>
-          </Grid>
-        </Grid>
-        
-       
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                Progression du projet
-              </Typography>
-              
-              <Box sx={{ mb: 4 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2">Avancement global</Typography>
-                  <Typography variant="body2" fontWeight="bold">0%</Typography>
-                </Box>
-                <LinearProgress variant="determinate" value={0} sx={{ height: 8, borderRadius: 4 }} />
-              </Box>
-              
-              <Box>
-                <Typography variant="body2" sx={{ mb: 2 }}>Sprints</Typography>
-                <Typography variant="body1" color="text.secondary" align="center">
-                  Aucun sprint planifié pour le moment
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
+            </SectionTitle>
+
+            <UserRoleSection
+              title="Chefs de projet"
+              users={currentProject.projectManagers}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+
+            <Divider sx={{ my: 2 }} />
+
+            <UserRoleSection
+              title="Product Owners"
+              users={currentProject.productOwners}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+
+            <UserRoleSection
+              title="Scrum Masters"
+              users={currentProject.scrumMasters}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+
+            <UserRoleSection
+              title="Développeurs"
+              users={currentProject.users}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+
+            <UserRoleSection
+              title="Testeurs"
+              users={currentProject.testers}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+          </StyledPaper>
         </Grid>
       </Grid>
     </Box>

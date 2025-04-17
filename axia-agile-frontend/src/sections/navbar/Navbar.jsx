@@ -55,7 +55,7 @@ function Navbar() {
   };
   
   const handleNavigate = () => {
-    navigate('/AuthForms');
+    navigate('/Login');
   };
   
   return (

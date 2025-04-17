@@ -400,7 +400,7 @@ const UserStatisticsDashboard = () => {
   return (
     <Box sx={{ p: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
-        Tableau de Bord des Utilisateurs
+        Tableau de Bord Admin
       </Typography>
 
       {loading ? (

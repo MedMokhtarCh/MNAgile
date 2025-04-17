@@ -247,8 +247,8 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
         <ListItem 
           button 
           component={Link} 
-          to={`/project/${projectId}/messages`} 
-          className={`menu-item ${isActive(`/project/${projectId}/messages`)}`}
+          to={`/project/${projectId}/GroupDiscussion`} 
+          className={`menu-item ${isActive(`/project/${projectId}/GroupDiscussion`)}`}
         >
           <ListItemIcon className="menu-icon">
             <Tooltip title="Messages" placement="right">
@@ -257,6 +257,7 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
           </ListItemIcon>
           {!collapsed && <ListItemText primary="Messages" />}
         </ListItem>
+        
       </List>
     </Drawer>
   );

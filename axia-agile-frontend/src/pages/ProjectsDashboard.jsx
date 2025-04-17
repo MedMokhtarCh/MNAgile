@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Select, Card, Row, Col, Typography, Progress, Space } from 'antd';
 import {
   ProjectOutlined,
@@ -18,7 +18,6 @@ import {
   Legend
 } from 'chart.js';
 
-
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -31,47 +30,111 @@ ChartJS.register(
 
 const { Title: AntTitle, Text } = Typography;
 
-// Sample data for projects
-const projectsData = {
-  "Projet A": {
-    tasks: 12,
-    members: 5,
-    activeTasks: 8,
-    scrumData: [
-      { name: 'Sprint 1', activeTasks: 5, totalTasks: 12 },
-      { name: 'Sprint 2', activeTasks: 8, totalTasks: 20 },
-    ],
-    burndownData: {
-      labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
-      remaining: [20, 18, 15, 14, 12, 10, 8, 5, 3, 0],
-      ideal: [20, 18, 16, 14, 12, 10, 8, 6, 4, 2]
+const ProjectsDashboard = () => {
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [projectOptions, setProjectOptions] = useState([]);
+
+  useEffect(() => {
+    // Load current user
+    const user = JSON.parse(localStorage.getItem('currentUser'));
+    setCurrentUser(user);
+
+    // Load projects from localStorage
+    const storedProjects = JSON.parse(localStorage.getItem('projects')) || [];
+    setProjects(storedProjects);
+
+    // Load users from localStorage
+    const storedUsers = JSON.parse(localStorage.getItem('users')) || [];
+    setUsers(storedUsers);
+
+    // Filter projects based on user role
+    if (user) {
+      let filteredProjects = [];
+      if (user.role === 'chef_projet') {
+        filteredProjects = storedProjects.filter(
+          project => project.createdBy === user.email || 
+          project.projectManagers?.includes(user.email)
+        );
+      } else {
+        filteredProjects = storedProjects.filter(
+          project => project.users?.includes(user.email) ||
+          project.scrumMasters?.includes(user.email) ||
+          project.productOwners?.includes(user.email) ||
+          project.testers?.includes(user.email)
+        );
+      }
+
+      // Prepare project options for Select
+      const options = filteredProjects.map(project => ({
+        value: project.id,
+        label: project.title,
+      }));
+
+      setProjectOptions(options);
+      
+      // Set initial selected project
+      if (filteredProjects.length > 0) {
+        setSelectedProject(filteredProjects[0]);
+      }
     }
-  },
-  "Projet B": {
-    tasks: 20,
-    members: 7,
-    activeTasks: 12,
-    scrumData: [
-      { name: 'Sprint 1', activeTasks: 7, totalTasks: 15 },
-      { name: 'Sprint 2', activeTasks: 10, totalTasks: 25 },
-    ],
-    burndownData: {
-      labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
-      remaining: [25, 23, 20, 18, 15, 13, 10, 8, 5, 2],
-      ideal: [25, 22.5, 20, 17.5, 15, 12.5, 10, 7.5, 5, 2.5]
+  }, []);
+
+  const handleProjectChange = (projectId) => {
+    const project = projects.find(p => p.id === projectId);
+    setSelectedProject(project);
+  };
+
+  // Get team members for the selected project
+  const getTeamMembers = () => {
+    if (!selectedProject) return 0;
+    
+    const allMembers = [
+      ...(selectedProject.projectManagers || []),
+      ...(selectedProject.productOwners || []),
+      ...(selectedProject.scrumMasters || []),
+      ...(selectedProject.users || []),
+      ...(selectedProject.testers || [])
+    ];
+    
+    // Remove duplicates
+    return [...new Set(allMembers)].length;
+  };
+
+  // Sample data for tasks and sprints (to be replaced with real data later)
+  const getProjectData = () => {
+    if (!selectedProject) {
+      return {
+        tasks: 0,
+        activeTasks: 0,
+        scrumData: [],
+        burndownData: {
+          labels: [],
+          remaining: [],
+          ideal: []
+        }
+      };
     }
-  }
-};
 
-const Dashboard = () => {
-  const [selectedProject, setSelectedProject] = useState("Projet A");
+    // Placeholder data - to be replaced with real data from backend/localStorage
+    return {
+      tasks: 12, // This should come from project data
+      activeTasks: 8, // This should come from project data
+      scrumData: [
+        { name: 'Sprint 1', activeTasks: 5, totalTasks: 12 },
+        { name: 'Sprint 2', activeTasks: 8, totalTasks: 20 },
+      ],
+      burndownData: {
+        labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
+        remaining: [20, 18, 15, 14, 12, 10, 8, 5, 3, 0],
+        ideal: [20, 18, 16, 14, 12, 10, 8, 6, 4, 2]
+      }
+    };
+  };
 
-  const options = Object.keys(projectsData).map(project => ({
-    value: project,
-    label: project,
-  }));
-
-  const currentProject = projectsData[selectedProject];
+  const currentProjectData = getProjectData();
 
   const cardStyle = {
     borderRadius: '8px',
@@ -85,11 +148,11 @@ const Dashboard = () => {
   };
 
   const burndownChartData = {
-    labels: currentProject.burndownData.labels,
+    labels: currentProjectData.burndownData.labels,
     datasets: [
       {
         label: 'Travail restant',
-        data: currentProject.burndownData.remaining,
+        data: currentProjectData.burndownData.remaining,
         borderColor: '#0958d9',
         backgroundColor: 'rgba(9, 88, 217, 0.1)',
         tension: 0.4,
@@ -97,7 +160,7 @@ const Dashboard = () => {
       },
       {
         label: 'Ligne idéale',
-        data: currentProject.burndownData.ideal,
+        data: currentProjectData.burndownData.ideal,
         borderColor: '#91caff',
         borderDash: [5, 5],
         tension: 0.4,
@@ -134,6 +197,19 @@ const Dashboard = () => {
     }
   };
 
+  if (!selectedProject && projectOptions.length > 0) {
+    return <div style={{ padding: '24px', textAlign: 'center' }}>Chargement...</div>;
+  }
+
+  if (projectOptions.length === 0) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <AntTitle level={4}>Aucun projet disponible</AntTitle>
+        <Text>Vous n'avez accès à aucun projet ou aucun projet n'a été créé.</Text>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '24px', backgroundColor: '#ffffff', minHeight: '100vh' }}>
       <Space direction="vertical" size="large" style={{ width: '100%', marginBottom: '24px' }}>
@@ -147,15 +223,12 @@ const Dashboard = () => {
             <Select
               showSearch
               style={{ width: '100%' }}
-              value={selectedProject}
-              onChange={setSelectedProject}
-              options={options}
-              placeholder="Rechercher ou sélectionner un projet"
+              value={selectedProject?.id}
+              onChange={handleProjectChange}
+              options={projectOptions}
+              placeholder="Sélectionner un projet"
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              filterSort={(optionA, optionB) =>
-                (optionA?.label ?? '').toLowerCase().localeCompare((optionB?.label ?? '').toLowerCase())
               }
             />
           </Col>
@@ -170,7 +243,7 @@ const Dashboard = () => {
                 <div>
                   <Text type="secondary">Tâches Totales</Text>
                   <AntTitle level={3} style={{ margin: '8px 0 0 0', color: '#0958d9' }}>
-                    {currentProject.tasks}
+                    {currentProjectData.tasks}
                   </AntTitle>
                 </div>
               </Space>
@@ -183,7 +256,7 @@ const Dashboard = () => {
                 <div>
                   <Text type="secondary">Tâches Actives</Text>
                   <AntTitle level={3} style={{ margin: '8px 0 0 0', color: '#0958d9' }}>
-                    {currentProject.activeTasks}
+                    {currentProjectData.activeTasks}
                   </AntTitle>
                 </div>
               </Space>
@@ -196,7 +269,7 @@ const Dashboard = () => {
                 <div>
                   <Text type="secondary">Membres</Text>
                   <AntTitle level={3} style={{ margin: '8px 0 0 0', color: '#0958d9' }}>
-                    {currentProject.members}
+                    {getTeamMembers()}
                   </AntTitle>
                 </div>
               </Space>
@@ -213,7 +286,7 @@ const Dashboard = () => {
 
         {/* Sprint Progress */}
         <Row gutter={16}>
-          {currentProject.scrumData.map((sprint, index) => (
+          {currentProjectData.scrumData.map((sprint, index) => (
             <Col span={12} key={index}>
               <Card
                 title={
@@ -251,4 +324,4 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+export default ProjectsDashboard;
