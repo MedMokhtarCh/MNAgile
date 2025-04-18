@@ -28,9 +28,10 @@ export const validateUser = (user, requiredFields, isEditMode) => {
 
 export const validateProject = (project, team, isEditMode) => {
   const errors = [];
+
   const requiredFields = ['title', 'description', 'method'];
 
-  // Validate required fields for new projects
+  // Champs requis (si création)
   if (!isEditMode) {
     requiredFields.forEach((field) => {
       if (!project[field]) {
@@ -39,15 +40,13 @@ export const validateProject = (project, team, isEditMode) => {
     });
   }
 
-  // Validate method
+  // Méthode agile
   const validMethods = ['scrum', 'scrumban', 'kanban'];
   if (project.method && !validMethods.includes(project.method)) {
     errors.push('La méthode agile doit être Scrum, Scrumban ou Kanban');
   }
 
- 
-
-  // Validate team member emails
+  // Validation des emails de tous les membres
   const allMembers = [
     ...(team.projectManagers || []),
     ...(team.productOwners || []),

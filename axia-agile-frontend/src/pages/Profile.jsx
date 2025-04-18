@@ -78,8 +78,8 @@ const Profile = () => {
         console.log("Current user from localStorage:", user);
 
         if (!user || !user.email) {
-          console.log("No valid user found, redirecting to /AuthForms");
-          navigate("/AuthForms");
+          console.log("No valid user found, redirecting to /login");
+          navigate("/Login");
           return;
         }
 

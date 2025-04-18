@@ -17,6 +17,7 @@ import {
   Tooltip,
   Legend
 } from 'chart.js';
+import PageTitle from '../components/common/PageTitle';
 
 ChartJS.register(
   CategoryScale,
@@ -215,9 +216,9 @@ const ProjectsDashboard = () => {
       <Space direction="vertical" size="large" style={{ width: '100%', marginBottom: '24px' }}>
         <Row justify="space-between" align="middle">
           <Col>
-            <AntTitle level={2} style={{ margin: 0}}>
+            <PageTitle>
               Tableau de Bord
-            </AntTitle>
+            </PageTitle>
           </Col>
           <Col span={8}>
             <Select

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Button, ThemeProvider, CssBaseline } from '@mui/material';
+import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import { usePermissions } from '../hooks/usePermissions';
@@ -11,6 +11,7 @@ import FilterBar from '../components/common/FilterBarUsers';
 import { permissionsGroups } from '../constants/permissions';
 import { userColumns } from '../constants/tableColumnsUsers';
 import { theme } from '../constants/themes';
+import PageTitle from '../components/common/PageTitle';
 
 const UserManagement = () => {
   const {
@@ -22,7 +23,7 @@ const UserManagement = () => {
     editMode,
     setEditMode,
     availableRoles,
-    handleSaveUser,
+    handleCreateUser,
     handleEditUser,
     handleDeleteUser,
     handleToggleActive,
@@ -78,7 +79,7 @@ const UserManagement = () => {
       <CssBaseline />
       <Box sx={{ p: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Typography variant="h4" color="text.primary">Gestion des Utilisateurs</Typography>
+          <PageTitle>Gestion des Utilisateurs</PageTitle>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -130,7 +131,6 @@ const UserManagement = () => {
             setFilterRole(values.role);
             setFilterStatus(values.status);
           }}
-          onRefresh={() => setLoading(true)}
         />
 
         <TableUsers
@@ -143,7 +143,6 @@ const UserManagement = () => {
           onDelete={handleDeleteUser}
           onToggleActive={handleToggleActive}
           onManagePermissions={handleOpenPermissionsModal}
-          setOpenModal={setOpenModal}
           columns={userColumns}
           getAvatarColor={(user) => (user.role === 'chef_projet' ? 'secondary.main' : 'primary.main')}
         />
@@ -153,7 +152,7 @@ const UserManagement = () => {
           onClose={handleCloseModal}
           user={newUser}
           setUser={setNewUser}
-          onSave={() => handleSaveUser(['email', 'password', 'nom', 'prenom', 'jobTitle'])}
+          onSave={() => handleCreateUser(['email', 'nom', 'prenom', 'jobTitle'])}
           isEditMode={editMode}
           roles={availableRoles}
           permissionsGroups={{

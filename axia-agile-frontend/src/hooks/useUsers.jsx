@@ -12,7 +12,7 @@ export const useUsers = (storageKey) => {
     nom: '',
     prenom: '',
     telephone: '',
-    role: 'user',
+    role: storageKey === 'admins' ? 'admin' : 'user',
     jobTitle: '',
     entreprise: '',
     adresse: '',
@@ -29,7 +29,7 @@ export const useUsers = (storageKey) => {
   useEffect(() => {
     setLoading(true);
     setTimeout(() => {
-      const storedUsers = getStoredData(storageKey);
+      const storedUsers = getStoredData(storageKey) || [];
       setUsers(storedUsers.map((user) => ({
         ...user,
         permissions: user.permissions || [],
@@ -57,22 +57,21 @@ export const useUsers = (storageKey) => {
       return;
     }
 
-    if (!editMode) {
-      if (users.find((user) => user.email === newUser.email)) {
-        showSnackbar('Cet email est déjà utilisé', 'error');
-        return;
-      }
+    if (!editMode && users.some(user => user.email === newUser.email)) {
+      showSnackbar('Cet email est déjà utilisé', 'error');
+      return;
     }
 
+    const userData = {
+      ...newUser,
+      role: storageKey === 'admins' ? 'admin' : newUser.role,
+      isActive: true,
+      permissions: newUser.permissions || []
+    };
+
     if (editMode) {
-      const updatedUsers = users.map((user) =>
-        user.id === currentUserId
-          ? {
-              ...user,
-              ...newUser,
-              password: newUser.password || user.password,
-            }
-          : user
+      const updatedUsers = users.map(user => 
+        user.id === currentUserId ? { ...user, ...userData } : user
       );
       setUsers(updatedUsers);
       setStoredData(storageKey, updatedUsers);
@@ -81,19 +80,23 @@ export const useUsers = (storageKey) => {
       const updatedUsers = [
         ...users,
         {
-          ...newUser,
+          ...userData,
           id: Date.now(),
-          isActive: true,
           dateCreated: new Date().toISOString(),
           lastLogin: null,
           createdBy: currentUser.email,
-        },
+        }
       ];
       setUsers(updatedUsers);
       setStoredData(storageKey, updatedUsers);
-      showSnackbar(`${newUser.role === 'chef_projet' ? 'Chef de projet' : 'Utilisateur'} créé avec succès!`, 'success');
+      showSnackbar(
+        storageKey === 'admins' ? 'Admin créé avec succès!' : 
+        newUser.role === 'chef_projet' ? 'Chef de projet créé avec succès!' : 'Utilisateur créé avec succès!',
+        'success'
+      );
     }
 
+    // Reset form
     setNewUser({
       email: '',
       password: '',
@@ -112,7 +115,7 @@ export const useUsers = (storageKey) => {
   };
 
   const handleEditUser = (id) => {
-    const userToEdit = users.find((user) => user.id === id);
+    const userToEdit = users.find(user => user.id === id);
     if (userToEdit) {
       setNewUser({ ...userToEdit, password: '' });
       setEditMode(true);
@@ -121,20 +124,20 @@ export const useUsers = (storageKey) => {
   };
 
   const handleDeleteUser = (id) => {
-    const user = users.find((u) => u.id === id);
-    const updatedUsers = users.filter((user) => user.id !== id);
+    const user = users.find(u => u.id === id);
+    const updatedUsers = users.filter(user => user.id !== id);
     setUsers(updatedUsers);
     setStoredData(storageKey, updatedUsers);
     showSnackbar(`Compte supprimé pour ${user.email}`, 'success');
   };
 
   const handleToggleActive = (id) => {
-    const updatedUsers = users.map((user) =>
+    const updatedUsers = users.map(user =>
       user.id === id ? { ...user, isActive: !user.isActive } : user
     );
     setUsers(updatedUsers);
     setStoredData(storageKey, updatedUsers);
-    const user = updatedUsers.find((u) => u.id === id);
+    const user = updatedUsers.find(u => u.id === id);
     showSnackbar(`Compte ${user.isActive ? 'activé' : 'désactivé'} pour ${user.email}`, 'info');
   };
 

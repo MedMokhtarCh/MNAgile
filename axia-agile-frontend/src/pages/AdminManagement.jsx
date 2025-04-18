@@ -11,6 +11,7 @@ import FilterBar from '../components/common/FilterBarUsers';
 import { permissionsGroups } from '../constants/permissions';
 import { adminColumns } from '../constants/tableColumnsUsers';
 import { theme } from '../constants/themes';
+import PageTitle from '../components/common/PageTitle';
 
 const AdminManagement = () => {
   const {
@@ -74,7 +75,8 @@ const AdminManagement = () => {
       <CssBaseline />
       <Box sx={{ p: 4 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-          <Typography variant="h4" color="text.primary">Gestion des Comptes Admin</Typography>
+       
+          <PageTitle>Gestion des Comptes Admin</PageTitle>
           <Button
             variant="contained"
             startIcon={<AddIcon />}

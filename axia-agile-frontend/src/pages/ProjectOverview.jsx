@@ -16,6 +16,7 @@ import { styled } from '@mui/material/styles';
 import { useAvatar } from '../hooks/useAvatar';
 import { useUsers } from '../hooks/useUsers';
 import UserRoleSection from '../components/common/UserRoleSection';
+import PageTitle from '../components/common/PageTitle';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
@@ -60,9 +61,8 @@ const ProjectOverview = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ fontWeight: 'bold', mb: 3 }}>
-        Aperçu du projet
-      </Typography>
+     
+      <PageTitle>Aperçu du projet</PageTitle>
 
       <Grid container spacing={3}>
         {/* Informations du projet */}

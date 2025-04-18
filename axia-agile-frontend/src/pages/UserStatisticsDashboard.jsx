@@ -39,7 +39,7 @@ import {
   DoughnutController,
 } from 'chart.js';
 import { Bar, Doughnut, Pie } from 'react-chartjs-2';
-
+import PageTitle from '../components/common/PageTitle';
 // Register Chart.js components
 ChartJS.register(
   CategoryScale,
@@ -399,9 +399,8 @@ const UserStatisticsDashboard = () => {
 
   return (
     <Box sx={{ p: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Tableau de Bord Admin
-      </Typography>
+    
+      <PageTitle>Tableau de Bord Admin</PageTitle>
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>

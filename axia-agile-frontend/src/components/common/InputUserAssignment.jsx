@@ -1,5 +1,13 @@
 import React from 'react';
-import { Autocomplete, TextField, Chip, Avatar } from '@mui/material';
+import {
+  Autocomplete,
+  TextField,
+  Chip,
+  Avatar,
+  createFilterOptions,
+} from '@mui/material';
+
+const filter = createFilterOptions();
 
 const InputUserAssignment = ({
   options,
@@ -10,7 +18,6 @@ const InputUserAssignment = ({
   getAvatarColor,
   generateInitials,
 }) => {
-  // Ensure options and value are defined
   const safeOptions = options || [];
   const safeValue = value || [];
 
@@ -18,10 +25,20 @@ const InputUserAssignment = ({
     <Autocomplete
       multiple
       options={safeOptions}
-      getOptionLabel={(option) => `${option.nom} ${option.prenom}` || option.email || ''}
-      isOptionEqualToValue={(option, val) => option.email === val.email}
       value={safeValue}
       onChange={(event, newValue) => onChange(event, newValue)}
+      getOptionLabel={(option) =>
+        `${option.nom || ''} ${option.prenom || ''}`.trim() || option.email || ''
+      }
+      isOptionEqualToValue={(option, val) => option.email === val.email}
+      filterOptions={(options, params) => {
+        const input = params.inputValue.toLowerCase();
+        return options.filter((option) => {
+          const fullName = `${option.nom || ''} ${option.prenom || ''}`.toLowerCase();
+          const email = (option.email || '').toLowerCase();
+          return fullName.includes(input) || email.includes(input);
+        });
+      }}
       renderInput={(params) => (
         <TextField
           {...params}
@@ -39,12 +56,28 @@ const InputUserAssignment = ({
                 {generateInitials(option.nom || option.email)}
               </Avatar>
             }
-            label={`${option.nom} ${option.prenom}` || option.email}
+            label={`${option.nom || ''} ${option.prenom || ''}`.trim() || option.email}
             {...getTagProps({ index })}
             sx={{ borderRadius: 16 }}
           />
         ))
       }
+      renderOption={(props, option) => (
+        <li {...props}>
+          <Avatar
+            sx={{
+              bgcolor: getAvatarColor(option.nom || option.email),
+              width: 24,
+              height: 24,
+              fontSize: 12,
+              marginRight: 1,
+            }}
+          >
+            {generateInitials(option.nom || option.email)}
+          </Avatar>
+          {`${option.nom || ''} ${option.prenom || ''}`.trim()} ({option.email})
+        </li>
+      )}
       sx={{ mb: 2 }}
     />
   );

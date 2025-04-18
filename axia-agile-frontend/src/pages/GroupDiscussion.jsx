@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import EmojiPicker from 'emoji-picker-react';
-import { 
-  Box, Typography, TextField, Button, Avatar, Paper, Divider, IconButton, 
+import {
+  Box, Typography, TextField, Button, Avatar, Paper, Divider, IconButton,
   Badge, List, ListItem, ListItemText, ListItemAvatar, AppBar, Toolbar,
-  Drawer, useMediaQuery, Menu, MenuItem, Tooltip, InputAdornment, Popover
+  useMediaQuery, Menu, MenuItem, Tooltip, InputAdornment, Popover,
+  Dialog, DialogTitle, DialogContent, DialogActions, Autocomplete
 } from '@mui/material';
 import { styled, useTheme } from '@mui/material/styles';
 import SendIcon from '@mui/icons-material/Send';
@@ -13,6 +14,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import InfoIcon from '@mui/icons-material/Info';
 import EmojiEmotionsIcon from '@mui/icons-material/EmojiEmotions';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AddIcon from '@mui/icons-material/Add';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import ImageIcon from '@mui/icons-material/Image';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
@@ -20,57 +22,57 @@ import DescriptionIcon from '@mui/icons-material/Description';
 
 // Default channels
 const DEFAULT_CHANNELS = [
-  { id: 1, name: 'général', unread: 0 },
-  { id: 2, name: 'sprint-planning', unread: 0 },
-  { id: 3, name: 'backlog-grooming', unread: 0 },
-  { id: 4, name: 'daily-standup', unread: 0 },
-  { id: 5, name: 'retrospective', unread: 0 },
+  { id: 1, name: 'général', unread: 0, type: 'channel' },
+  { id: 2, name: 'planification-sprint', unread: 0, type: 'channel' },
+  { id: 3, name: 'grooming-backlog', unread: 0, type: 'channel' },
+  { id: 4, name: 'standup-quotidien', unread: 0, type: 'channel' },
+  { id: 5, name: 'rétrospective', unread: 0, type: 'channel' },
 ];
 
 // Custom scrollbar styles
 const ScrollbarStyle = {
   '&::-webkit-scrollbar': {
-    width: '8px',
-    height: '8px',
+    width: '6px',
+    height: '6px',
   },
   '&::-webkit-scrollbar-track': {
     background: 'transparent',
   },
   '&::-webkit-scrollbar-thumb': {
-    background: 'transparent',
-    borderRadius: '4px',
-  },
-  '&:hover::-webkit-scrollbar-thumb': {
-    background: 'rgba(0, 0, 0, 0.2)',
+    background: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: '3px',
   },
   scrollbarWidth: 'thin',
-  scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent',
+  scrollbarColor: 'rgba(0, 0, 0, 0.3) transparent',
 };
 
-// Styled components with fixed layout
+// Styled components
 const ChatContainer = styled(Box)({
   display: 'flex',
-  height: '100vh',
+  height: '100%',
+  backgroundColor: '#f5f7fa',
   overflow: 'hidden',
-  backgroundColor: '#f7f9fc',
 });
 
 const SidebarContainer = styled(Box, {
-  shouldForwardProp: (prop) => prop !== 'open'
+  shouldForwardProp: (prop) => prop !== 'open',
 })(({ theme, open }) => ({
-  width: 280,
-  backgroundColor: '#1A237E',
+  width: 260,
+  background: 'linear-gradient(180deg, #2c3e50 0%, #34495e 100%)',
   color: '#fff',
   display: 'flex',
   flexDirection: 'column',
   flexShrink: 0,
+  transition: theme.transitions.create(['left'], {
+    easing: theme.transitions.easing.easeInOut,
+    duration: theme.transitions.duration.standard,
+  }),
   [theme.breakpoints.down('md')]: {
     position: 'fixed',
     zIndex: 1200,
-    left: open ? 0 : -280,
+    left: open ? 0 : -260,
     top: 0,
     height: '100%',
-    transition: 'left 0.3s ease-in-out',
   },
 }));
 
@@ -79,28 +81,33 @@ const MainArea = styled(Box)({
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-  width: 'calc(100% - 280px)',
 });
 
 const ChannelItem = styled(ListItem, {
-  shouldForwardProp: (prop) => prop !== 'active' && prop !== 'hasUnread'
+  shouldForwardProp: (prop) => prop !== 'active' && prop !== 'hasUnread',
 })(({ theme, active, hasUnread }) => ({
-  borderRadius: 8,
+  borderRadius: 6,
   margin: '4px 8px',
+  padding: '8px 12px',
   cursor: 'pointer',
-  backgroundColor: active ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+  backgroundColor: active ? 'rgba(255, 255, 255, 0.2)' : 'transparent',
+  transition: theme.transitions.create(['background-color'], {
+    duration: theme.transitions.duration.short,
+  }),
   '&:hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   '& .MuiListItemText-primary': {
     fontWeight: hasUnread || active ? 600 : 400,
-    fontSize: '0.95rem',
+    fontSize: '0.9rem',
+    color: '#fff',
   },
 }));
 
 const MemberItem = styled(ListItem)({
-  borderRadius: 8,
+  borderRadius: 6,
   margin: '2px 8px',
+  padding: '6px 12px',
   cursor: 'pointer',
   '&:hover': {
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
@@ -109,120 +116,105 @@ const MemberItem = styled(ListItem)({
 
 const MessageContainer = styled(Box)({
   flexGrow: 1,
-  padding: '20px',
+  padding: '16px 20px',
   overflowY: 'auto',
   display: 'flex',
   flexDirection: 'column',
-  backgroundColor: '#ffffff',
-  marginLeft: 0,
-  ...ScrollbarStyle
+  backgroundColor: '#f5f7fa',
+  ...ScrollbarStyle,
 });
 
 const SidebarScroll = styled(Box)({
   overflowY: 'auto',
   flexGrow: 1,
-  height: '100%',
-  ...ScrollbarStyle
+  ...ScrollbarStyle,
 });
 
 const MessageItem = styled(Box)({
-  marginBottom: '16px',
+  marginBottom: '12px',
   display: 'flex',
   alignItems: 'flex-start',
 });
 
 const MessageContent = styled(Box)({
-  marginLeft: '12px',
+  marginLeft: '10px',
   flexGrow: 1,
 });
 
 const InputArea = styled(Box)({
-  padding: '12px 20px 16px',
-  borderTop: '1px solid rgba(0, 0, 0, 0.08)',
-  backgroundColor: '#ffffff',
+  padding: '12px 16px',
+  borderTop: '1px solid #e8ecef',
+  backgroundColor: '#fff',
 });
 
 const StyledTextField = styled(TextField)(({ theme }) => ({
   '& .MuiOutlinedInput-root': {
-    borderRadius: 8,
-    backgroundColor: '#f5f7fa',
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    transition: theme.transitions.create(['border-color', 'box-shadow']),
     '&:hover': {
       '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#5B9BD5',
-      }
+        borderColor: theme.palette.primary.light,
+      },
     },
     '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#1A237E',
+      borderColor: theme.palette.primary.main,
       borderWidth: '2px',
-    }
-  },
-  '& .MuiOutlinedInput-notchedOutline': {
-    borderWidth: '1.5px',
+    },
   },
   '& .MuiInputBase-input': {
-    padding: '12px 14px',
-  }
+    padding: '10px 12px',
+    fontSize: '0.9rem',
+  },
 }));
 
-const SendButton = styled(Button)({
-  borderRadius: 8,
-  padding: '8px 16px',
-  marginLeft: '10px',
-  boxShadow: '0px 3px 6px rgba(0, 0, 0, 0.1)',
-  transition: 'all 0.2s ease-in-out',
-  background: 'linear-gradient(135deg, #5B9BD5 0%, #3F51B5 100%)',
+const SendButton = styled(Button)(({ theme }) => ({
+  borderRadius: 10,
+  padding: '8px 20px',
+  marginLeft: '12px',
+  background: 'linear-gradient(135deg, #007bff 0%, #0056b3 100%)',
+  transition: theme.transitions.create(['transform', 'box-shadow', 'background']),
   '&:hover': {
-    transform: 'translateY(-2px)',
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)',
-    background: 'linear-gradient(135deg, #6BA5DB 0%, #4A5AC6 100%)',
-  }
-});
+    transform: 'translateY(-1px)',
+    boxShadow: theme.shadows[2],
+    background: 'linear-gradient(135deg, #3395ff 0%, #1a73e8 100%)',
+  },
+}));
 
 const FileAttachment = styled(Box)({
   display: 'flex',
   alignItems: 'center',
-  backgroundColor: '#f2f6fc',
-  borderRadius: 8,
-  padding: '8px 12px',
-  marginTop: '8px',
-  marginRight: '8px',
-  border: '1px solid #e0e7ef',
-  boxShadow: '0px 1px 3px rgba(0, 0, 0, 0.05)',
+  backgroundColor: '#f8fafc',
+  borderRadius: 6,
+  padding: '6px 10px',
+  marginTop: '6px',
+  marginRight: '6px',
+  border: '1px solid #e8ecef',
   maxWidth: 'fit-content',
 });
 
 const StatusBadge = styled(Badge, {
-  shouldForwardProp: (prop) => prop !== 'status'
+  shouldForwardProp: (prop) => prop !== 'status',
 })(({ theme, status }) => {
-  let bgColor = '#ccc';
-  if (status === 'online') bgColor = '#4caf50';
-  else if (status === 'away') bgColor = '#ff9800';
-
+  const bgColor = status === 'online' ? '#28a745' : status === 'away' ? '#ffc107' : '#6c757d';
   return {
     '& .MuiBadge-badge': {
       backgroundColor: bgColor,
-      color: bgColor,
       boxShadow: `0 0 0 2px ${theme.palette.background.paper}`,
-      '&::after': {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        borderRadius: '50%',
-        content: '""',
-      }
-    }
+      width: 10,
+      height: 10,
+      borderRadius: '50%',
+    },
   };
 });
 
 const SectionTitle = styled(Typography)({
-  fontSize: '0.9rem',
-  fontWeight: 600,
+  fontSize: '0.85rem',
+  fontWeight: 500,
   textTransform: 'uppercase',
-  letterSpacing: '0.1em',
-  color: 'rgba(255, 255, 255, 0.7)',
-  padding: '16px 16px 8px',
+  letterSpacing: '0.05em',
+  color: 'rgba(255, 255, 255, 0.6)',
+  padding: '12px 16px 6px',
 });
 
 // Utility functions
@@ -231,110 +223,158 @@ const formatTimestamp = (isoString) => {
   const now = new Date();
   const diffMs = now - date;
   const diffHours = diffMs / (1000 * 60 * 60);
-  
+
   if (diffHours < 24 && date.getDate() === now.getDate()) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   } else if (diffHours < 48) {
-    return 'Hier ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `Hier ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
   } else {
-    return date.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ' +
-           date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} ${date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
   }
 };
 
 const getFileIcon = (fileType) => {
-  switch(fileType) {
+  switch (fileType) {
     case 'pdf':
-      return <PictureAsPdfIcon color="error" />;
+      return (
+        <>
+          <PictureAsPdfIcon color="error" /> 📑
+        </>
+      );
     case 'image':
-      return <ImageIcon color="primary" />;
+      return (
+        <>
+          <ImageIcon color="primary" /> 🖼️
+        </>
+      );
     case 'doc':
     case 'docx':
-      return <DescriptionIcon color="primary" />;
+      return (
+        <>
+          <DescriptionIcon color="primary" /> 📄
+        </>
+      );
     default:
-      return <InsertDriveFileIcon color="action" />;
+      return (
+        <>
+          <InsertDriveFileIcon color="action" /> 📎
+        </>
+      );
   }
 };
 
-const GroupDiscussion = () => {
+const GroupDiscussion = ({ workspaceName = 'Espace de travail' }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
-  const [messages, setMessages] = useState(JSON.parse(localStorage.getItem('messages')) || []);
+  const [messages, setMessages] = useState(
+    JSON.parse(localStorage.getItem(`messages_channel_${DEFAULT_CHANNELS[0].id}`)) || []
+  );
   const [messageInput, setMessageInput] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [selectedChannel, setSelectedChannel] = useState(DEFAULT_CHANNELS[0]);
+  const [directMessages, setDirectMessages] = useState(
+    JSON.parse(localStorage.getItem('direct_messages')) || []
+  );
+  const [openNewDmDialog, setOpenNewDmDialog] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [attachedFiles, setAttachedFiles] = useState([]);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
-  
-  // Emoji picker state
   const [emojiAnchorEl, setEmojiAnchorEl] = useState(null);
   const emojiPickerOpen = Boolean(emojiAnchorEl);
 
-  // Get users from localStorage
   const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-  const teamMembers = JSON.parse(localStorage.getItem('users')) || [];
-
-  // Check if discussion is possible
+  const teamMembers = (JSON.parse(localStorage.getItem('users')) || []).filter(
+    (member) => member.id !== currentUser?.id
+  );
   const canCommunicate = currentUser && teamMembers.length > 0;
 
-  // Generate random statuses for members
   const getRandomStatus = () => {
     const statuses = ['online', 'away', 'offline'];
     return statuses[Math.floor(Math.random() * statuses.length)];
   };
 
-  // Scroll to bottom when new messages are added
+  useEffect(() => {
+    const storageKey = selectedChannel.type === 'dm' ? `messages_${selectedChannel.id}` : `messages_channel_${selectedChannel.id}`;
+    const channelMessages = JSON.parse(localStorage.getItem(storageKey)) || [];
+    setMessages(channelMessages);
+  }, [selectedChannel]);
+
+  useEffect(() => {
+    const storageKey = selectedChannel.type === 'dm' ? `messages_${selectedChannel.id}` : `messages_channel_${selectedChannel.id}`;
+    localStorage.setItem(storageKey, JSON.stringify(messages));
+  }, [messages, selectedChannel]);
+
+  useEffect(() => {
+    localStorage.setItem('direct_messages', JSON.stringify(directMessages));
+  }, [directMessages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Update unread messages and persist messages
-  useEffect(() => {
-    localStorage.setItem('messages', JSON.stringify(messages));
-    if (messages.length > 0) {
-      setSelectedChannel(prev => ({
-        ...prev,
-        unread: prev.unread + 1
-      }));
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
+  const handleEmojiPickerOpen = (event) => setEmojiAnchorEl(event.currentTarget);
+  const handleEmojiPickerClose = () => setEmojiAnchorEl(null);
+  const handleEmojiClick = (emojiData) => setMessageInput((prev) => prev + emojiData.emoji);
+
+  const startDirectMessage = (member) => {
+    if (member.id === currentUser?.id) return;
+    const dmId = `dm_${Math.min(currentUser.id, member.id)}_${Math.max(currentUser.id, member.id)}`;
+    const dmChannel = {
+      id: dmId,
+      name: `${member.prenom || ''} ${member.nom || ''}`.trim() || 'Utilisateur inconnu',
+      type: 'dm',
+      recipientId: member.id,
+      unread: 0,
+    };
+    if (!directMessages.find((dm) => dm.id === dmId)) {
+      setDirectMessages([...directMessages, dmChannel]);
     }
-  }, [messages]);
-
-  const handleMenuOpen = (event) => {
-    setAnchorEl(event.currentTarget);
+    setSelectedChannel(dmChannel);
+    setOpenNewDmDialog(false);
+    setSidebarOpen(false);
   };
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleEmojiPickerOpen = (event) => {
-    setEmojiAnchorEl(event.currentTarget);
-  };
-
-  const handleEmojiPickerClose = () => {
-    setEmojiAnchorEl(null);
-  };
-
-  const handleEmojiClick = (emojiData) => {
-    setMessageInput(prev => prev + emojiData.emoji);
+  const handleSelectChannel = (channel) => {
+    setSelectedChannel(channel);
+    if (channel.type === 'dm') {
+      setDirectMessages((prev) =>
+        prev.map((dm) =>
+          dm.id === channel.id ? { ...dm, unread: 0 } : dm
+        )
+      );
+    }
+    setSidebarOpen(false);
   };
 
   const handleSendMessage = () => {
     if (!canCommunicate || (messageInput.trim() === '' && attachedFiles.length === 0)) return;
-    
+
     const newMessage = {
       id: messages.length + 1,
       senderId: currentUser.id,
       content: messageInput,
       timestamp: new Date().toISOString(),
       attachments: attachedFiles,
-      replyTo
+      replyTo,
+      recipientId: selectedChannel.type === 'dm' ? selectedChannel.recipientId : null,
     };
-    
+
     setMessages([...messages, newMessage]);
+
+    // Increment unread count for DM if not currently selected
+    if (selectedChannel.type === 'dm') {
+      const dmId = selectedChannel.id;
+      setDirectMessages((prev) =>
+        prev.map((dm) =>
+          dm.id === dmId ? { ...dm, unread: (dm.unread || 0) + 1 } : dm
+        )
+      );
+    }
+
     setMessageInput('');
     setAttachedFiles([]);
     setReplyTo(null);
@@ -349,116 +389,136 @@ const GroupDiscussion = () => {
 
   const handleFileSelection = (event) => {
     const files = Array.from(event.target.files);
-    
     const newAttachments = files.map((file, index) => {
       let fileType = 'file';
       if (file.type.includes('image')) fileType = 'image';
       else if (file.type.includes('pdf')) fileType = 'pdf';
       else if (file.type.includes('word') || file.name.endsWith('.doc') || file.name.endsWith('.docx')) fileType = 'doc';
-      
+
       return {
         id: attachedFiles.length + index + 1,
         name: file.name,
         type: fileType,
-        size: (file.size / (1024 * 1024)).toFixed(1) + ' MB'
+        size: (file.size / (1024 * 1024)).toFixed(1) + ' Mo',
       };
     });
-    
+
     setAttachedFiles([...attachedFiles, ...newAttachments]);
   };
 
-  const triggerFileInput = () => {
-    fileInputRef.current.click();
-  };
+  const triggerFileInput = () => fileInputRef.current.click();
 
   const removeAttachment = (id) => {
-    setAttachedFiles(attachedFiles.filter(file => file.id !== id));
+    setAttachedFiles(attachedFiles.filter((file) => file.id !== id));
   };
 
-  // Find message sender
   const getSender = (senderId) => {
     if (senderId === currentUser?.id) {
       return {
         ...currentUser,
-        name: currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : 'Vous'
+        name: currentUser.prenom || currentUser.nom ? `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() : 'Vous',
       };
     }
-    const member = teamMembers.find(m => m.id === senderId);
-    return member ? {
-      ...member,
-      name: `${member.prenom || ''} ${member.nom || ''}`.trim() || 'Utilisateur inconnu'
-    } : { 
-      id: senderId, 
-      name: 'Utilisateur inconnu', 
-      prenom: 'Inconnu', 
-      nom: 'Utilisateur' 
-    };
+    const member = teamMembers.find((m) => m.id === senderId);
+    return member
+      ? {
+          ...member,
+          name: `${member.prenom || ''} ${member.nom || ''}`.trim() || 'Utilisateur inconnu',
+        }
+      : { id: senderId, name: 'Utilisateur inconnu', prenom: 'Inconnu', nom: 'Utilisateur' };
   };
 
   return (
     <ChatContainer>
-      {/* Sidebar for channels and team members */}
+      {/* Sidebar */}
       <SidebarContainer open={sidebarOpen}>
         <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>AxiaAgile</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#fff' }}>
+            {workspaceName}
+          </Typography>
           {isMobile && (
-            <IconButton size="small" onClick={() => setSidebarOpen(false)} sx={{ color: 'white' }}>
+            <IconButton size="small" onClick={() => setSidebarOpen(false)} sx={{ color: '#fff' }}>
               <CloseIcon />
             </IconButton>
           )}
         </Box>
-        
-        <Divider sx={{ backgroundColor: 'rgba(255, 255, 255, 0.12)' }} />
-        
+        <Divider sx={{ backgroundColor: 'rgba(255, 255, 255, 0.15)' }} />
         <SidebarScroll>
-          {/* Channels section */}
-          <SectionTitle>CANAUX</SectionTitle>
+          <SectionTitle>Canaux</SectionTitle>
           <List component="nav" dense>
-            {DEFAULT_CHANNELS.map(channel => (
-              <ChannelItem 
+            {DEFAULT_CHANNELS.map((channel) => (
+              <ChannelItem
                 key={channel.id}
                 active={channel.id === selectedChannel.id}
                 hasUnread={channel.unread > 0}
-                onClick={() => setSelectedChannel(channel)}
+                onClick={() => handleSelectChannel(channel)}
               >
                 <ListItemText primary={`# ${channel.name}`} />
-                {channel.unread > 0 && (
-                  <Badge badgeContent={channel.unread} color="error" />
-                )}
+                {channel.unread > 0 && <Badge badgeContent={channel.unread} color="error" />}
               </ChannelItem>
             ))}
           </List>
-          
-          {/* Team members section */}
-          <SectionTitle>MEMBRES DE L'ÉQUIPE</SectionTitle>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2 }}>
+            <SectionTitle>Messages privés</SectionTitle>
+            <Tooltip title="Nouveau message">
+              <IconButton size="small" color="inherit" onClick={() => setOpenNewDmDialog(true)}>
+                <AddIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <List dense>
+            {directMessages.length === 0 ? (
+              <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', px: 2 }}>
+                Aucun message privé
+              </Typography>
+            ) : (
+              directMessages
+                .filter((dm) => dm.recipientId !== currentUser?.id)
+                .map((dm) => (
+                  <ChannelItem
+                    key={dm.id}
+                    active={dm.id === selectedChannel.id}
+                    hasUnread={dm.unread > 0}
+                    onClick={() => handleSelectChannel(dm)}
+                  >
+                    <ListItemText primary={dm.name} />
+                    {dm.unread > 0 && (
+                      <Badge badgeContent={dm.unread} color="error" aria-label={`${dm.unread} messages non lus`} />
+                    )}
+                  </ChannelItem>
+                ))
+            )}
+          </List>
+          <SectionTitle>Membres de l'équipe</SectionTitle>
           {teamMembers.length === 0 ? (
             <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.7)', px: 2 }}>
               Aucun membre disponible
             </Typography>
           ) : (
             <List dense>
-              {teamMembers.map(member => (
-                <MemberItem key={member.id}>
+              {teamMembers.map((member) => (
+                <MemberItem
+                  key={member.id}
+                  onClick={() => startDirectMessage(member)}
+                >
                   <ListItemAvatar>
                     <StatusBadge
                       overlap="circular"
                       anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                       variant="dot"
                       status={getRandomStatus()}
+                      aria-label={getRandomStatus() === 'online' ? 'En ligne' : getRandomStatus() === 'away' ? 'Absent' : 'Hors ligne'}
                     >
-                      <Avatar>
+                      <Avatar sx={{ bgcolor: '#007bff', width: 36, height: 36, fontSize: '0.9rem' }}>
                         {member.prenom?.[0] || member.nom?.[0] || '?'}
                       </Avatar>
                     </StatusBadge>
                   </ListItemAvatar>
-                  <ListItemText 
-                    primary={`${member.prenom || ''} ${member.nom || ''}`.trim() || 'Utilisateur inconnu'} 
-                    primaryTypographyProps={{ 
+                  <ListItemText
+                    primary={`${member.prenom || ''} ${member.nom || ''}`.trim() || 'Utilisateur inconnu'}
+                    primaryTypographyProps={{
                       variant: 'body2',
-                      style: {
-                        fontWeight: 500,
-                        color: '#fff'
-                      }
+                      style: { fontWeight: 500, color: '#fff' },
                     }}
                   />
                 </MemberItem>
@@ -467,116 +527,126 @@ const GroupDiscussion = () => {
           )}
         </SidebarScroll>
       </SidebarContainer>
-      
-      {/* Main area */}
+
+      {/* Main Area */}
       <MainArea>
-        {/* Channel header */}
-        <AppBar position="static" color="default" elevation={0} sx={{ backgroundColor: '#fff', borderBottom: '1px solid rgba(0, 0, 0, 0.08)' }}>
+        <AppBar
+          position="static"
+          color="transparent"
+          elevation={0}
+          sx={{ backgroundColor: '#fff', borderBottom: '1px solid #e8ecef' }}
+        >
           <Toolbar>
             {isMobile && (
               <IconButton
                 edge="start"
                 color="inherit"
-                aria-label="menu"
+                aria-label="Ouvrir la barre latérale"
                 onClick={() => setSidebarOpen(true)}
-                sx={{ mr: 2 }}
+                sx={{ mr: 1 }}
               >
                 <MenuIcon />
               </IconButton>
             )}
-            <Typography variant="h6" sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', fontWeight: 600, color: '#1A237E' }}>
-              # {selectedChannel.name}
+            <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600, color: '#2c3e50' }}>
+              {selectedChannel.type === 'dm' ? selectedChannel.name : `# ${selectedChannel.name}`}
             </Typography>
-            <Tooltip title="Informations du canal">
+            <Tooltip title="Informations sur le canal">
               <IconButton color="primary">
                 <InfoIcon />
               </IconButton>
             </Tooltip>
           </Toolbar>
         </AppBar>
-        
-        {/* Message area */}
+
         <MessageContainer>
           {!canCommunicate ? (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
-              Veuillez configurer les utilisateurs pour commencer la discussion.
+              Veuillez configurer des utilisateurs pour commencer la discussion.
             </Typography>
           ) : messages.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 4 }}>
-              Aucun message dans ce canal. Commencez la discussion !
+              Aucun message dans ce {selectedChannel.type === 'dm' ? 'message privé' : 'canal'}. Commencez la conversation !
             </Typography>
           ) : (
-            messages.map(message => {
-              const sender = getSender(message.senderId);
-              const replyToMessage = message.replyTo ? messages.find(m => m.id === message.replyTo) : null;
-              const replyToSender = replyToMessage ? getSender(replyToMessage.senderId) : null;
-              return (
-                <MessageItem key={message.id}>
-                  <Avatar sx={{ bgcolor: sender.id === currentUser?.id ? '#1A237E' : '#5B9BD5' }}>
-                    {sender.prenom?.[0] || sender.nom?.[0] || '?'}
-                  </Avatar>
-                  <MessageContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 1 }}>
-                        {sender.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatTimestamp(message.timestamp)}
-                      </Typography>
-                    </Box>
-                    {replyToMessage && (
-                      <Box sx={{ backgroundColor: '#f5f7fa', p: 1, borderRadius: 1, mb: 1, borderLeft: '3px solid #ccc' }}>
+            messages
+              .filter((message) =>
+                selectedChannel.type === 'dm'
+                  ? (message.senderId === currentUser.id && message.recipientId === selectedChannel.recipientId) ||
+                    (message.senderId === selectedChannel.recipientId && message.recipientId === currentUser.id)
+                  : true
+              )
+              .map((message) => {
+                const sender = getSender(message.senderId);
+                const replyToMessage = message.replyTo ? messages.find((m) => m.id === message.replyTo) : null;
+                const replyToSender = replyToMessage ? getSender(replyToMessage.senderId) : null;
+                return (
+                  <MessageItem key={message.id}>
+                    <Avatar sx={{ bgcolor: sender.id === currentUser?.id ? '#007bff' : '#6c757d', width: 36, height: 36 }}>
+                      {sender.prenom?.[0] || sender.nom?.[0] || '?'}
+                    </Avatar>
+                    <MessageContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600, mr: 1, color: '#2c3e50' }}>
+                          {sender.name}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          En réponse à {replyToSender?.name}
-                        </Typography>
-                        <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-                          {replyToMessage.content.slice(0, 50)}{replyToMessage.content.length > 50 ? '...' : ''}
+                          {formatTimestamp(message.timestamp)}
                         </Typography>
                       </Box>
-                    )}
-                    <Typography variant="body2" sx={{ mb: 1, whiteSpace: 'pre-wrap' }}>
-                      {message.content}
-                    </Typography>
-                    {message.attachments.length > 0 && (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
-                        {message.attachments.map(file => (
-                          <FileAttachment key={file.id}>
-                            {getFileIcon(file.type)}
-                            <Box sx={{ ml: 1 }}>
-                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                {file.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {file.size}
-                              </Typography>
-                            </Box>
-                          </FileAttachment>
-                        ))}
-                      </Box>
-                    )}
-                    <Button
-                      size="small"
-                      color="primary"
-                      onClick={() => {
-                        setMessageInput(`@${sender.name} `);
-                        setReplyTo(message.id);
-                        document.querySelector('#message-input')?.focus();
-                      }}
-                    >
-                      Répondre
-                    </Button>
-                  </MessageContent>
-                </MessageItem>
-              );
-            })
+                      {replyToMessage && (
+                        <Box sx={{ backgroundColor: '#f8fafc', p: 1, borderRadius: 1, mb: 1, borderLeft: '3px solid #e8ecef' }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Réponse à {replyToSender?.name}
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                            {replyToMessage.content.slice(0, 50)}
+                            {replyToMessage.content.length > 50 ? '...' : ''}
+                          </Typography>
+                        </Box>
+                      )}
+                      <Typography variant="body2" sx={{ mb: 1, whiteSpace: 'pre-wrap', color: '#34495e' }}>
+                        {message.content}
+                      </Typography>
+                      {message.attachments.length > 0 && (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+                          {message.attachments.map((file) => (
+                            <FileAttachment key={file.id}>
+                              {getFileIcon(file.type)}
+                              <Box sx={{ ml: 1 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 500, color: '#2c3e50' }}>
+                                  {file.name}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {file.size}
+                                </Typography>
+                              </Box>
+                            </FileAttachment>
+                          ))}
+                        </Box>
+                      )}
+                      <Button
+                        size="small"
+                        color="primary"
+                        onClick={() => {
+                          setMessageInput(`@${sender.name} `);
+                          setReplyTo(message.id);
+                          document.querySelector('#message-input')?.focus();
+                        }}
+                      >
+                        Répondre
+                      </Button>
+                    </MessageContent>
+                  </MessageItem>
+                );
+              })
           )}
           <div ref={messagesEndRef} />
         </MessageContainer>
-        
-        {/* Attached files waiting to be sent */}
+
         {attachedFiles.length > 0 && (
-          <Box sx={{ backgroundColor: '#fff', padding: '8px 20px', display: 'flex', flexWrap: 'wrap' }}>
-            {attachedFiles.map(file => (
+          <Box sx={{ backgroundColor: '#fff', padding: '8px 16px', display: 'flex', flexWrap: 'wrap' }}>
+            {attachedFiles.map((file) => (
               <Paper
                 key={file.id}
                 elevation={0}
@@ -584,15 +654,15 @@ const GroupDiscussion = () => {
                   display: 'flex',
                   alignItems: 'center',
                   borderRadius: 2,
-                  border: '1px solid #e0e7ef',
+                  border: '1px solid #e8ecef',
                   padding: '4px 8px',
                   marginRight: 1,
                   marginBottom: 1,
-                  backgroundColor: '#f2f6fc',
+                  backgroundColor: '#f8fafc',
                 }}
               >
                 {getFileIcon(file.type)}
-                <Typography variant="body2" sx={{ mx: 1 }}>
+                <Typography variant="body2" sx={{ mx: 1, color: '#2c3e50' }}>
                   {file.name}
                 </Typography>
                 <IconButton size="small" onClick={() => removeAttachment(file.id)}>
@@ -602,8 +672,7 @@ const GroupDiscussion = () => {
             ))}
           </Box>
         )}
-        
-        {/* Input area */}
+
         <InputArea>
           <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
             <StyledTextField
@@ -611,7 +680,7 @@ const GroupDiscussion = () => {
               fullWidth
               multiline
               maxRows={4}
-              placeholder={canCommunicate ? `Message pour #${selectedChannel.name}` : 'Discussion désactivée'}
+              placeholder={canCommunicate ? `Envoyer un message à ${selectedChannel.type === 'dm' ? selectedChannel.name : '#' + selectedChannel.name}` : 'Discussion désactivée'}
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -620,41 +689,29 @@ const GroupDiscussion = () => {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Box sx={{ display: 'flex' }}>
-                      <Tooltip title="Ajouter un emoji">
-                        <IconButton 
-                          size="small" 
-                          color="primary" 
-                          disabled={!canCommunicate}
-                          onClick={handleEmojiPickerOpen}
-                        >
-                          <EmojiEmotionsIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Joindre un fichier">
-                        <IconButton size="small" color="primary" onClick={triggerFileInput} disabled={!canCommunicate}>
-                          <AttachFileIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        multiple
-                        onChange={handleFileSelection}
-                        style={{ display: 'none' }}
-                        disabled={!canCommunicate}
-                      />
-                      <Tooltip title="Plus d'options">
-                        <IconButton 
-                          size="small" 
-                          color="primary"
-                          onClick={handleMenuOpen}
-                          disabled={!canCommunicate}
-                        >
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
+                    <Tooltip title="Ajouter un emoji">
+                      <IconButton size="small" color="primary" disabled={!canCommunicate} onClick={handleEmojiPickerOpen}>
+                        <EmojiEmotionsIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Joindre un fichier">
+                      <IconButton size="small" color="primary" onClick={triggerFileInput} disabled={!canCommunicate}>
+                        <AttachFileIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      onChange={handleFileSelection}
+                      style={{ display: 'none' }}
+                      disabled={!canCommunicate}
+                    />
+                    <Tooltip title="Plus d'options">
+                      <IconButton size="small" color="primary" onClick={handleMenuOpen} disabled={!canCommunicate}>
+                        <MoreVertIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </InputAdornment>
                 ),
               }}
@@ -670,42 +727,55 @@ const GroupDiscussion = () => {
           </Box>
         </InputArea>
       </MainArea>
-      
-      {/* Emoji Picker Popover */}
+
+      <Dialog open={openNewDmDialog} onClose={() => setOpenNewDmDialog(false)}>
+        <DialogTitle>Nouveau message</DialogTitle>
+        <DialogContent>
+          <Autocomplete
+            options={teamMembers}
+            getOptionLabel={(option) =>
+              `${option.prenom || ''} ${option.nom || ''}`.trim() || 'Utilisateur inconnu'
+            }
+            onChange={(event, value) => {
+              if (value) {
+                startDirectMessage(value);
+                setOpenNewDmDialog(false);
+              }
+            }}
+            renderInput={(params) => (
+              <TextField {...params} label="Rechercher un membre" variant="outlined" autoFocus />
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenNewDmDialog(false)}>Annuler</Button>
+        </DialogActions>
+      </Dialog>
+
       <Popover
         open={emojiPickerOpen}
         anchorEl={emojiAnchorEl}
         onClose={handleEmojiPickerClose}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <EmojiPicker onEmojiClick={handleEmojiClick} />
+        <EmojiPicker
+          onEmojiClick={handleEmojiClick}
+          categories={['smileys_people', 'objects', 'symbols']}
+        />
       </Popover>
-      
-      {/* Menu for additional options */}
+
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
-        anchorOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
-        }}
-        transformOrigin={{
-          vertical: 'bottom',
-          horizontal: 'right',
-        }}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
-        <MenuItem onClick={handleMenuClose}>Créer un snippet de code</MenuItem>
+        <MenuItem onClick={handleMenuClose}>Créer un extrait de code</MenuItem>
         <MenuItem onClick={handleMenuClose}>Créer un sondage</MenuItem>
-        <MenuItem onClick={handleMenuClose}>Partager un écran</MenuItem>
-        <MenuItem onClick={handleMenuClose}>Plus d'options...</MenuItem>
+        <MenuItem onClick={handleMenuClose}>Partager l'écran</MenuItem>
+        <MenuItem onClick={handleMenuClose}>Autres options...</MenuItem>
       </Menu>
     </ChatContainer>
   );

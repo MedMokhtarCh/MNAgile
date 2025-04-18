@@ -1,11 +1,12 @@
 import React from 'react';
-import { 
-  Card, 
-  CardContent, 
-  Typography, 
-  Box, 
-  IconButton, 
-  Avatar 
+import {
+  Card,
+  CardContent,
+  Typography,
+  Box,
+  IconButton,
+  Avatar,
+  Tooltip
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -14,73 +15,72 @@ const ProjectCardStyled = styled(Card)(({ theme }) => ({
   width: '100%',
   maxWidth: 380,
   minWidth: 300,
-  height: 260,
+  height: 270,
   margin: '12px auto',
   backgroundColor: theme.palette.background.paper,
   transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-  borderRadius: 16,
+  borderRadius: 20,
   overflow: 'hidden',
   cursor: 'pointer',
   display: 'flex',
   flexDirection: 'column',
   '&:hover': {
     transform: 'translateY(-6px)',
-    boxShadow: theme.shadows[12],
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
   },
 }));
 
 const UserAvatar = styled(Avatar)(({ theme }) => ({
-  width: 32,
-  height: 32,
-  fontSize: 14,
-  backgroundColor: theme.palette.primary.main,
-}));
-
-const TitleContainer = styled(Box)(({ theme }) => ({
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: theme.spacing(2),
-  minHeight: 40,
-}));
-
-const TitleTypography = styled(Typography)(({ theme }) => ({
-  fontWeight: 600,
-  color: theme.palette.primary.main,
-  maxWidth: '75%',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
+  width: 30,
+  height: 30,
+  fontSize: 12,
+  marginLeft: -6,
+  border: '2px solid white',
+  zIndex: 1,
+  transition: 'transform 0.2s ease',
+  '&:hover': {
+    transform: 'scale(1.1)',
+    zIndex: 20,
+  },
+  '&:first-of-type': {
+    marginLeft: 0,
+  },
 }));
 
 const ContentContainer = styled(Box)(({ theme }) => ({
   flex: 1,
   display: 'flex',
   flexDirection: 'column',
-  justifyContent: 'space-between',
   overflow: 'hidden',
 }));
 
-const DescriptionTypography = styled(Typography)(({ theme }) => ({
-  color: theme.palette.text.secondary,
-  lineHeight: 1.5,
+const FooterBar = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: theme.spacing(1.5, 2),
+  borderTop: `1px solid ${theme.palette.divider}`,
+  backgroundColor: '#f9fbfd',
+}));
+
+const TitleTypography = styled(Typography)(({ theme }) => ({
+  fontWeight: 700,
+  color: theme.palette.primary.main,
+  fontSize: '1.1rem',
+  maxWidth: '75%',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  marginBottom: theme.spacing(1),
+  whiteSpace: 'nowrap',
 }));
 
-const ProjectCard = ({ 
-  project, 
-  currentUser, 
-  handleMenuOpen, 
-  navigateToProject, 
+const ProjectCard = ({
+  project,
+  currentUser,
+  handleMenuOpen,
+  navigateToProject,
   getUserDisplayName,
-  getShortDescription,
   getAvatarColor,
-  generateInitials 
+  generateInitials
 }) => {
   const uniqueMembers = [
     ...(project.projectManagers || []),
@@ -90,58 +90,90 @@ const ProjectCard = ({
     ...(project.testers || []),
   ].filter((email, index, self) => self.indexOf(email) === index);
 
+  const formattedDate = new Date(project.createdAt).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
   return (
     <ProjectCardStyled onClick={() => navigateToProject(project.id)}>
-      <CardContent sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <TitleContainer>
-          <TitleTypography variant="h6">
-            {project.title}
-          </TitleTypography>
-          {currentUser?.role === 'chef_projet' && (
-            <IconButton 
-              size="small" 
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMenuOpen(e, project);
-              }}
-              sx={{ flexShrink: 0 }}
-            >
-              <MoreVertIcon />
-            </IconButton>
-          )}
-        </TitleContainer>
-        <ContentContainer>
-          <Box>
-            <DescriptionTypography variant="body2">
-              {getShortDescription(project.description)}
-            </DescriptionTypography>
-            <Typography
-              variant="body2"
-              sx={{ mb: 1, fontWeight: 500 }}
-            >
-              Méthode: {project.method ? project.method.charAt(0).toUpperCase() + project.method.slice(1) : 'Non spécifié'}
-            </Typography>
-            <Typography variant="caption" sx={{ mb: 2, display: 'block' }}>
-              Créé le: {new Date(project.createdAt).toLocaleDateString('fr-FR')}
-            </Typography>
+      <ContentContainer>
+        <CardContent sx={{ p: 3, flex: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <TitleTypography variant="h6">
+              {project.title}
+            </TitleTypography>
+            {currentUser?.role === 'chef_projet' && (
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleMenuOpen(e, project);
+                }}
+              >
+                <MoreVertIcon />
+              </IconButton>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-            {uniqueMembers.slice(0, 5).map((email, index) => (
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              mb: 2,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+            }}
+          >
+            {project.description || 'Aucune description disponible.'}
+          </Typography>
+
+          <Typography
+            variant="body2"
+            sx={{
+              mb: 1,
+              fontWeight: 500,
+              color: theme => theme.palette.primary.main,
+            }}
+          >
+            Méthodologie : {project.method ? project.method.charAt(0).toUpperCase() + project.method.slice(1) : 'Non renseignée'}
+          </Typography>
+        </CardContent>
+      </ContentContainer>
+
+      <FooterBar>
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Créé le {formattedDate}
+          </Typography>
+        </Box>
+
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          {uniqueMembers.slice(0, 3).map((email, index) => (
+            <Tooltip key={index} title={getUserDisplayName(email)} arrow>
               <UserAvatar
-                key={index}
-                sx={{ bgcolor: getAvatarColor(getUserDisplayName(email)) }}
+                sx={{
+                  bgcolor: getAvatarColor(getUserDisplayName(email)),
+                  zIndex: 10 - index,
+                }}
               >
                 {generateInitials(getUserDisplayName(email))}
               </UserAvatar>
-            ))}
-            {uniqueMembers.length > 5 && (
-              <UserAvatar>
-                +{uniqueMembers.length - 5}
+            </Tooltip>
+          ))}
+          {uniqueMembers.length > 3 && (
+            <Tooltip title={`${uniqueMembers.length - 3} autres`} arrow>
+              <UserAvatar sx={{ bgcolor: '#1976d2', zIndex: 6 }}>
+                +{uniqueMembers.length - 3}
               </UserAvatar>
-            )}
-          </Box>
-        </ContentContainer>
-      </CardContent>
+            </Tooltip>
+          )}
+        </Box>
+      </FooterBar>
     </ProjectCardStyled>
   );
 };

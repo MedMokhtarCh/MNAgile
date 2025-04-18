@@ -1,13 +1,12 @@
-// hooks/useNotification.js
+
 import { useCallback } from 'react';
 
 export const useNotification = () => {
-  // Create a notification
-  // Supported types: 'project', 'user', 'task', 'message', 'document', 'system'
+ 
   const createNotification = useCallback(
     ({
       recipient,
-      type = 'general', // e.g., 'project', 'task', 'user'
+      type = 'general', // 'project', 'task', 'user'
       message,
       sender = { name: 'Système', avatar: null },
       metadata = {},
@@ -19,8 +18,8 @@ export const useNotification = () => {
         message,
         timestamp: new Date().toISOString(),
         read: false,
-        recipient, // Email or user ID
-        metadata, // e.g., { projectId, taskId }
+        recipient, 
+        metadata, // { projectId, taskId }
       };
 
       const storedNotifications =

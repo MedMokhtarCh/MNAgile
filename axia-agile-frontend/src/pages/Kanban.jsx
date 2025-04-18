@@ -15,6 +15,7 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-ki
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useParams } from 'react-router-dom';
+import PageTitle from '../components/common/PageTitle';
 
 // Styled components
 const KanbanColumn = styled(Paper)(({ theme }) => ({
@@ -511,9 +512,9 @@ function Kanban() {
     <Box sx={{ minHeight: '100vh', bgcolor: theme.palette.grey[50] }}>
       <AppBar position="static" elevation= {0} sx={{ bgcolor: 'white', borderBottom: `1px solid ${theme.palette.grey[200]}` }}>
         <Toolbar>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-            {projectTitle}
-          </Typography>
+         
+          <PageTitle>Tableau Kanban pour le projet {projectTitle}</PageTitle>
+        
         </Toolbar>
       </AppBar>
       <Container maxWidth="xl" sx={{ mt: 4, mb: 6 }}>

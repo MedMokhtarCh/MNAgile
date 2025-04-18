@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material';
 import { Chart as ChartJS, ArcElement, Tooltip as ChartTooltip, Legend } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
+import PageTitle from '../components/common/PageTitle';
 
 
 ChartJS.register(ArcElement, ChartTooltip, Legend);
@@ -112,9 +113,8 @@ const AdminStatistics = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ mb: 3, fontWeight: 600 }}>
-        Rapport Statistique des Comptes Admin
-      </Typography>
+    
+      <PageTitle>Rapport Statistique des Comptes Admin</PageTitle>
       
       {/* Cartes de statistiques */}
       <Grid container spacing={3} sx={{ mb: 4 }}>

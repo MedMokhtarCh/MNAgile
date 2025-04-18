@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Component } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -28,9 +28,11 @@ import { useUsers } from '../hooks/useUsers';
 import AlertUser from '../components/common/AlertUser';
 import ProjectCard from '../components/common/ProjectCard';
 import ProjectFormStepper from '../components/common/ProjectFormStepper';
+import PageTitle from '../components/common/PageTitle';
+import Pagination from '../components/common/Pagination'; 
 
 // Error Boundary
-class ErrorBoundary extends Component {
+class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
@@ -145,8 +147,11 @@ function Projects() {
   const [errorAlertOpen, setErrorAlertOpen] = useState(false);
   const [successAlertOpen, setSuccessAlertOpen] = useState(false);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const projectsPerPage = 9; // Ajusté pour une grille 3x3 qui fonctionne bien visuellement
+
   useEffect(() => {
-    console.log('Form error changed:', formError);
     if (formError) {
       setErrorAlertOpen(true);
     } else {
@@ -155,7 +160,6 @@ function Projects() {
   }, [formError]);
 
   useEffect(() => {
-    console.log('Form success changed:', formSuccess);
     if (formSuccess) {
       setSuccessAlertOpen(true);
     } else {
@@ -163,12 +167,22 @@ function Projects() {
     }
   }, [formSuccess]);
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, dateFilter, sortOrder]);
+
   const handleErrorAlertClose = () => {
     setErrorAlertOpen(false);
   };
 
   const handleSuccessAlertClose = () => {
     setSuccessAlertOpen(false);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const getUserDisplayName = (email) => {
@@ -182,7 +196,14 @@ function Projects() {
     return words.length > 4 ? `${words.slice(0, 4).join(' ')}...` : words.join(' ');
   };
 
+  // Get filtered projects
   const filteredProjects = getFilteredProjects();
+  
+  // Calculate pagination
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));
+  const indexOfLastProject = currentPage * projectsPerPage;
+  const indexOfFirstProject = indexOfLastProject - projectsPerPage;
+  const currentProjects = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
 
   return (
     <ErrorBoundary>
@@ -197,16 +218,7 @@ function Projects() {
             gap: 2,
           }}
         >
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 700,
-              color: theme.palette.text.primary,
-              letterSpacing: -0.5,
-            }}
-          >
-            Gestion des Projets
-          </Typography>
+          <PageTitle>Mes Projets</PageTitle>
           {currentUser?.role === 'chef_projet' && (
             <CreateButton
               startIcon={<AddIcon sx={{ fontSize: 26 }} />}
@@ -271,7 +283,15 @@ function Projects() {
         </FilterContainer>
 
         <Box sx={{ mt: 4 }}>
-          <SectionTitle variant="h5">Liste des Projets</SectionTitle>
+          <SectionTitle variant="h5">
+            Liste des Projets 
+            {filteredProjects.length > 0 && (
+              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 2, fontWeight: 'normal' }}>
+                ({indexOfFirstProject + 1} - {Math.min(indexOfLastProject, filteredProjects.length)} sur {filteredProjects.length})
+              </Typography>
+            )}
+          </SectionTitle>
+          
           <Box
             sx={{
               display: 'grid',
@@ -282,10 +302,11 @@ function Projects() {
               },
               gap: 3,
               justifyItems: 'center',
+              minHeight: '500px', // Espace minimum pour éviter les sauts de page
             }}
           >
-            {filteredProjects.length > 0 ? (
-              filteredProjects.map((project) => (
+            {currentProjects.length > 0 ? (
+              currentProjects.map((project) => (
                 <ProjectCard
                   key={project.id}
                   project={project}
@@ -306,6 +327,17 @@ function Projects() {
               </Box>
             )}
           </Box>
+          
+          {/* Pagination component */}
+          {filteredProjects.length > 0 && (
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+              <Pagination 
+                page={currentPage} 
+                count={totalPages} 
+                onChange={handlePageChange} 
+              />
+            </Box>
+          )}
         </Box>
 
         <Menu anchorEl={menuAnchorEl} open={Boolean(menuAnchorEl)} onClose={handleMenuClose}>
