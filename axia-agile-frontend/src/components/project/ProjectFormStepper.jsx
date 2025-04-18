@@ -32,7 +32,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
 
-import InputUserAssignment from './InputUserAssignment';
+import InputUserAssignment from '../common/InputUserAssignment';
 
 // Styled Components
 const StepperContainer = styled(Box)(({ theme }) => ({
@@ -129,7 +129,6 @@ const ProjectFormStepper = ({
   setDevelopers,
   testers,
   setTesters,
-  createNotification,
   getAvatarColor,
   generateInitials
 }) => {

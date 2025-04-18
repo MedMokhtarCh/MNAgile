@@ -3,14 +3,14 @@ import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import { usePermissions } from '../hooks/usePermissions';
-import UserForm from '../components/common/UserForm';
-import TableUsers from '../components/common/TableUsers';
+import UserForm from '../components/users/UserForm';
+import TableUsers from '../components/users/TableUsers';
 import PermissionsModal from '../components/permissions/PermissionsModal';
 import AlertUser from '../components/common/AlertUser';
-import FilterBar from '../components/common/FilterBarUsers';
+import FilterBar from '../components/users/FilterBarUsers';
 import { permissionsGroups } from '../constants/permissions';
-import { userColumns } from '../constants/tableColumnsUsers';
-import { theme } from '../constants/themes';
+import { userColumns } from '../components/users/tableColumnsUsers';
+import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
 
 const UserManagement = () => {

@@ -33,14 +33,6 @@ export const useProject = () => {
   const [testers, setTesters] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
-  // État pour stocker les membres originaux du projet (pour comparaison lors de l'édition)
-  const [originalProjectMembers, setOriginalProjectMembers] = useState({
-    projectManagers: [],
-    productOwners: [],
-    scrumMasters: [],
-    users: [], // developers
-    testers: []
-  });
 
   const steps = ['Informations Projet', 'Équipe Projet', 'Confirmation'];
 
@@ -108,15 +100,6 @@ export const useProject = () => {
       const getUsersByEmails = (emails) =>
         users.filter((user) => emails?.includes(user.email)) || [];
 
-      // Pour l'édition, on stocke les membres originaux pour comparaison ultérieure
-      setOriginalProjectMembers({
-        projectManagers: project.projectManagers || [],
-        productOwners: project.productOwners || [],
-        scrumMasters: project.scrumMasters || [],
-        users: project.users || [], // developers
-        testers: project.testers || []
-      });
-
       setProjectManagers(getUsersByEmails(project.projectManagers));
       setProductOwners(getUsersByEmails(project.productOwners));
       setScrumMasters(getUsersByEmails(project.scrumMasters));
@@ -134,13 +117,6 @@ export const useProject = () => {
       setScrumMasters([]);
       setDevelopers([]);
       setTesters([]);
-      setOriginalProjectMembers({
-        projectManagers: [],
-        productOwners: [],
-        scrumMasters: [],
-        users: [],
-        testers: []
-      });
     }
 
     setModalOpen(true);
@@ -163,13 +139,6 @@ export const useProject = () => {
     setScrumMasters([]);
     setDevelopers([]);
     setTesters([]);
-    setOriginalProjectMembers({
-      projectManagers: [],
-      productOwners: [],
-      scrumMasters: [],
-      users: [],
-      testers: []
-    });
   }, []);
 
   const handleDeleteDialogOpen = useCallback((project) => {
@@ -229,62 +198,36 @@ export const useProject = () => {
     setFormError('');
   }, [activeStep]);
 
-  // Fonction pour notifier les nouveaux utilisateurs assignés uniquement
-  const notifyNewlyAssignedUsers = useCallback((projectData, isEditing) => {
+  // Fonction pour envoyer des notifications à tous les utilisateurs d'un projet
+  const notifyProjectUsers = useCallback((projectData, isEditing) => {
     const projectTitle = projectData.title;
     const projectId = projectData.id;
     
-    // Si c'est une création de projet, tous les utilisateurs sont nouveaux
-    if (!isEditing) {
-      // Fonction helper pour notifier les utilisateurs par rôle
-      const notifyUsersByRole = (users, roleName) => {
-        users.forEach(userEmail => {
-          if (userEmail !== currentUser?.email) {
-            createNotification({
-              recipient: userEmail,
-              type: 'project',
-              message: `Vous avez été ${roleName === 'développeur' ? 'assigné' : 'assignée'} en tant que ${roleName} au nouveau projet "${projectTitle}".`,
-              sender: { name: currentUser?.nom ? `${currentUser.nom} ${currentUser.prenom}` : 'Système', avatar: null },
-              metadata: { projectId }
-            });
-          }
-        });
-      };
+    // Fonction helper pour envoyer des notifications par rôle
+    const notifyUsersByRole = (users, roleName) => {
+      users.forEach(userEmail => {
+        if (userEmail !== currentUser?.email) {
+          createNotification({
+            recipient: userEmail,
+            type: 'project',
+            message: isEditing
+              ? `Vous avez été ${roleName === 'développeur' ? 'assigné' : 'assignée'} en tant que ${roleName} au projet "${projectTitle}" récemment mis à jour.`
+              : `Vous avez été ${roleName === 'développeur' ? 'assigné' : 'assignée'} en tant que ${roleName} au nouveau projet "${projectTitle}".`,
+            sender: { name: currentUser?.nom ? `${currentUser.nom} ${currentUser.prenom}` : 'Système', avatar: null },
+            metadata: { projectId }
+          });
+        }
+      });
+    };
 
-      // Notifier chaque nouvel utilisateur selon son rôle
-      notifyUsersByRole(projectData.projectManagers, 'chef de projet');
-      notifyUsersByRole(projectData.productOwners, 'product owner');
-      notifyUsersByRole(projectData.scrumMasters, 'scrum master');
-      notifyUsersByRole(projectData.users, 'développeur');
-      notifyUsersByRole(projectData.testers, 'testeur');
-    } 
-    // Si c'est une modification, on notifie seulement les nouveaux utilisateurs
-    else {
-      // Pour chaque rôle, on trouve les nouveaux membres (ceux qui n'étaient pas dans la liste originale)
-      const notifyNewUsers = (currentUsers, originalUsers, roleName) => {
-        const newUsers = currentUsers.filter(email => !originalUsers.includes(email));
-        newUsers.forEach(userEmail => {
-          if (userEmail !== currentUser?.email) {
-            createNotification({
-              recipient: userEmail,
-              type: 'project',
-              message: `Vous avez été ${roleName === 'développeur' ? 'assigné' : 'assignée'} en tant que ${roleName} au projet "${projectTitle}".`,
-              sender: { name: currentUser?.nom ? `${currentUser.nom} ${currentUser.prenom}` : 'Système', avatar: null },
-              metadata: { projectId }
-            });
-          }
-        });
-      };
-
-      // Notifier uniquement les nouveaux utilisateurs pour chaque rôle
-      notifyNewUsers(projectData.projectManagers, originalProjectMembers.projectManagers, 'chef de projet');
-      notifyNewUsers(projectData.productOwners, originalProjectMembers.productOwners, 'product owner');
-      notifyNewUsers(projectData.scrumMasters, originalProjectMembers.scrumMasters, 'scrum master');
-      notifyNewUsers(projectData.users, originalProjectMembers.users, 'développeur');
-      notifyNewUsers(projectData.testers, originalProjectMembers.testers, 'testeur');
-    }
+    // Notifier chaque utilisateur selon son rôle
+    notifyUsersByRole(projectData.projectManagers, 'chef de projet');
+    notifyUsersByRole(projectData.productOwners, 'product owner');
+    notifyUsersByRole(projectData.scrumMasters, 'scrum master');
+    notifyUsersByRole(projectData.users, 'développeur');
+    notifyUsersByRole(projectData.testers, 'testeur');
     
-  }, [createNotification, currentUser, originalProjectMembers]);
+  }, [createNotification, currentUser]);
 
   const handleSaveProject = useCallback(() => {
     const team = {
@@ -338,8 +281,8 @@ export const useProject = () => {
       metadata: { projectId: projectData.id }
     });
     
-    // Notifier uniquement les nouveaux utilisateurs assignés
-    notifyNewlyAssignedUsers(projectData, isEditing);
+    // Notifier tous les utilisateurs assignés au projet
+    notifyProjectUsers(projectData, isEditing);
 
     setFormSuccess(
       isEditing ? 'Projet mis à jour avec succès !' : 'Projet créé avec succès !'
@@ -360,7 +303,7 @@ export const useProject = () => {
     currentUser,
     createNotification,
     handleModalClose,
-    notifyNewlyAssignedUsers
+    notifyProjectUsers
   ]);
 
   const handleMenuOpen = useCallback((event, project) => {

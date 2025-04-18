@@ -140,6 +140,10 @@ export const useUsers = (storageKey) => {
     const user = updatedUsers.find(u => u.id === id);
     showSnackbar(`Compte ${user.isActive ? 'activé' : 'désactivé'} pour ${user.email}`, 'info');
   };
+  const getUserByEmail = (email) => {
+    const storedUsers = getStoredData(storageKey) || [];
+    return storedUsers.find((user) => user.email === email);
+  };
 
   return {
     users,
@@ -159,5 +163,6 @@ export const useUsers = (storageKey) => {
     handleToggleActive,
     snackbar,
     handleCloseSnackbar,
+    getUserByEmail,
   };
 };

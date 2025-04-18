@@ -6,7 +6,6 @@ import {
   Paper,
   Grid,
   Divider,
-  
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PeopleIcon from '@mui/icons-material/People';
@@ -46,9 +45,18 @@ const ProjectOverview = () => {
   const { generateInitials, getAvatarColor } = useAvatar();
   const { users } = useUsers('users');
 
+  // Function to get display name (for display purposes)
   const getUserDisplayName = (email) => {
     const user = users.find((u) => u.email === email);
     return user ? `${user.nom} ${user.prenom}` : email;
+  };
+
+  // Function to get avatar name (for consistent avatar color)
+  const getAvatarName = (email) => {
+    const user = users.find((u) => u.email === email);
+    return user && user.prenom && user.nom 
+      ? `${user.prenom} ${user.nom}` 
+      : email || "Utilisateur";
   };
 
   if (!currentProject) {
@@ -61,7 +69,6 @@ const ProjectOverview = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-     
       <PageTitle>Aperçu du projet</PageTitle>
 
       <Grid container spacing={3}>
@@ -79,14 +86,29 @@ const ProjectOverview = () => {
               <Typography variant="body2" color="textSecondary">
                 Titre
               </Typography>
-              <Typography variant="h6">{currentProject.title}</Typography>
+              <Typography 
+                variant="h6" 
+                sx={{ 
+                  wordBreak: 'break-word', 
+                  overflowWrap: 'break-word' 
+                }}
+              >
+                {currentProject.title}
+              </Typography>
             </Box>
 
             <Box sx={{ mb: 3 }}>
               <Typography variant="body2" color="textSecondary">
                 Description
               </Typography>
-              <Typography>{currentProject.description}</Typography>
+              <Typography 
+                sx={{ 
+                  wordBreak: 'break-word', 
+                  overflowWrap: 'break-word' 
+                }}
+              >
+                {currentProject.description}
+              </Typography>
             </Box>
 
             <Box sx={{ mb: 3 }}>
@@ -123,6 +145,7 @@ const ProjectOverview = () => {
               title="Chefs de projet"
               users={currentProject.projectManagers}
               getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName} // Pass getAvatarName
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
@@ -133,6 +156,7 @@ const ProjectOverview = () => {
               title="Product Owners"
               users={currentProject.productOwners}
               getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
@@ -141,6 +165,7 @@ const ProjectOverview = () => {
               title="Scrum Masters"
               users={currentProject.scrumMasters}
               getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
@@ -149,6 +174,7 @@ const ProjectOverview = () => {
               title="Développeurs"
               users={currentProject.users}
               getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
@@ -157,6 +183,7 @@ const ProjectOverview = () => {
               title="Testeurs"
               users={currentProject.testers}
               getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />

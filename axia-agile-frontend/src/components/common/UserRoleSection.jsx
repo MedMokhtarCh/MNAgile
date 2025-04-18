@@ -19,16 +19,18 @@ const UserRoleSection = ({ title, users, getUserDisplayName, getAvatarColor, gen
                 key={email}
                 avatar={
                   <Avatar
-                    sx={{
-                      bgcolor: getAvatarColor(displayName),
-                      width: 32,
-                      height: 32,
-                      fontSize: '0.9rem',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    {initials}
-                  </Avatar>
+                  sx={{
+                    bgcolor: getAvatarColor(displayName),
+                    width: 32,
+                    height: 32,
+                    fontSize: '0.9rem',
+                    fontWeight: 'bold',
+                    color: 'white !important', 
+                  }}
+                >
+                  {initials}
+                </Avatar>
+                
                 }
                 label={displayName}
                 variant="outlined"

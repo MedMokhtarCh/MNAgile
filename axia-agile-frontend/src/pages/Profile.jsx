@@ -1,4 +1,3 @@
-// src/pages/Profile.jsx
 import React, { useState, useEffect } from "react";
 import {
   Box,
@@ -39,13 +38,15 @@ import {
   Cancel as CancelIcon,
 } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import { useAvatar } from "../hooks/useAvatar";
 
 const Profile = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const { generateInitials, getAvatarColor } = useAvatar();
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); 
+  const [error, setError] = useState(null);
   const [profileImage, setProfileImage] = useState(null);
   const [activeTab, setActiveTab] = useState(0);
   const [editMode, setEditMode] = useState(false);
@@ -280,6 +281,11 @@ const Profile = () => {
     );
   }
 
+  // Standardize fullName for consistent avatar color
+  const fullName = currentUser.prenom && currentUser.nom 
+    ? `${currentUser.prenom} ${currentUser.nom}` 
+    : currentUser.email || "Utilisateur";
+
   const InfoField = ({ label, value, icon }) => (
     <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
       {icon && (
@@ -314,11 +320,10 @@ const Profile = () => {
                 width: 100,
                 height: 100,
                 fontSize: 40,
-                bgcolor: theme.palette.primary.light,
-                color: theme.palette.primary.contrastText,
+                bgcolor: getAvatarColor(fullName), // Use standardized fullName
               }}
             >
-              {(currentUser.prenom?.charAt(0) || "") + (currentUser.nom?.charAt(0) || currentUser.email.charAt(0))}
+              {generateInitials(fullName)} {/* Use standardized fullName */}
             </Avatar>
 
             {editMode && (

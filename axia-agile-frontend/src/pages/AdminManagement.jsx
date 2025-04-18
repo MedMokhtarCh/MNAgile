@@ -3,14 +3,14 @@ import { Box, Typography, Button, ThemeProvider, CssBaseline } from '@mui/materi
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import { usePermissions } from '../hooks/usePermissions';
-import UserForm from '../components/common/UserForm';
-import TableUsers from '../components/common/TableUsers';
+import UserForm from '../components/users/UserForm';
+import TableUsers from '../components/users/TableUsers';
 import PermissionsModal from '../components/permissions/PermissionsModal';
 import AlertUser from '../components/common/AlertUser';
-import FilterBar from '../components/common/FilterBarUsers';
+import FilterBar from '../components/users/FilterBarUsers';
 import { permissionsGroups } from '../constants/permissions';
-import { adminColumns } from '../constants/tableColumnsUsers';
-import { theme } from '../constants/themes';
+import { adminColumns } from '../components/users/tableColumnsUsers';
+import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
 
 const AdminManagement = () => {
@@ -18,12 +18,13 @@ const AdminManagement = () => {
     users: admins,
     setUsers: setAdmins,
     loading,
+    setLoading,
     newUser: newAdmin,
     setNewUser: setNewAdmin,
     editMode,
     setEditMode,
     availableRoles,
-    handleSaveUser,
+    handleCreateUser, // This is the correct function name from the hook
     handleEditUser,
     handleDeleteUser,
     handleToggleActive,
@@ -139,7 +140,7 @@ const AdminManagement = () => {
           onClose={handleCloseModal}
           user={newAdmin}
           setUser={setNewAdmin}
-          onSave={() => handleSaveUser(['email', 'entreprise', 'adresse', 'telephone'])}
+          onSave={() => handleCreateUser(['email', 'entreprise', 'adresse', 'telephone'])} // Change handleSaveUser to handleCreateUser
           isEditMode={editMode}
           roles={availableRoles}
           permissionsGroups={{ admin: permissionsGroups.admin }}

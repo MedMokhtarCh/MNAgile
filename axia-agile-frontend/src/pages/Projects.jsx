@@ -26,8 +26,8 @@ import { useNotification } from '../hooks/useNotifications';
 import { useAvatar } from '../hooks/useAvatar';
 import { useUsers } from '../hooks/useUsers';
 import AlertUser from '../components/common/AlertUser';
-import ProjectCard from '../components/common/ProjectCard';
-import ProjectFormStepper from '../components/common/ProjectFormStepper';
+import ProjectCard from '../components/project/ProjectCard';
+import ProjectFormStepper from '../components/project/ProjectFormStepper';
 import PageTitle from '../components/common/PageTitle';
 import Pagination from '../components/common/Pagination'; 
 

@@ -16,6 +16,8 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useParams } from 'react-router-dom';
 import PageTitle from '../components/common/PageTitle';
+import InputUserAssignment from '../components/common/InputUserAssignment';
+import { useAvatar } from '../hooks/useAvatar';
 
 // Styled components
 const KanbanColumn = styled(Paper)(({ theme }) => ({
@@ -105,26 +107,7 @@ function SortableTask({ task, users }) {
     transition,
   };
 
-  const generateInitials = (name) => {
-    if (!name) return '??';
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name[0]?.toUpperCase() || '??';
-  };
-
-  const getAvatarColor = (name) => {
-    const colors = [
-      '#3f51b5', '#2196f3', '#00bcd4', '#009688',
-      '#4caf50', '#8bc34a', '#ff9800', '#ff5722', '#795548',
-    ];
-    let sum = 0;
-    for (let i = 0; i < (name || '').length; i++) {
-      sum += name.charCodeAt(i);
-    }
-    return colors[sum % colors.length];
-  };
+  const { generateInitials, getAvatarColor } = useAvatar();
 
   const getPriorityLabel = (priority) => {
     switch (priority) {
@@ -215,6 +198,7 @@ function Kanban() {
     })
   );
   const { projectId } = useParams();
+  const { generateInitials, getAvatarColor } = useAvatar();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -251,6 +235,21 @@ function Kanban() {
   const [selectedPriority, setSelectedPriority] = useState('');
   const [newColumnName, setNewColumnName] = useState('');
   const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentColumn, setCurrentColumn] = useState(null);
+  const [formValues, setFormValues] = useState({
+    title: '',
+    description: '',
+    assignedUsers: [],
+    priority: 'medium',
+  });
+  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+
+  const columnLabels = {
+    todo: 'À faire',
+    inProgress: 'En cours',
+    done: 'Terminé',
+  };
 
   // Fetch project-specific users
   useEffect(() => {
@@ -317,7 +316,7 @@ function Kanban() {
       setIsAddingColumn(false);
     } catch (err) {
       console.error('Error adding column:', err);
-      setError('Erreur lors de l’ajout de la colonne.');
+      setError('Erreur lors de l\'ajout de la colonne.');
     }
   };
 
@@ -329,22 +328,6 @@ function Kanban() {
     });
     return acc;
   }, {});
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [currentColumn, setCurrentColumn] = useState(null);
-  const [formValues, setFormValues] = useState({
-    title: '',
-    description: '',
-    assignedUsers: [],
-    priority: 'medium',
-  });
-
-  const [menuAnchorEl, setMenuAnchorEl] = useState(null);
-  const columnLabels = {
-    todo: 'À faire',
-    inProgress: 'En cours',
-    done: 'Terminé',
-  };
 
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -471,27 +454,6 @@ function Kanban() {
     }
   };
 
-  const generateInitials = (name) => {
-    if (!name) return '??';
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name[0]?.toUpperCase() || '??';
-  };
-
-  const getAvatarColor = (name) => {
-    const colors = [
-      '#3f51b5', '#2196f3', '#00bcd4', '#009688',
-      '#4caf50', '#8bc34a', '#ff9800', '#ff5722', '#795548',
-    ];
-    let sum = 0;
-    for (let i = 0; i < (name || '').length; i++) {
-      sum += name.charCodeAt(i);
-    }
-    return colors[sum % colors.length];
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -510,11 +472,9 @@ function Kanban() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: theme.palette.grey[50] }}>
-      <AppBar position="static" elevation= {0} sx={{ bgcolor: 'white', borderBottom: `1px solid ${theme.palette.grey[200]}` }}>
+      <AppBar position="static" elevation={0} sx={{ bgcolor: 'white', borderBottom: `1px solid ${theme.palette.grey[200]}` }}>
         <Toolbar>
-         
           <PageTitle>Tableau Kanban pour le projet {projectTitle}</PageTitle>
-        
         </Toolbar>
       </AppBar>
       <Container maxWidth="xl" sx={{ mt: 4, mb: 6 }}>
@@ -715,49 +675,14 @@ function Kanban() {
                 </MuiSelect>
               </FormControl>
               {projectUsers.length > 0 ? (
-                <Autocomplete
-                  multiple
+                <InputUserAssignment
                   options={projectUsers}
-                  getOptionLabel={(option) => option.name || option.email}
-                  isOptionEqualToValue={(option, value) => option.email === value.email}
                   value={formValues.assignedUsers}
                   onChange={handleFormChange('assignedUsers')}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      label="Assigné à"
-                      placeholder="Sélectionner les utilisateurs"
-                      variant="outlined"
-                      sx={{ bgcolor: 'white' }}
-                      InputProps={{
-                        ...params.InputProps,
-                        startAdornment: (
-                          <>
-                            <InputAdornment position="start">
-                              <PersonIcon sx={{ color: theme.palette.text.secondary }} />
-                            </InputAdornment>
-                            {params.InputProps.startAdornment}
-                          </>
-                        ),
-                      }}
-                    />
-                  )}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip
-                        key={option.email || index}
-                        avatar={
-                          <Avatar sx={{ bgcolor: getAvatarColor(option.name || option.email) }}>
-                            {generateInitials(option.name || option.email)}
-                          </Avatar>
-                        }
-                        label={option.name || option.email}
-                        {...getTagProps({ index })}
-                        sx={{ borderRadius: 16 }}
-                      />
-                    ))
-                  }
-                  noOptionsText="Aucun utilisateur disponible"
+                  label="Assigné à"
+                  placeholder="Sélectionner les utilisateurs"
+                  getAvatarColor={getAvatarColor}
+                  generateInitials={generateInitials}
                 />
               ) : (
                 <Typography color="text.secondary">

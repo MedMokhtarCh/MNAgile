@@ -21,19 +21,24 @@ import {
 } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
 import "./HeaderDashboard.css";
-import NotificationSystem from '../NotificationSystem'; 
+import NotificationSystem from '../NotificationSystem';
+import { useAvatar } from "../../hooks/useAvatar";
 
 const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);
   const navigate = useNavigate();
+  const { generateInitials, getAvatarColor } = useAvatar();
 
   // Get current user data
   const currentUser = JSON.parse(localStorage.getItem("currentUser")) || {};
-  const userInitial = currentUser.prenom?.charAt(0) || currentUser.email?.charAt(0) || "U";
+  // Standardize fullName for consistent avatar color
   const fullName = currentUser.prenom && currentUser.nom 
     ? `${currentUser.prenom} ${currentUser.nom}` 
-    : currentUser.email?.split('@')[0] || "Utilisateur";
+    : currentUser.email || "Utilisateur";
+  
+  const userInitial = generateInitials(fullName);
+  const avatarColor = getAvatarColor(fullName);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -75,7 +80,6 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
       </div>
 
       <div className="header-right">
-        {/* Utiliser le composant NotificationSystem */}
         <NotificationSystem currentUser={currentUser} />
 
         <div className="user-profile">
@@ -86,7 +90,7 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
             aria-haspopup="true"
             onClick={handleToggle}
           >
-            <Avatar className="avatar">
+            <Avatar className="avatar" style={{ backgroundColor: avatarColor }}>
               {userInitial}
             </Avatar>
             <div className="user-info">
@@ -122,7 +126,6 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
                         <FiUser size={16} className="menu-icon" />
                         Mon Profil
                       </MenuItem>
-                   
                       <MenuItem onClick={handleHelpNavigate} className="menu-item">
                         <FiHelpCircle size={16} className="menu-icon" />
                         Aide
