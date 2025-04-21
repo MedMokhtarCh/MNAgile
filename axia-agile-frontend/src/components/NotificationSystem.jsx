@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Popper,
@@ -92,7 +91,11 @@ const NotificationSystem = ({ currentUser }) => {
   const handleViewNotification = (id, metadata) => {
     markNotificationAsRead(id);
     if (metadata?.projectId) {
-      navigate(`/project/${metadata.projectId}`);
+      if (metadata?.taskId) {
+        navigate(`/project/${metadata.projectId}?task=${metadata.taskId}`);
+      } else {
+        navigate(`/project/${metadata.projectId}`);
+      }
     }
   };
 
@@ -164,35 +167,25 @@ const NotificationSystem = ({ currentUser }) => {
 
   const getNotificationTypeColor = (type) => {
     switch (type) {
-      case 'message':
-        return '#2563eb';
-      case 'document':
-        return '#10b981';
-      case 'system':
-        return '#f59e0b';
-      case 'project':
-        return '#8b5cf6';
-      case 'user':
-        return '#ef4444';
-      default:
-        return '#2563eb';
+      case 'message': return '#2563eb';
+      case 'document': return '#10b981';
+      case 'system': return '#f59e0b';
+      case 'project': return '#8b5cf6';
+      case 'task': return '#059669';
+      case 'user': return '#ef4444';
+      default: return '#2563eb';
     }
   };
 
   const getNotificationTypeIcon = (type) => {
     switch (type) {
-      case 'message':
-        return <FiMail size={14} />;
-      case 'document':
-        return <FiFileText size={14} />;
-      case 'system':
-        return <FiInfo size={14} />;
-      case 'project':
-        return <FiFolderPlus size={14} />;
-      case 'user':
-        return <FiUser size={14} />;
-      default:
-        return null;
+      case 'message': return <FiMail size={14} />;
+      case 'document': return <FiFileText size={14} />;
+      case 'system': return <FiInfo size={14} />;
+      case 'project': return <FiFolderPlus size={14} />;
+      case 'task': return <FiCheckCircle size={14} />;
+      case 'user': return <FiUser size={14} />;
+      default: return null;
     }
   };
 
@@ -325,6 +318,23 @@ const NotificationSystem = ({ currentUser }) => {
                       </Button>
                       <Button
                         size="small"
+                        variant={filterType === 'task' ? 'contained' : 'outlined'}
+                        onClick={() => handleFilterChange('task')}
+                        style={{
+                          textTransform: 'none',
+                          minWidth: 'auto',
+                          backgroundColor: filterType === 'task' ? '#059669' : 'transparent',
+                          color: filterType === 'task' ? 'white' : '#059669',
+                          borderColor: '#059669',
+                          padding: '4px 12px',
+                          fontSize: '13px',
+                        }}
+                        startIcon={<FiCheckCircle size={14} />}
+                      >
+                        Tâches
+                      </Button>
+                      <Button
+                        size="small"
                         variant={filterType === 'user' ? 'contained' : 'outlined'}
                         onClick={() => handleFilterChange('user')}
                         style={{
@@ -392,7 +402,11 @@ const NotificationSystem = ({ currentUser }) => {
                               >
                                 {getNotificationTypeIcon(notification.type)}
                                 <span style={{ marginLeft: '4px' }}>
-                                  {notification.type === 'project' ? 'Projet' : notification.type}
+                                  {notification.type === 'project'
+                                    ? 'Projet'
+                                    : notification.type === 'task'
+                                    ? 'Tâche'
+                                    : notification.type}
                                 </span>
                               </span>
                             </Typography>

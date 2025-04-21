@@ -19,6 +19,7 @@ import ProfileWithLayout from "../pages/ProfileWithLayout";
 import Profile from "../pages/Profile";
 import Login from "../pages/Login";
 import NotFound from "../pages/NotFound";
+import ActiveSprintPage from "../pages/ActiveSprintPage";
 import { ProtectedRoute, RoleProtectedRoute } from "./ProtectedRoute";
 
 const AppRoutes = () => {
@@ -65,6 +66,7 @@ const AppRoutes = () => {
           <Route index element={<ProjectDashboard />} />
           <Route path="kanban" element={<Kanban />} />
           <Route path="backlog" element={<BacklogPage />} />
+          <Route path="ActiveSprintPage" element={<ActiveSprintPage />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="GroupDiscussion" element={<GroupDiscussion />} />
         </Route>

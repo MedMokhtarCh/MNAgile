@@ -217,8 +217,8 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
             <ListItem 
               button 
               component={Link} 
-              to={`/project/${projectId}/sprint`} 
-              className={`menu-item submenu-item ${isActive(`/project/${projectId}/sprint`)}`}
+              to={`/project/${projectId}/ActiveSprintPage`} 
+              className={`menu-item submenu-item ${isActive(`/project/${projectId}/ActiveSprintPage`)}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Sprint" placement="right">
