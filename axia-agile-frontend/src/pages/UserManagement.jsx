@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
-import UserForm from '../components/users/UserForm';
-import TableUsers from '../components/users/TableUsers';
+import UserForm from '../components/users/UserForm'; // Default import
+import TableUsers from '../components/users/TableUsers'; // Ensure this import is present
 import PermissionsModal from '../components/permissions/PermissionsModal';
 import AlertUser from '../components/common/AlertUser';
 import FilterBar from '../components/users/FilterBarUsers';
@@ -13,11 +13,11 @@ import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
-import { useDispatch } from 'react-redux'; // Add this import
-import { updateUser } from '../store/slices/usersSlice'; // Import updateUser
+import { useDispatch } from 'react-redux';
+import { updateUser } from '../store/slices/usersSlice';
 
 const UserManagement = () => {
-  const dispatch = useDispatch(); // Define dispatch
+  const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
   const {
@@ -36,14 +36,19 @@ const UserManagement = () => {
     handleToggleActive,
     snackbar,
     handleCloseSnackbar,
+    openModal,
+    setOpenModal,
   } = useUsers('users');
 
-  const [openModal, setOpenModal] = useState(false);
   const [openPermissionsModal, setOpenPermissionsModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  useEffect(() => {
+    console.log('UserManagement openModal state:', openModal); // Debug log
+  }, [openModal]);
 
   const handleCloseModal = () => {
     setOpenModal(false);
@@ -148,6 +153,7 @@ const UserManagement = () => {
             setFilterRole(values.role);
             setFilterStatus(values.status);
           }}
+          onRefresh={() => dispatch(fetchUsers())}
         />
 
         <TableUsers
@@ -195,7 +201,7 @@ const UserManagement = () => {
               phoneNumber: selectedUser.telephone || selectedUser.phoneNumber,
               roleId: selectedUser.roleId || (selectedUser.role === 'chef_projet' ? 3 : 4),
               jobTitle: selectedUser.jobTitle,
-              isActive: selectedUser.isActive, // Ensure isActive is included
+              isActive: selectedUser.isActive,
             };
             try {
               await dispatch(updateUser({ id: selectedUser.id, userData }));

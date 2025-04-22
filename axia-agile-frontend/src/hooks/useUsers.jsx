@@ -18,6 +18,7 @@ export const useUsers = (storageKey) => {
   const { users, roles, loading, error, snackbar } = useSelector((state) => state.users);
   const { currentUser } = useAuth();
 
+  const [openModal, setOpenModal] = useState(false);
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
@@ -43,7 +44,7 @@ export const useUsers = (storageKey) => {
     .map((role) => ({
       id: role.id,
       label: role.label,
-      icon: role.iconName === 'Security' ? <SecurityIcon /> : 
+      icon: role.iconName === 'Security' ? <SecurityIcon /> :
             role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
     }));
 
@@ -51,6 +52,10 @@ export const useUsers = (storageKey) => {
     dispatch(fetchUsers());
     dispatch(fetchRoles());
   }, [dispatch]);
+
+  useEffect(() => {
+    console.log('openModal state:', openModal); // Debug log
+  }, [openModal]);
 
   const handleCloseSnackbar = () => {
     dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
@@ -80,55 +85,74 @@ export const useUsers = (storageKey) => {
       const action = editMode
         ? updateUser({ id: currentUserId, userData })
         : createUser(userData);
-      
-      const result = await dispatch(action).unwrap();
 
-      setNewUser({
-        email: '',
-        password: '',
-        firstName: '',
-        lastName: '',
-        phoneNumber: '',
-        roleId: currentUser?.roleId === 1 ? 2 : 4,
-        jobTitle: '',
-        entreprise: '',
-        claimIds: [],
-        isActive: true,
-      });
-      setEditMode(false);
-      setCurrentUserId(null);
-      
+      const result = await dispatch(action).unwrap();
+      resetUserForm();
       return result;
     } catch (error) {
-      dispatch(setSnackbar({ 
-        open: true, 
-        message: error.message || 'Une erreur est survenue', 
-        severity: 'error' 
+      dispatch(setSnackbar({
+        open: true,
+        message: error.message || 'Une erreur est survenue',
+        severity: 'error',
       }));
       throw error;
     }
   };
 
-  const handleEditUser = (id) => {
-    const userToEdit = users.find((user) => user.id === id);
-    if (userToEdit) {
-      setNewUser({
-        ...userToEdit,
-        password: '', // Reset password field
-      });
-      setEditMode(true);
-      setCurrentUserId(id);
+  const resetUserForm = () => {
+    setNewUser({
+      email: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+      phoneNumber: '',
+      roleId: currentUser?.roleId === 1 ? 2 : 4,
+      jobTitle: '',
+      entreprise: '',
+      claimIds: [],
+      isActive: true,
+    });
+    setEditMode(false);
+    setCurrentUserId(null);
+    setOpenModal(false);
+  };
+
+  const handleEditUser = (user) => {
+    if (!user) {
+      console.error('No user provided for editing');
+      dispatch(setSnackbar({
+        open: true,
+        message: 'Utilisateur non valide',
+        severity: 'error',
+      }));
+      return;
     }
+    console.log('Édition de l\'utilisateur:', user);
+    setNewUser({
+      ...user,
+      password: '',
+    });
+    setEditMode(true);
+    setCurrentUserId(user.id);
+    setOpenModal((prev) => {
+      console.log('Setting openModal to true, previous state:', prev);
+      return true;
+    });
   };
 
   const handleDeleteUser = async (id) => {
     try {
       await dispatch(deleteUser(id)).unwrap();
+      dispatch(setSnackbar({
+        open: true,
+        message: 'Utilisateur supprimé avec succès',
+        severity: 'success',
+      }));
     } catch (error) {
-      dispatch(setSnackbar({ 
-        open: true, 
-        message: error.message || 'Échec de la suppression', 
-        severity: 'error' 
+      dispatch(setSnackbar({
+        open: true,
+        message: error.message || 'Échec de la suppression',
+        severity: 'error',
       }));
     }
   };
@@ -138,21 +162,25 @@ export const useUsers = (storageKey) => {
     if (!user) return;
 
     try {
-      await dispatch(toggleUserActive({ 
-        id, 
-        isActive: !user.isActive 
+      await dispatch(toggleUserActive({
+        id,
+        isActive: !user.isActive,
       })).unwrap();
     } catch (error) {
-      dispatch(setSnackbar({ 
-        open: true, 
-        message: error.message || 'Échec du changement de statut', 
-        severity: 'error' 
+      dispatch(setSnackbar({
+        open: true,
+        message: error.message || 'Échec du changement de statut',
+        severity: 'error',
       }));
     }
   };
 
   const getUserByEmail = (email) => {
     return users.find((user) => user.email === email);
+  };
+
+  const handleCloseModal = () => {
+    resetUserForm();
   };
 
   return {
@@ -165,10 +193,13 @@ export const useUsers = (storageKey) => {
     currentUserId,
     setCurrentUserId,
     availableRoles,
+    openModal,
+    setOpenModal,
     handleCreateUser,
     handleEditUser,
     handleDeleteUser,
     handleToggleActive,
+    handleCloseModal,
     snackbar,
     handleCloseSnackbar,
     getUserByEmail,

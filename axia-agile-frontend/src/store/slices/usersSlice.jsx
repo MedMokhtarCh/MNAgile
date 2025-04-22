@@ -75,9 +75,7 @@ export const createUser = createAsyncThunk(
       });
       return normalizeUser(response.data);
     } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || error.message || 'Erreur lors de la création'
-      );
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la création');
     }
   }
 );
@@ -87,26 +85,49 @@ export const updateUser = createAsyncThunk(
   'users/updateUser',
   async ({ id, userData }, { rejectWithValue, getState }) => {
     try {
+      console.log('Updating user with data:', { id, userData });
+      
       const { users } = getState().users;
-      if (users.some(user => user.email.toLowerCase() === userData.email.toLowerCase() && user.id !== id)) {
+      const existingUser = users.find(user => user.id === id);
+      
+      if (!existingUser) {
+        return rejectWithValue('Utilisateur non trouvé');
+      }
+
+      // Skip email uniqueness check if email hasn't changed
+      if (userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
+          users.some(user => 
+            user.email.toLowerCase() === userData.email.toLowerCase() && 
+            user.id !== id
+          )) {
         return rejectWithValue('Cet email est déjà utilisé par un autre utilisateur');
       }
 
-      const response = await api.put(`/Users/${id}`, {
+      const payload = {
         Email: userData.email,
-        Password: userData.password || undefined, // Ne pas envoyer si vide
         FirstName: userData.firstName,
         LastName: userData.lastName,
         PhoneNumber: userData.phoneNumber || null,
         Entreprise: userData.roleId === 2 ? userData.entreprise : '',
         RoleId: userData.roleId,
         ClaimIds: userData.claimIds || [],
-        JobTitle: userData.roleId === 3 ? userData.jobTitle : userData.jobTitle || 'Administrateur',
-      });
+        JobTitle: userData.roleId === 3 ? userData.jobTitle : 'Administrateur',
+      };
+
+      if (userData.password) {
+        payload.Password = userData.password;
+      }
+
+      const response = await api.put(`/Users/${id}`, payload);
+      console.log('Update successful:', response.data);
+      
       return normalizeUser(response.data);
     } catch (error) {
+      console.error('Update user error:', error);
       return rejectWithValue(
-        error.response?.data?.message || error.message || 'Échec de la mise à jour'
+        error.response?.data?.message || 
+        error.message || 
+        'Échec de la mise à jour'
       );
     }
   }
@@ -137,6 +158,7 @@ export const toggleUserActive = createAsyncThunk(
     }
   }
 );
+
 const usersSlice = createSlice({
   name: 'users',
   initialState: {

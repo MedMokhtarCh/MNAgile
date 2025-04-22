@@ -25,6 +25,19 @@ const TableUsers = ({
   columns,
   getAvatarColor,
 }) => {
+  const renderCell = (column, user) => {
+    if (typeof column.render === 'function') {
+      return column.render(user, {
+        onEdit: () => onEdit(user),
+        onDelete: () => onDelete(user.id),
+        onToggleActive: () => onToggleActive(user.id),
+        onManagePermissions: () => onManagePermissions(user),
+        getAvatarColor: () => getAvatarColor(user),
+      });
+    }
+    return user[column.id];
+  };
+
   return (
     <Paper sx={{ overflow: 'hidden', mb: 4 }}>
       <TableContainer>
@@ -65,15 +78,9 @@ const TableUsers = ({
             ) : (
               users.map((user) => (
                 <TableRow key={user.id} hover>
-                  {columns.map((col) => (
-                    <TableCell key={col.id} align={col.align || 'left'}>
-                      {col.render(user, {
-                        onEdit,
-                        onDelete,
-                        onToggleActive,
-                        onManagePermissions,
-                        getAvatarColor,
-                      })}
+                  {columns.map((column) => (
+                    <TableCell key={`${user.id}-${column.id}`} align={column.align || 'left'}>
+                      {renderCell(column, user)}
                     </TableCell>
                   ))}
                 </TableRow>

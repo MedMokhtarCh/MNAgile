@@ -8,7 +8,7 @@ import {
   Business as BusinessIcon,
   Phone as PhoneIcon,
   Check as CheckIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
 } from '@mui/icons-material';
 
 export const adminColumns = [
@@ -17,11 +17,13 @@ export const adminColumns = [
     label: 'Email',
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Avatar sx={{ 
-          mr: 2, 
-          bgcolor: admin.isActive ? 'primary.main' : 'grey.400',
-          color: 'white'
-        }}>
+        <Avatar
+          sx={{
+            mr: 2,
+            bgcolor: admin.isActive ? 'primary.main' : 'grey.400',
+            color: 'white',
+          }}
+        >
           {admin.email.charAt(0).toUpperCase()}
         </Avatar>
         <Box>
@@ -41,9 +43,7 @@ export const adminColumns = [
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <BusinessIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">
-          {admin.entreprise || 'Non renseigné'}
-        </Typography>
+        <Typography variant="body2">{admin.entreprise || 'Non renseigné'}</Typography>
       </Box>
     ),
   },
@@ -53,9 +53,7 @@ export const adminColumns = [
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">
-          {admin.phoneNumber || 'Non renseigné'}
-        </Typography>
+        <Typography variant="body2">{admin.phoneNumber || 'Non renseigné'}</Typography>
       </Box>
     ),
   },
@@ -102,29 +100,35 @@ export const adminColumns = [
     id: 'actions',
     label: 'Actions',
     align: 'right',
-    render: (admin, { onEdit, onDelete }) => (
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Tooltip title="Modifier">
-          <IconButton 
-            size="small" 
-            sx={{ mr: 1 }} 
-            onClick={() => onEdit(admin.id)}
-            color="primary"
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Supprimer">
-          <IconButton 
-            size="small" 
-            color="error" 
-            onClick={() => onDelete(admin.id)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-    ),
+    render: (admin, { onEdit, onDelete }) => {
+      console.log('Admin in actions column:', admin); // Debug log
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Modifier">
+            <IconButton
+              size="small"
+              sx={{ mr: 1 }}
+              onClick={() => {
+                console.log('Edit icon clicked for admin:', admin); // Debug log
+                onEdit(admin);
+              }}
+              color="primary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDelete(admin.id)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      );
+    },
   },
 ];
 
@@ -134,11 +138,13 @@ export const userColumns = [
     label: 'Utilisateur',
     render: (user, { getAvatarColor }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Avatar sx={{ 
-          mr: 2, 
-          bgcolor: getAvatarColor(user),
-          color: 'white'
-        }}>
+        <Avatar
+          sx={{
+            mr: 2,
+            bgcolor: getAvatarColor(user),
+            color: 'white',
+          }}
+        >
           {user.firstName?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase()}
         </Avatar>
         <Box>
@@ -168,11 +174,7 @@ export const userColumns = [
   {
     id: 'jobTitle',
     label: 'Titre de poste',
-    render: (user) => (
-      <Typography variant="body2">
-        {user.jobTitle || 'Non renseigné'}
-      </Typography>
-    ),
+    render: (user) => <Typography variant="body2">{user.jobTitle || 'Non renseigné'}</Typography>,
   },
   {
     id: 'telephone',
@@ -180,9 +182,7 @@ export const userColumns = [
     render: (user) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">
-          {user.phoneNumber || 'Non renseigné'}
-        </Typography>
+        <Typography variant="body2">{user.phoneNumber || 'Non renseigné'}</Typography>
       </Box>
     ),
   },
@@ -229,28 +229,34 @@ export const userColumns = [
     id: 'actions',
     label: 'Actions',
     align: 'right',
-    render: (user, { onEdit, onDelete }) => (
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-        <Tooltip title="Modifier">
-          <IconButton 
-            size="small" 
-            sx={{ mr: 1 }} 
-            onClick={() => onEdit(user.id)}
-            color="primary"
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip title="Supprimer">
-          <IconButton 
-            size="small" 
-            color="error" 
-            onClick={() => onDelete(user.id)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-    ),
+    render: (user, { onEdit, onDelete }) => {
+      console.log('User in actions column:', user); // Debug log
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Modifier">
+            <IconButton
+              size="small"
+              sx={{ mr: 1 }}
+              onClick={() => {
+                console.log('Edit icon clicked for user:', user); // Debug log
+                onEdit(user);
+              }}
+              color="primary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDelete(user.id)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      );
+    },
   },
 ];

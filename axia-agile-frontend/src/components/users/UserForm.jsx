@@ -26,7 +26,6 @@ import {
 } from '@mui/icons-material';
 import PermissionForm from '../permissions/PermissionForm';
 
-// Map iconName to React component
 const getIconComponent = (iconName) => {
   switch (iconName) {
     case 'Security':
@@ -53,6 +52,7 @@ const UserForm = ({
   requiredFields = ['email', 'firstName', 'lastName'],
   showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
 }) => {
+  console.log('UserForm open prop:', open); // Debug log
   const [errors, setErrors] = useState({});
 
   const handleChange = (field, value) => {
@@ -71,27 +71,28 @@ const UserForm = ({
 
   const handleSubmit = () => {
     const newErrors = {};
-    
-    // Validation de base
+
     requiredFields.forEach((field) => {
       if (!user[field] && !(field === 'password' && isEditMode)) {
         newErrors[field] = 'Ce champ est requis';
       }
     });
-  
-    // Validation spécifique au rôle
-    if ([3, 4].includes(user.roleId)) {
-      if (!user.jobTitle) {
-        newErrors.jobTitle = 'Le titre de poste est requis pour ce rôle';
-      }
-    } else if (user.roleId === 2 && !user.entreprise) {
-      newErrors.entreprise = 'L entreprise est requise pour les administrateurs';
+
+    if (user.roleId === 2 && !user.entreprise) {
+      newErrors.entreprise = "L'entreprise est requise pour les administrateurs";
     }
-  
+
+    if (user.roleId === 3 && !user.jobTitle) {
+      newErrors.jobTitle = 'Le titre de poste est requis pour les chefs de projet';
+    }
+
+    console.log('Form validation errors:', newErrors);
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
+
     onSave();
   };
 

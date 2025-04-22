@@ -2,7 +2,6 @@ import React from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography } from '@mui/material';
 import PermissionForm from './PermissionForm';
 import { Security as SecurityIcon } from '@mui/icons-material';
-import { mapFrontendToBackendPermissions } from '../../constants/permissions';
 
 const PermissionsModal = ({ open, onClose, user, permissionsGroups, onSave, onPermissionChange }) => {
   if (!user) return null;
@@ -10,8 +9,9 @@ const PermissionsModal = ({ open, onClose, user, permissionsGroups, onSave, onPe
   const handleSave = () => {
     const updatedUser = {
       ...user,
-      claimIds: mapFrontendToBackendPermissions(user.claimIds),
+      claimIds: user.claimIds || [],
     };
+    console.log('Saving updated user permissions:', updatedUser);
     onSave(updatedUser);
   };
 
@@ -28,13 +28,13 @@ const PermissionsModal = ({ open, onClose, user, permissionsGroups, onSave, onPe
       <DialogContent>
         <PermissionForm
           permissionsGroups={permissionsGroups}
-          selectedPermissions={user.claimIds}
+          selectedPermissions={user.claimIds || []}
           onPermissionChange={onPermissionChange}
         />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="outlined">Annuler</Button>
-        <Button variant="contained" onClick={handleSave}>Enregistrer</Button>
+        <Button variant="contained" onClick={handleSave} disabled={user.isSaving}>Enregistrer</Button>
       </DialogActions>
     </Dialog>
   );
