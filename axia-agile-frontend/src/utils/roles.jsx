@@ -1,45 +1,31 @@
-import { Person as PersonIcon, SupervisorAccount as ChefProjetIcon, Security as SecurityIcon } from '@mui/icons-material';
-import { getStoredData } from './storage';
-
-export const roles = {
-  superadmin: {
-    id: 'superadmin',
-    label: 'Super Administrateur',
-    icon: <SecurityIcon />,
-    permissions: ['create_users', 'create_project_managers'],
-  },
-  admin: {
-    id: 'admin',
-    label: 'Administrateur',
-    icon: <SecurityIcon />,
-    permissions: [],
-  },
-  chef_projet: {
-    id: 'chef_projet',
-    label: 'Chef de Projet',
-    icon: <ChefProjetIcon />,
-    permissions: ['project_view', 'project_create', 'task_view', 'task_create', 'task_assign'],
-  },
-  user: {
-    id: 'user',
-    label: 'Utilisateur',
-    icon: <PersonIcon />,
-    permissions: ['project_view', 'task_view'],
-  },
-};
+import { AdminPanelSettings as AdminIcon, Person as UserIcon, SupervisorAccount as ChefProjetIcon } from '@mui/icons-material';
 
 export const getAvailableRoles = (currentUser) => {
-  if (currentUser.role === 'superadmin') {
-    return [{ ...roles.admin, disabled: false }];
-  } else if (currentUser.role === 'admin') {
-    const admins = getStoredData('admins');
-    const adminData = admins.find((admin) => admin.email === currentUser.email);
-    const hasCreateUsers = adminData?.permissions?.includes('create_users') || false;
-    const hasCreateProjectManagers = adminData?.permissions?.includes('create_project_managers') || false;
-    return [
-      { ...roles.user, disabled: !hasCreateUsers },
-      { ...roles.chef_projet, disabled: !hasCreateProjectManagers },
-    ];
-  }
-  return [];
+  const roles = [
+    {
+      id: 1,
+      label: 'Superadmin',
+      icon: <AdminIcon />,
+      disabled: currentUser?.roleId !== 1, // Only superadmin can assign superadmin
+    },
+    {
+      id: 2,
+      label: 'Admin',
+      icon: <AdminIcon />,
+      disabled: currentUser?.roleId > 2,
+    },
+    {
+      id: 3,
+      label: 'Chef de projet',
+      icon: <ChefProjetIcon />,
+      disabled: currentUser?.roleId > 3,
+    },
+    {
+      id: 4,
+      label: 'Utilisateur',
+      icon: <UserIcon />,
+      disabled: false,
+    },
+  ];
+  return roles.filter((role) => !role.disabled || currentUser?.roleId === role.id);
 };

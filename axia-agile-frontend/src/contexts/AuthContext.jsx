@@ -1,68 +1,50 @@
-// src/contexts/AuthContext.jsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
+import { login, logout } from '../store/slices/authSlice';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
-  useEffect(() => {
-    // Check if user is logged in on component mount
-    const storedUser = localStorage.getItem('currentUser');
-    const token = localStorage.getItem('token');
-    
-    if (storedUser && token) {
-      setCurrentUser(JSON.parse(storedUser));
+  const handleLogin = async (userData) => {
+    const response = await dispatch(login(userData));
+    if (login.fulfilled.match(response)) {
+      const role = response.payload.user.role;
+      const redirectPath =
+        role === 'SuperAdmin' ? '/SuperAdminStatistics' :
+        role === 'Admin' ? '/UserStatisticsDashboard' :
+        role === 'ChefProjet' ? '/dashboard' : '/projects';
+      navigate(redirectPath);
     }
-    
-    setLoading(false);
-  }, []);
-
-  const login = (userData, token) => {
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    localStorage.setItem('token', token);
-    setCurrentUser(userData);
   };
 
-  const logout = () => {
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('token');
-    setCurrentUser(null);
+  const handleLogout = () => {
+    dispatch(logout());
     navigate('/login');
   };
 
   const hasRole = (requiredRoles) => {
     if (!currentUser) return false;
-    
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true; // No specific role required
-    }
-    
+    if (!requiredRoles || requiredRoles.length === 0) return true;
     if (Array.isArray(requiredRoles)) {
       return requiredRoles.includes(currentUser.role);
     }
-    
     return currentUser.role === requiredRoles;
   };
 
   const value = {
     currentUser,
-    login,
-    logout,
+    login: handleLogin,
+    logout: handleLogout,
     hasRole,
-    isAuthenticated: !!currentUser,
+    isAuthenticated,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {!loading && children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
-export const useAuth = () => {
-  return useContext(AuthContext);
-};
+export const useAuth = () => useContext(AuthContext);

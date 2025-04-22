@@ -75,6 +75,7 @@ const AppRoutes = () => {
       {/* Error routes */}
     
       <Route path="*" element={<NotFound />} />
+      
     </Routes>
   );
 };

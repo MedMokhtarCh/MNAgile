@@ -6,7 +6,7 @@ import {
   Box,
   IconButton,
   Avatar,
-  Tooltip
+  Tooltip,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
@@ -80,7 +80,7 @@ const ProjectCard = ({
   navigateToProject,
   getUserDisplayName,
   getAvatarColor,
-  generateInitials
+  generateInitials,
 }) => {
   const uniqueMembers = [
     ...(project.projectManagers || []),
@@ -101,10 +101,8 @@ const ProjectCard = ({
       <ContentContainer>
         <CardContent sx={{ p: 3, flex: 1 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <TitleTypography variant="h6">
-              {project.title}
-            </TitleTypography>
-            {currentUser?.role === 'chef_projet' && (
+            <TitleTypography variant="h6">{project.title}</TitleTypography>
+            {currentUser?.roleId === 3 && (
               <IconButton
                 size="small"
                 onClick={(e) => {
@@ -137,11 +135,13 @@ const ProjectCard = ({
             sx={{
               mb: 1,
               fontWeight: 500,
-              color: theme => theme.palette.primary.main,
+              color: (theme) => theme.palette.primary.main,
             }}
           >
-            Méthodologie : {project.method ? project.method.charAt(0).toUpperCase() + project.method.slice(1) : 'Non renseignée'}
+            Méthodologie :{' '}
+            {project.method ? project.method.charAt(0).toUpperCase() + project.method.slice(1) : 'Non renseignée'}
           </Typography>
+
         </CardContent>
       </ContentContainer>
 

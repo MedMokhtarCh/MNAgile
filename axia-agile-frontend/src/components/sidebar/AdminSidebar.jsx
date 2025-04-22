@@ -10,24 +10,39 @@ import {
   Tooltip,
 } from "@mui/material";
 import { FaChartBar, FaUsers, FaSignOutAlt } from "react-icons/fa";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "../../store/slices/authSlice";
 import logo from "../../assets/logo.png";
 import "./Sidebar.css";
 
-const AdminSidebar = ({ collapsed, onLogout }) => {
+const AdminSidebar = ({ collapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  
-  const currentUser = JSON.parse(localStorage.getItem("currentUser"));
-  const role = currentUser?.role;
+  // Get currentUser from Redux store
+  const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
+
+  // Map backend roleId to frontend role string
+  const role = currentUser
+    ? currentUser.roleId === 1
+      ? "superadmin"
+      : currentUser.roleId === 2
+      ? "admin"
+      : null
+    : null;
 
   const isActive = (path) => (location.pathname === path ? "active" : "");
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("currentUser");
-    navigate("/Login");
+    dispatch(logout()); // Dispatch Redux logout action
+    navigate("/login"); // Use lowercase /login
   };
+
+  // If not authenticated, don't render the sidebar
+  if (!isAuthenticated || !role) {
+    return null;
+  }
 
   return (
     <Drawer
@@ -53,10 +68,8 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
       </div>
 
       <List>
-        
         {role === "superadmin" && (
           <>
-            
             <ListItem
               button
               component={Link}
@@ -71,7 +84,6 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
               {!collapsed && <ListItemText primary="Tableau de bord" />}
             </ListItem>
 
-            
             <ListItem
               button
               component={Link}
@@ -88,10 +100,8 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
           </>
         )}
 
-       
         {role === "admin" && (
           <>
-            
             <ListItem
               button
               component={Link}
@@ -106,7 +116,6 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
               {!collapsed && <ListItemText primary="Tableau de bord" />}
             </ListItem>
 
-           
             <ListItem
               button
               component={Link}
@@ -120,12 +129,10 @@ const AdminSidebar = ({ collapsed, onLogout }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
             </ListItem>
-            
           </>
         )}
       </List>
 
-      {/* Bouton de déconnexion */}
       <div className="footer-sidebar">
         <IconButton
           onClick={handleLogout}

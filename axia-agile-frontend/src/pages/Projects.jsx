@@ -20,7 +20,7 @@ import { styled, useTheme } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import SearchIcon from '@mui/icons-material/Search';
+import SearchIcon from '@mui/icons-material/Search'; // Added import
 import { useProject } from '../hooks/useProjects';
 import { useNotification } from '../hooks/useNotifications';
 import { useAvatar } from '../hooks/useAvatar';
@@ -29,19 +29,25 @@ import AlertUser from '../components/common/AlertUser';
 import ProjectCard from '../components/project/ProjectCard';
 import ProjectFormStepper from '../components/project/ProjectFormStepper';
 import PageTitle from '../components/common/PageTitle';
-import Pagination from '../components/common/Pagination'; 
+import Pagination from '../components/common/Pagination';
 
 // Error Boundary
 class ErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
+
   static getDerivedStateFromError(error) {
     return { hasError: true, error };
   }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
   render() {
     if (this.state.hasError) {
       return (
         <Typography color="error">
-          Erreur: {this.state.error.message}
+          Une erreur est survenue: {this.state.error.message}
         </Typography>
       );
     }
@@ -143,13 +149,13 @@ function Projects() {
   } = useProject();
   const { createNotification } = useNotification();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const { users } = useUsers('users');
+  const { users } = useUsers('users'); // Returns users with roleId: 3, 4
   const [errorAlertOpen, setErrorAlertOpen] = useState(false);
   const [successAlertOpen, setSuccessAlertOpen] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const projectsPerPage = 9; // Ajusté pour une grille 3x3 qui fonctionne bien visuellement
+  const projectsPerPage = 9;
 
   useEffect(() => {
     if (formError) {
@@ -167,7 +173,6 @@ function Projects() {
     }
   }, [formSuccess]);
 
-  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, dateFilter, sortOrder]);
@@ -187,7 +192,7 @@ function Projects() {
 
   const getUserDisplayName = (email) => {
     const user = users.find((u) => u.email === email);
-    return user ? `${user.nom} ${user.prenom}` : email;
+    return user ? `${user.firstName} ${user.lastName}` : 'Utilisateur inconnu';
   };
 
   const getShortDescription = (description) => {
@@ -198,7 +203,7 @@ function Projects() {
 
   // Get filtered projects
   const filteredProjects = getFilteredProjects();
-  
+
   // Calculate pagination
   const totalPages = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));
   const indexOfLastProject = currentPage * projectsPerPage;
@@ -219,7 +224,7 @@ function Projects() {
           }}
         >
           <PageTitle>Mes Projets</PageTitle>
-          {currentUser?.role === 'chef_projet' && (
+          {currentUser?.roleId === 3 && (
             <CreateButton
               startIcon={<AddIcon sx={{ fontSize: 26 }} />}
               onClick={() => handleModalOpen(false)}
@@ -284,14 +289,20 @@ function Projects() {
 
         <Box sx={{ mt: 4 }}>
           <SectionTitle variant="h5">
-            Liste des Projets 
+            Liste des Projets
             {filteredProjects.length > 0 && (
-              <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 2, fontWeight: 'normal' }}>
-                ({indexOfFirstProject + 1} - {Math.min(indexOfLastProject, filteredProjects.length)} sur {filteredProjects.length})
+              <Typography
+                component="span"
+                variant="body2"
+                color="text.secondary"
+                sx={{ ml: 2, fontWeight: 'normal' }}
+              >
+                ({indexOfFirstProject + 1} - {Math.min(indexOfLastProject, filteredProjects.length)} sur{' '}
+                {filteredProjects.length})
               </Typography>
             )}
           </SectionTitle>
-          
+
           <Box
             sx={{
               display: 'grid',
@@ -302,7 +313,7 @@ function Projects() {
               },
               gap: 3,
               justifyItems: 'center',
-              minHeight: '500px', // Espace minimum pour éviter les sauts de page
+              minHeight: '500px',
             }}
           >
             {currentProjects.length > 0 ? (
@@ -327,15 +338,10 @@ function Projects() {
               </Box>
             )}
           </Box>
-          
-          {/* Pagination component */}
+
           {filteredProjects.length > 0 && (
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-              <Pagination 
-                page={currentPage} 
-                count={totalPages} 
-                onChange={handlePageChange} 
-              />
+              <Pagination page={currentPage} count={totalPages} onChange={handlePageChange} />
             </Box>
           )}
         </Box>
@@ -350,7 +356,10 @@ function Projects() {
             <EditIcon fontSize="small" sx={{ mr: 1 }} />
             Modifier
           </MenuItem>
-          <MenuItem onClick={() => handleDeleteDialogOpen(selectedProject)} sx={{ color: 'error.main' }}>
+          <MenuItem
+            onClick={() => handleDeleteDialogOpen(selectedProject)}
+            sx={{ color: 'error.main' }}
+          >
             <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
             Supprimer
           </MenuItem>
@@ -360,7 +369,8 @@ function Projects() {
           <DialogTitle>Confirmer la Suppression</DialogTitle>
           <DialogContent>
             <DialogContentText>
-              Êtes-vous sûr de vouloir supprimer le projet "{projectToDelete?.title}" ? Cette action est irréversible.
+              Êtes-vous sûr de vouloir supprimer le projet "{projectToDelete?.title}" ? Cette action
+              est irréversible.
             </DialogContentText>
           </DialogContent>
           <DialogActions>

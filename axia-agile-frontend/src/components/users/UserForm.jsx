@@ -1,11 +1,44 @@
-// src/components/common/UserForm.jsx
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Button, Grid,
-  FormControl, InputLabel, Select, MenuItem, InputAdornment, Box
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Button,
+  Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  InputAdornment,
+  Box,
 } from '@mui/material';
-import { Email as EmailIcon, Lock as LockIcon, Person as PersonIcon, Phone as PhoneIcon, AssignmentInd as JobTitleIcon, Business as BusinessIcon, Map as MapIcon } from '@mui/icons-material';
+import {
+  Email as EmailIcon,
+  Lock as LockIcon,
+  Person as PersonIcon,
+  Phone as PhoneIcon,
+  AssignmentInd as JobTitleIcon,
+  Business as BusinessIcon,
+  Security as SecurityIcon,
+  SupervisorAccount as SupervisorAccountIcon,
+} from '@mui/icons-material';
 import PermissionForm from '../permissions/PermissionForm';
+
+// Map iconName to React component
+const getIconComponent = (iconName) => {
+  switch (iconName) {
+    case 'Security':
+      return <SecurityIcon />;
+    case 'SupervisorAccount':
+      return <SupervisorAccountIcon />;
+    case 'Person':
+      return <PersonIcon />;
+    default:
+      return <PersonIcon />;
+  }
+};
 
 const UserForm = ({
   open,
@@ -17,18 +50,49 @@ const UserForm = ({
   roles,
   permissionsGroups,
   disabledFields = [],
-  requiredFields = ['email', 'password'],
-  showFields = ['email', 'password'],
+  requiredFields = ['email', 'firstName', 'lastName'],
+  showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
 }) => {
+  const [errors, setErrors] = useState({});
+
   const handleChange = (field, value) => {
     setUser({ ...user, [field]: value });
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: null });
+    }
   };
 
   const handlePermissionChange = (permissionId) => {
-    const permissions = user.permissions.includes(permissionId)
-      ? user.permissions.filter((id) => id !== permissionId)
-      : [...user.permissions, permissionId];
-    setUser({ ...user, permissions });
+    const claimIds = user.claimIds.includes(permissionId)
+      ? user.claimIds.filter((id) => id !== permissionId)
+      : [...user.claimIds, permissionId];
+    setUser({ ...user, claimIds });
+  };
+
+  const handleSubmit = () => {
+    const newErrors = {};
+    
+    // Validation de base
+    requiredFields.forEach((field) => {
+      if (!user[field] && !(field === 'password' && isEditMode)) {
+        newErrors[field] = 'Ce champ est requis';
+      }
+    });
+  
+    // Validation spécifique au rôle
+    if ([3, 4].includes(user.roleId)) {
+      if (!user.jobTitle) {
+        newErrors.jobTitle = 'Le titre de poste est requis pour ce rôle';
+      }
+    } else if (user.roleId === 2 && !user.entreprise) {
+      newErrors.entreprise = 'L entreprise est requise pour les administrateurs';
+    }
+  
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    onSave();
   };
 
   return (
@@ -38,27 +102,45 @@ const UserForm = ({
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
             <Grid container spacing={2}>
-              {showFields.includes('prenom') && (
+              {showFields.includes('firstName') && (
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Prénom"
                     fullWidth
-                    value={user.prenom || ''}
-                    onChange={(e) => handleChange('prenom', e.target.value)}
-                    required={requiredFields.includes('prenom')}
-                    disabled={disabledFields.includes('prenom')}
+                    value={user.firstName || ''}
+                    onChange={(e) => handleChange('firstName', e.target.value)}
+                    required={requiredFields.includes('firstName')}
+                    disabled={disabledFields.includes('firstName')}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    error={!!errors.firstName}
+                    helperText={errors.firstName}
                   />
                 </Grid>
               )}
-              {showFields.includes('nom') && (
+              {showFields.includes('lastName') && (
                 <Grid item xs={12} sm={6}>
                   <TextField
                     label="Nom"
                     fullWidth
-                    value={user.nom || ''}
-                    onChange={(e) => handleChange('nom', e.target.value)}
-                    required={requiredFields.includes('nom')}
-                    disabled={disabledFields.includes('nom')}
+                    value={user.lastName || ''}
+                    onChange={(e) => handleChange('lastName', e.target.value)}
+                    required={requiredFields.includes('lastName')}
+                    disabled={disabledFields.includes('lastName')}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PersonIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    error={!!errors.lastName}
+                    helperText={errors.lastName}
                   />
                 </Grid>
               )}
@@ -69,9 +151,17 @@ const UserForm = ({
                     fullWidth
                     value={user.email || ''}
                     onChange={(e) => handleChange('email', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><EmailIcon /></InputAdornment> }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EmailIcon />
+                        </InputAdornment>
+                      ),
+                    }}
                     required={requiredFields.includes('email')}
                     disabled={disabledFields.includes('email')}
+                    error={!!errors.email}
+                    helperText={errors.email}
                   />
                 </Grid>
               )}
@@ -83,83 +173,111 @@ const UserForm = ({
                     fullWidth
                     value={user.password || ''}
                     onChange={(e) => handleChange('password', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><LockIcon /></InputAdornment> }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon />
+                        </InputAdornment>
+                      ),
+                    }}
                     required={requiredFields.includes('password') && !isEditMode}
                     disabled={disabledFields.includes('password')}
+                    error={!!errors.password}
+                    helperText={errors.password}
                   />
                 </Grid>
               )}
-              {showFields.includes('telephone') && (
+              {showFields.includes('phoneNumber') && (
                 <Grid item xs={12}>
                   <TextField
                     label="Téléphone"
                     fullWidth
-                    value={user.telephone || ''}
-                    onChange={(e) => handleChange('telephone', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><PhoneIcon /></InputAdornment> }}
-                    required={requiredFields.includes('telephone')}
-                    disabled={disabledFields.includes('telephone')}
+                    value={user.phoneNumber || ''}
+                    onChange={(e) => handleChange('phoneNumber', e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <PhoneIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    required={requiredFields.includes('phoneNumber')}
+                    disabled={disabledFields.includes('phoneNumber')}
+                    error={!!errors.phoneNumber}
+                    helperText={errors.phoneNumber}
                   />
                 </Grid>
               )}
-              {showFields.includes('jobTitle') && (
+              {showFields.includes('jobTitle') && [3, 4].includes(user.roleId) && (
                 <Grid item xs={12}>
                   <TextField
                     label="Titre de poste"
                     fullWidth
                     value={user.jobTitle || ''}
                     onChange={(e) => handleChange('jobTitle', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><JobTitleIcon /></InputAdornment> }}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <JobTitleIcon />
+                        </InputAdornment>
+                      ),
+                    }}
                     required={requiredFields.includes('jobTitle')}
                     disabled={disabledFields.includes('jobTitle')}
+                    error={!!errors.jobTitle}
+                    helperText={errors.jobTitle}
                   />
                 </Grid>
               )}
-              {showFields.includes('entreprise') && (
+              {showFields.includes('entreprise') && user.roleId === 2 && (
                 <Grid item xs={12}>
                   <TextField
                     label="Entreprise"
                     fullWidth
                     value={user.entreprise || ''}
                     onChange={(e) => handleChange('entreprise', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><BusinessIcon /></InputAdornment> }}
                     required={requiredFields.includes('entreprise')}
                     disabled={disabledFields.includes('entreprise')}
-                  />
-                </Grid>
-              )}
-              {showFields.includes('adresse') && (
-                <Grid item xs={12}>
-                  <TextField
-                    label="Adresse"
-                    fullWidth
-                    value={user.adresse || ''}
-                    onChange={(e) => handleChange('adresse', e.target.value)}
-                    InputProps={{ startAdornment: <InputAdornment position="start"><MapIcon /></InputAdornment> }}
-                    required={requiredFields.includes('adresse')}
-                    disabled={disabledFields.includes('adresse')}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <BusinessIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    error={!!errors.entreprise}
+                    helperText={errors.entreprise}
                   />
                 </Grid>
               )}
               {showFields.includes('role') && (
                 <Grid item xs={12}>
-                  <FormControl fullWidth>
+                  <FormControl fullWidth error={!!errors.roleId}>
                     <InputLabel>Rôle</InputLabel>
                     <Select
-                      value={user.role || 'user'}
+                      value={user.roleId || (roles.length > 0 ? roles[0].id : '')}
                       label="Rôle"
-                      onChange={(e) => handleChange('role', e.target.value)}
+                      onChange={(e) => handleChange('roleId', e.target.value)}
                       disabled={disabledFields.includes('role')}
                     >
-                      {roles.map((role) => (
-                        <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            {role.icon}
-                            <Box sx={{ ml: 1 }}>{role.label}</Box>
-                          </Box>
+                      {roles.length > 0 ? (
+                        roles.map((role) => (
+                          <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {getIconComponent(role.iconName)}
+                              <Box sx={{ ml: 1 }}>{role.label}</Box>
+                            </Box>
+                          </MenuItem>
+                        ))
+                      ) : (
+                        <MenuItem value="" disabled>
+                          Aucun rôle disponible
                         </MenuItem>
-                      ))}
+                      )}
                     </Select>
+                    {errors.roleId && (
+                      <span className="MuiFormHelperText-root Mui-error">{errors.roleId}</span>
+                    )}
                   </FormControl>
                 </Grid>
               )}
@@ -168,15 +286,17 @@ const UserForm = ({
           <Grid item xs={12} md={6}>
             <PermissionForm
               permissionsGroups={permissionsGroups}
-              selectedPermissions={user.permissions}
+              selectedPermissions={user.claimIds}
               onPermissionChange={handlePermissionChange}
             />
           </Grid>
         </Grid>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined">Annuler</Button>
-        <Button variant="contained" onClick={onSave}>
+        <Button onClick={onClose} variant="outlined">
+          Annuler
+        </Button>
+        <Button variant="contained" onClick={handleSubmit}>
           {isEditMode ? 'Enregistrer' : 'Créer'}
         </Button>
       </DialogActions>

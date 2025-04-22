@@ -1,7 +1,16 @@
 import React from 'react';
 import {
-  Paper, TableContainer, Table, TableHead, TableRow, TableCell, TableBody,
-  CircularProgress, Button, Box, Typography
+  Paper,
+  TableContainer,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  CircularProgress,
+  Button,
+  Box,
+  Typography,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 
@@ -23,7 +32,9 @@ const TableUsers = ({
           <TableHead>
             <TableRow>
               {columns.map((col) => (
-                <TableCell key={col.id} align={col.align || 'left'}>{col.label}</TableCell>
+                <TableCell key={col.id} align={col.align || 'left'}>
+                  {col.label}
+                </TableCell>
               ))}
             </TableRow>
           </TableHead>
@@ -32,7 +43,9 @@ const TableUsers = ({
               <TableRow>
                 <TableCell colSpan={columns.length} align="center" sx={{ py: 5 }}>
                   <CircularProgress size={40} />
-                  <Typography variant="body2" sx={{ mt: 2 }}>Chargement...</Typography>
+                  <Typography variant="body2" sx={{ mt: 2 }}>
+                    Chargement...
+                  </Typography>
                 </TableCell>
               </TableRow>
             ) : users.length === 0 ? (

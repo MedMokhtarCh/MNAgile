@@ -1,5 +1,15 @@
 import { Avatar, Box, Typography, Chip, Switch, IconButton, Tooltip } from '@mui/material';
-import { Edit as EditIcon, Delete as DeleteIcon, Person as PersonIcon, SupervisorAccount as ChefProjetIcon, Security as SecurityIcon, Business as BusinessIcon, Map as MapIcon, Phone as PhoneIcon } from '@mui/icons-material';
+import {
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Person as PersonIcon,
+  SupervisorAccount as ChefProjetIcon,
+  Security as SecurityIcon,
+  Business as BusinessIcon,
+  Phone as PhoneIcon,
+  Check as CheckIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
 
 export const adminColumns = [
   {
@@ -7,12 +17,20 @@ export const adminColumns = [
     label: 'Email',
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Avatar sx={{ mr: 2, bgcolor: admin.isActive ? 'primary.main' : 'grey.400' }}>
+        <Avatar sx={{ 
+          mr: 2, 
+          bgcolor: admin.isActive ? 'primary.main' : 'grey.400',
+          color: 'white'
+        }}>
           {admin.email.charAt(0).toUpperCase()}
         </Avatar>
         <Box>
-          <Typography variant="body2">{admin.email}</Typography>
-          <Typography variant="caption" color="text.secondary">Admin</Typography>
+          <Typography variant="body2" fontWeight="medium">
+            {admin.email}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Administrateur
+          </Typography>
         </Box>
       </Box>
     ),
@@ -23,18 +41,8 @@ export const adminColumns = [
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <BusinessIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">{admin.entreprise}</Typography>
-      </Box>
-    ),
-  },
-  {
-    id: 'adresse',
-    label: 'Adresse',
-    render: (admin) => (
-      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <MapIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {admin.adresse}
+        <Typography variant="body2">
+          {admin.entreprise || 'Non renseigné'}
         </Typography>
       </Box>
     ),
@@ -45,7 +53,9 @@ export const adminColumns = [
     render: (admin) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">{admin.telephone}</Typography>
+        <Typography variant="body2">
+          {admin.phoneNumber || 'Non renseigné'}
+        </Typography>
       </Box>
     ),
   },
@@ -56,7 +66,7 @@ export const adminColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${admin.permissions.length} autorisations`}
+          label={`${admin.claimIds?.length || 0} autorisations`}
           size="small"
           color="info"
           onClick={() => onManagePermissions(admin)}
@@ -70,15 +80,19 @@ export const adminColumns = [
     label: 'Statut',
     render: (admin, { onToggleActive }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Switch
-          checked={admin.isActive}
-          onChange={() => onToggleActive(admin.id)}
-          color="secondary"
-        />
+        <Tooltip title={admin.isActive ? 'Désactiver' : 'Activer'}>
+          <Switch
+            checked={admin.isActive}
+            onChange={() => onToggleActive(admin.id)}
+            color="secondary"
+            inputProps={{ 'aria-label': 'Statut du compte' }}
+          />
+        </Tooltip>
         <Chip
+          icon={admin.isActive ? <CheckIcon fontSize="small" /> : <CloseIcon fontSize="small" />}
           label={admin.isActive ? 'Actif' : 'Inactif'}
           size="small"
-          color={admin.isActive ? 'success' : 'default'}
+          color={admin.isActive ? 'success' : 'error'}
           sx={{ ml: 1 }}
         />
       </Box>
@@ -89,18 +103,27 @@ export const adminColumns = [
     label: 'Actions',
     align: 'right',
     render: (admin, { onEdit, onDelete }) => (
-      <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Tooltip title="Modifier">
-          <IconButton size="small" sx={{ mr: 1 }} onClick={() => onEdit(admin.id)}>
+          <IconButton 
+            size="small" 
+            sx={{ mr: 1 }} 
+            onClick={() => onEdit(admin.id)}
+            color="primary"
+          >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Supprimer">
-          <IconButton size="small" color="error" onClick={() => onDelete(admin.id)}>
+          <IconButton 
+            size="small" 
+            color="error" 
+            onClick={() => onDelete(admin.id)}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-      </>
+      </Box>
     ),
   },
 ];
@@ -111,12 +134,20 @@ export const userColumns = [
     label: 'Utilisateur',
     render: (user, { getAvatarColor }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Avatar sx={{ mr: 2, bgcolor: getAvatarColor(user) }}>
-          {user.prenom?.charAt(0).toUpperCase() || user.email.charAt(0).toUpperCase()}
+        <Avatar sx={{ 
+          mr: 2, 
+          bgcolor: getAvatarColor(user),
+          color: 'white'
+        }}>
+          {user.firstName?.charAt(0)?.toUpperCase() || user.email.charAt(0).toUpperCase()}
         </Avatar>
         <Box>
-          <Typography variant="body2">{`${user.prenom || ''} ${user.nom || ''}`}</Typography>
-          <Typography variant="caption" color="text.secondary">{user.email}</Typography>
+          <Typography variant="body2" fontWeight="medium">
+            {`${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Non renseigné'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {user.email}
+          </Typography>
         </Box>
       </Box>
     ),
@@ -126,17 +157,22 @@ export const userColumns = [
     label: 'Rôle',
     render: (user) => (
       <Chip
-        icon={user.role === 'chef_projet' ? <ChefProjetIcon /> : <PersonIcon />}
-        label={user.role === 'chef_projet' ? 'Chef de Projet' : 'Utilisateur'}
+        icon={user.roleId === 3 ? <ChefProjetIcon /> : <PersonIcon />}
+        label={user.roleId === 3 ? 'Chef de Projet' : 'Utilisateur'}
         size="small"
-        color={user.role === 'chef_projet' ? 'secondary' : 'primary'}
+        color={user.roleId === 3 ? 'secondary' : 'primary'}
+        sx={{ fontWeight: 'medium' }}
       />
     ),
   },
   {
     id: 'jobTitle',
     label: 'Titre de poste',
-    render: (user) => <Typography variant="body2">{user.jobTitle || 'Non renseigné'}</Typography>,
+    render: (user) => (
+      <Typography variant="body2">
+        {user.jobTitle || 'Non renseigné'}
+      </Typography>
+    ),
   },
   {
     id: 'telephone',
@@ -144,7 +180,9 @@ export const userColumns = [
     render: (user) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-        <Typography variant="body2">{user.telephone || 'Non renseigné'}</Typography>
+        <Typography variant="body2">
+          {user.phoneNumber || 'Non renseigné'}
+        </Typography>
       </Box>
     ),
   },
@@ -155,7 +193,7 @@ export const userColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${user.permissions.length} autorisations`}
+          label={`${user.claimIds?.length || 0} autorisations`}
           size="small"
           color="info"
           onClick={() => onManagePermissions(user)}
@@ -169,15 +207,19 @@ export const userColumns = [
     label: 'Statut',
     render: (user, { onToggleActive }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-        <Switch
-          checked={user.isActive}
-          onChange={() => onToggleActive(user.id)}
-          color="success"
-        />
+        <Tooltip title={user.isActive ? 'Désactiver' : 'Activer'}>
+          <Switch
+            checked={user.isActive}
+            onChange={() => onToggleActive(user.id)}
+            color="primary"
+            inputProps={{ 'aria-label': 'Statut du compte' }}
+          />
+        </Tooltip>
         <Chip
+          icon={user.isActive ? <CheckIcon fontSize="small" /> : <CloseIcon fontSize="small" />}
           label={user.isActive ? 'Actif' : 'Inactif'}
           size="small"
-          color={user.isActive ? 'success' : 'default'}
+          color={user.isActive ? 'success' : 'error'}
           sx={{ ml: 1 }}
         />
       </Box>
@@ -188,18 +230,27 @@ export const userColumns = [
     label: 'Actions',
     align: 'right',
     render: (user, { onEdit, onDelete }) => (
-      <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Tooltip title="Modifier">
-          <IconButton size="small" sx={{ mr: 1 }} onClick={() => onEdit(user.id)}>
+          <IconButton 
+            size="small" 
+            sx={{ mr: 1 }} 
+            onClick={() => onEdit(user.id)}
+            color="primary"
+          >
             <EditIcon fontSize="small" />
           </IconButton>
         </Tooltip>
         <Tooltip title="Supprimer">
-          <IconButton size="small" color="error" onClick={() => onDelete(user.id)}>
+          <IconButton 
+            size="small" 
+            color="error" 
+            onClick={() => onDelete(user.id)}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Tooltip>
-      </>
+      </Box>
     ),
   },
 ];

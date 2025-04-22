@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -7,10 +6,9 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { styled } from '@mui/system';
 import logo from '../assets/logo.png';
-import heroImage from '../assets/Hero.png';
-import { authService, roleConfig } from '../utils/auth';
+import heroImage from '../assets/hero.png';
 import { useAuth } from '../contexts/AuthContext';
-
+import { useSelector } from 'react-redux';
 
 const AuthContainer = styled(Box)({
   display: 'flex',
@@ -25,9 +23,7 @@ const BackButton = styled(IconButton)({
   left: 20,
   backgroundColor: 'rgba(255, 255, 255, 0.8)',
   boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
-  '&:hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  },
+  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.95)' },
   zIndex: 10,
 });
 
@@ -59,31 +55,15 @@ const StyledButton = styled(Button)({
   fontWeight: 600,
   boxShadow: '0px 3px 6px rgba(0, 0, 0, 0.1)',
   transition: 'all 0.2s ease-in-out',
-  '&:hover': {
-    transform: 'translateY(-2px)',
-    boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)',
-  },
+  '&:hover': { transform: 'translateY(-2px)', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)' },
 });
 
 const StyledTextField = styled(TextField)({
   marginBottom: 24,
-  '& .MuiOutlinedInput-root': {
-    borderRadius: 8,
-    '&:hover': {
-      '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#5B9BD5',
-      },
-    },
-  },
-  '& .MuiOutlinedInput-notchedOutline': {
-    borderWidth: '1.5px',
-  },
-  '& .MuiInputLabel-root': {
-    color: '#2c4b6f',
-  },
-  '& .MuiInputBase-input': {
-    padding: '16px',
-  },
+  '& .MuiOutlinedInput-root': { borderRadius: 8, '&:hover': { '& .MuiOutlinedInput-notchedOutline': { borderColor: '#5B9BD5' } } },
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: '1.5px' },
+  '& .MuiInputLabel-root': { color: '#2c4b6f' },
+  '& .MuiInputBase-input': { padding: '16px' },
 });
 
 const HeroSide = styled(Box)({
@@ -94,7 +74,6 @@ const HeroSide = styled(Box)({
   background: '#EBF5FB',
   color: '#1A237E',
   padding: '40px',
-  position: 'relative',
 });
 
 const HeroTitle = styled(Typography)({
@@ -148,36 +127,24 @@ const InputLabel = styled(Typography)({
 
 const StyledCheckbox = styled(Checkbox)({
   color: '#5B9BD5',
-  '&.Mui-checked': {
-    color: '#1A237E',
-  },
+  '&.Mui-checked': { color: '#1A237E' },
 });
 
 const ForgotPasswordButton = styled(Button)({
   color: '#1A237E',
   textTransform: 'none',
   fontWeight: 600,
-  '&:hover': {
-    backgroundColor: 'rgba(27, 94, 182, 0.1)',
-  },
+  '&:hover': { backgroundColor: 'rgba(27, 94, 182, 0.1)' },
 });
 
 const Login = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [formData, setFormData] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { loading, error, success } = useSelector((state) => state.auth);
 
-  // Redirect destination after login
-  const from = location.state?.from?.pathname || "/dashboard";
-
-  // Load remembered email
   useEffect(() => {
     const rememberedEmail = localStorage.getItem('rememberedEmail');
     if (rememberedEmail) {
@@ -188,10 +155,7 @@ const Login = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleGoBack = () => {
@@ -199,97 +163,36 @@ const Login = () => {
   };
 
   const handleForgotPassword = () => {
-    setError('Fonctionnalité "Mot de passe oublié" non implémentée.');
-  };
-
-  const handleLoginSuccess = (user, role) => {
-    const config = roleConfig[role] || roleConfig.default;
-    setSuccess(config.welcomeMessage);
-
-    const userData = {
-      id: user.id || Date.now(),
-      email: user.email,
-      nom: user.nom || '',
-      prenom: user.prenom || '',
-      telephone: user.telephone || '',
-      role: role,
-      jobTitle: user.jobTitle || '',
-      permissions: user.permissions || [],
-      isActive: user.isActive !== undefined ? user.isActive : true,
-      dateCreated: user.dateCreated || new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      createdBy: user.createdBy || 'system',
-    };
-
-    // Use the auth context login function instead
-    login(userData, config.token);
-
-    if (rememberMe) {
-      localStorage.setItem('rememberedEmail', user.email);
-    } else {
-      localStorage.removeItem('rememberedEmail');
-    }
-
-    // Navigate to the intended page or default redirect
-    setTimeout(() => navigate(location.state?.from?.pathname || config.redirectPath), 1000);
+    // TODO: Implement forgot password functionality
+    alert('Fonctionnalité "Mot de passe oublié" non implémentée.');
   };
 
   const validateForm = () => {
     if (!formData.email || !formData.password) {
-      setError('Veuillez remplir tous les champs requis.');
-      return false;
+      return 'Veuillez remplir tous les champs requis.';
     }
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      setError('Veuillez entrer un email valide.');
-      return false;
+      return 'Veuillez entrer un email valide.';
     }
-    return true;
+    return '';
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (!validateForm()) return;
-
-    const { email, password } = formData;
-
-    if (authService.authenticateSuperAdmin(email, password)) {
-      handleLoginSuccess(
-        {
-          email,
-          nom: 'Super',
-          prenom: 'Admin',
-          role: 'superadmin',
-        },
-        'superadmin'
-      );
+    const validationError = validateForm();
+    if (validationError) {
+      alert(validationError);
       return;
     }
 
-    const admin = authService.authenticateAdmin(email, password);
-    if (admin) {
-      if (!admin.isActive) {
-        setError('Ce compte admin est désactivé.');
-        return;
-      }
-      handleLoginSuccess(admin, 'admin');
-      return;
-    }
+    await login({ email: formData.email, password: formData.password });
 
-    const user = authService.authenticateUser(email, password);
-    if (user) {
-      if (!user.isActive) {
-        setError('Ce compte est désactivé.');
-        return;
-      }
-      handleLoginSuccess(user, user.role || 'user');
-      return;
+    if (rememberMe) {
+      localStorage.setItem('rememberedEmail', formData.email);
+    } else {
+      localStorage.removeItem('rememberedEmail');
     }
-
-    setError('Email ou mot de passe incorrect.');
   };
 
   return (
@@ -305,9 +208,7 @@ const Login = () => {
 
         <FormContainer>
           <FormTitle variant="h4">Bienvenue</FormTitle>
-          <FormSubtitle variant="body1">
-            Connectez-vous pour accéder à votre espace
-          </FormSubtitle>
+          <FormSubtitle variant="body1">Connectez-vous pour accéder à votre espace</FormSubtitle>
 
           <form onSubmit={handleSubmit}>
             <InputLabel>Adresse email</InputLabel>
@@ -334,38 +235,27 @@ const Login = () => {
 
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <FormControlLabel
-                control={
-                  <StyledCheckbox
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                  />
-                }
+                control={<StyledCheckbox checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />}
                 label="Se souvenir de moi"
               />
-              <ForgotPasswordButton onClick={handleForgotPassword}>
-                Mot de passe oublié
-              </ForgotPasswordButton>
+              <ForgotPasswordButton onClick={handleForgotPassword}>Mot de passe oublié</ForgotPasswordButton>
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
             {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
 
-            <StyledButton type="submit" fullWidth variant="contained" color="primary">
-              Se connecter
+            <StyledButton type="submit" fullWidth variant="contained" color="primary" disabled={loading}>
+              {loading ? 'Connexion...' : 'Se connecter'}
             </StyledButton>
           </form>
         </FormContainer>
       </FormSide>
 
       <HeroSide>
-        <HeroTitle variant="h4">
-          AxiaAgile
-        </HeroTitle>
-
+        <HeroTitle variant="h4">AxiaAgile</HeroTitle>
         <HeroImageContainer>
           <HeroImg src={heroImage} alt="Hero" />
         </HeroImageContainer>
-
         <HeroFooter>
           <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
             Solution complète de gestion de projets agiles

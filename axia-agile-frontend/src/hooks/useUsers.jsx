@@ -1,155 +1,163 @@
 import { useState, useEffect } from 'react';
-import { getStoredData, setStoredData, getCurrentUser } from '../utils/storage';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchUsers,
+  fetchRoles,
+  createUser,
+  updateUser,
+  deleteUser,
+  toggleUserActive,
+  setSnackbar,
+} from '../store/slices/usersSlice';
 import { validateUser } from '../utils/validators';
-import { getAvailableRoles } from '../utils/roles';
+import { useAuth } from '../contexts/AuthContext';
+import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, Person as PersonIcon } from '@mui/icons-material';
 
 export const useUsers = (storageKey) => {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
+  const { users, roles, loading, error, snackbar } = useSelector((state) => state.users);
+  const { currentUser } = useAuth();
+
   const [newUser, setNewUser] = useState({
     email: '',
     password: '',
-    nom: '',
-    prenom: '',
-    telephone: '',
-    role: storageKey === 'admins' ? 'admin' : 'user',
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    roleId: currentUser?.roleId === 1 ? 2 : 4,
     jobTitle: '',
     entreprise: '',
-    adresse: '',
-    permissions: [],
+    claimIds: [],
     isActive: true,
   });
+
   const [editMode, setEditMode] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  const currentUser = getCurrentUser();
-  const availableRoles = getAvailableRoles(currentUser);
+  const availableRoles = roles
+    .filter((role) => {
+      if (currentUser?.roleId === 1) return role.id === 2;
+      if (currentUser?.roleId === 2) return [3, 4].includes(role.id);
+      return false;
+    })
+    .map((role) => ({
+      id: role.id,
+      label: role.label,
+      icon: role.iconName === 'Security' ? <SecurityIcon /> : 
+            role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
+    }));
 
   useEffect(() => {
-    setLoading(true);
-    setTimeout(() => {
-      const storedUsers = getStoredData(storageKey) || [];
-      setUsers(storedUsers.map((user) => ({
-        ...user,
-        permissions: user.permissions || [],
-        isActive: user.isActive !== undefined ? user.isActive : true,
-        jobTitle: user.jobTitle || '',
-        entreprise: user.entreprise || '',
-        adresse: user.adresse || '',
-      })));
-      setLoading(false);
-    }, 500);
-  }, [storageKey]);
-
-  const showSnackbar = (message, severity) => {
-    setSnackbar({ open: true, message, severity });
-  };
+    dispatch(fetchUsers());
+    dispatch(fetchRoles());
+  }, [dispatch]);
 
   const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
+    dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
   };
 
-  const handleCreateUser = (requiredFields) => {
+  const handleCreateUser = async (requiredFields) => {
     const errors = validateUser(newUser, requiredFields, editMode);
     if (errors.length > 0) {
-      showSnackbar(errors[0], 'error');
-      return;
-    }
-
-    if (!editMode && users.some(user => user.email === newUser.email)) {
-      showSnackbar('Cet email est déjà utilisé', 'error');
+      dispatch(setSnackbar({ open: true, message: errors[0], severity: 'error' }));
       return;
     }
 
     const userData = {
-      ...newUser,
-      role: storageKey === 'admins' ? 'admin' : newUser.role,
-      isActive: true,
-      permissions: newUser.permissions || []
+      email: newUser.email,
+      password: newUser.password,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
+      phoneNumber: newUser.phoneNumber,
+      roleId: storageKey === 'admins' ? 2 : newUser.roleId,
+      jobTitle: [3, 4].includes(newUser.roleId) ? newUser.jobTitle : null,
+      entreprise: newUser.roleId === 2 ? newUser.entreprise : null,
+      claimIds: newUser.claimIds || [],
+      isActive: newUser.isActive,
     };
 
-    if (editMode) {
-      const updatedUsers = users.map(user => 
-        user.id === currentUserId ? { ...user, ...userData } : user
-      );
-      setUsers(updatedUsers);
-      setStoredData(storageKey, updatedUsers);
-      showSnackbar('Utilisateur modifié avec succès!', 'success');
-    } else {
-      const updatedUsers = [
-        ...users,
-        {
-          ...userData,
-          id: Date.now(),
-          dateCreated: new Date().toISOString(),
-          lastLogin: null,
-          createdBy: currentUser.email,
-        }
-      ];
-      setUsers(updatedUsers);
-      setStoredData(storageKey, updatedUsers);
-      showSnackbar(
-        storageKey === 'admins' ? 'Admin créé avec succès!' : 
-        newUser.role === 'chef_projet' ? 'Chef de projet créé avec succès!' : 'Utilisateur créé avec succès!',
-        'success'
-      );
-    }
+    try {
+      const action = editMode
+        ? updateUser({ id: currentUserId, userData })
+        : createUser(userData);
+      
+      const result = await dispatch(action).unwrap();
 
-    // Reset form
-    setNewUser({
-      email: '',
-      password: '',
-      nom: '',
-      prenom: '',
-      telephone: '',
-      role: storageKey === 'admins' ? 'admin' : 'user',
-      jobTitle: '',
-      entreprise: '',
-      adresse: '',
-      permissions: [],
-      isActive: true,
-    });
-    setEditMode(false);
-    setCurrentUserId(null);
+      setNewUser({
+        email: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        phoneNumber: '',
+        roleId: currentUser?.roleId === 1 ? 2 : 4,
+        jobTitle: '',
+        entreprise: '',
+        claimIds: [],
+        isActive: true,
+      });
+      setEditMode(false);
+      setCurrentUserId(null);
+      
+      return result;
+    } catch (error) {
+      dispatch(setSnackbar({ 
+        open: true, 
+        message: error.message || 'Une erreur est survenue', 
+        severity: 'error' 
+      }));
+      throw error;
+    }
   };
 
   const handleEditUser = (id) => {
-    const userToEdit = users.find(user => user.id === id);
+    const userToEdit = users.find((user) => user.id === id);
     if (userToEdit) {
-      setNewUser({ ...userToEdit, password: '' });
+      setNewUser({
+        ...userToEdit,
+        password: '', // Reset password field
+      });
       setEditMode(true);
       setCurrentUserId(id);
     }
   };
 
-  const handleDeleteUser = (id) => {
-    const user = users.find(u => u.id === id);
-    const updatedUsers = users.filter(user => user.id !== id);
-    setUsers(updatedUsers);
-    setStoredData(storageKey, updatedUsers);
-    showSnackbar(`Compte supprimé pour ${user.email}`, 'success');
+  const handleDeleteUser = async (id) => {
+    try {
+      await dispatch(deleteUser(id)).unwrap();
+    } catch (error) {
+      dispatch(setSnackbar({ 
+        open: true, 
+        message: error.message || 'Échec de la suppression', 
+        severity: 'error' 
+      }));
+    }
   };
 
-  const handleToggleActive = (id) => {
-    const updatedUsers = users.map(user =>
-      user.id === id ? { ...user, isActive: !user.isActive } : user
-    );
-    setUsers(updatedUsers);
-    setStoredData(storageKey, updatedUsers);
-    const user = updatedUsers.find(u => u.id === id);
-    showSnackbar(`Compte ${user.isActive ? 'activé' : 'désactivé'} pour ${user.email}`, 'info');
+  const handleToggleActive = async (id) => {
+    const user = users.find((u) => u.id === id);
+    if (!user) return;
+
+    try {
+      await dispatch(toggleUserActive({ 
+        id, 
+        isActive: !user.isActive 
+      })).unwrap();
+    } catch (error) {
+      dispatch(setSnackbar({ 
+        open: true, 
+        message: error.message || 'Échec du changement de statut', 
+        severity: 'error' 
+      }));
+    }
   };
+
   const getUserByEmail = (email) => {
-    const storedUsers = getStoredData(storageKey) || [];
-    return storedUsers.find((user) => user.email === email);
+    return users.find((user) => user.email === email);
   };
 
   return {
     users,
-    setUsers,
     loading,
-    setLoading,
     newUser,
     setNewUser,
     editMode,
