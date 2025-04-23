@@ -47,12 +47,12 @@ const UserForm = ({
   onSave,
   isEditMode,
   roles,
-  permissionsGroups,
+  claims, // Replaced permissionsGroups with claims
   disabledFields = [],
   requiredFields = ['email', 'firstName', 'lastName'],
   showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
 }) => {
-  console.log('UserForm open prop:', open); // Debug log
+  console.log('UserForm open prop:', open);
   const [errors, setErrors] = useState({});
 
   const handleChange = (field, value) => {
@@ -286,7 +286,7 @@ const UserForm = ({
           </Grid>
           <Grid item xs={12} md={6}>
             <PermissionForm
-              permissionsGroups={permissionsGroups}
+              claims={claims} // Pass claims instead of permissionsGroups
               selectedPermissions={user.claimIds}
               onPermissionChange={handlePermissionChange}
             />

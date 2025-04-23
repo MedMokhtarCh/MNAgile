@@ -1,25 +1,27 @@
+// UserManagement.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
-import UserForm from '../components/users/UserForm'; // Default import
-import TableUsers from '../components/users/TableUsers'; // Ensure this import is present
+import UserForm from '../components/users/UserForm';
+import TableUsers from '../components/users/TableUsers';
 import PermissionsModal from '../components/permissions/PermissionsModal';
 import AlertUser from '../components/common/AlertUser';
 import FilterBar from '../components/users/FilterBarUsers';
-import { permissionsGroups } from '../constants/permissions';
 import { userColumns } from '../components/users/tableColumnsUsers';
 import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
-import { useDispatch } from 'react-redux';
-import { updateUser } from '../store/slices/usersSlice';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateUser, fetchUsers } from '../store/slices/usersSlice';
 
 const UserManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
+  const { claims } = useSelector((state) => state.users); // Fetch claims from Redux
+
   const {
     users,
     loading,
@@ -47,7 +49,7 @@ const UserManagement = () => {
   const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
-    console.log('UserManagement openModal state:', openModal); // Debug log
+    console.log('UserManagement openModal state:', openModal);
   }, [openModal]);
 
   const handleCloseModal = () => {
@@ -163,7 +165,10 @@ const UserManagement = () => {
           onDelete={handleDeleteUser}
           onToggleActive={handleToggleActive}
           onManagePermissions={(user) => {
-            setSelectedUser(user);
+            setSelectedUser({
+              ...user,
+              claimIds: user.claimIds || [],
+            });
             setOpenPermissionsModal(true);
           }}
           setOpenModal={setOpenModal}
@@ -180,7 +185,7 @@ const UserManagement = () => {
           onSave={() => handleCreateUser(getRequiredFields())}
           isEditMode={editMode}
           roles={filteredRoles}
-          permissionsGroups={permissionsGroups}
+          claims={claims} // Pass claims instead of permissionsGroups
           requiredFields={getRequiredFields()}
           showFields={getShowFields()}
           disabledFields={editMode ? ['role'] : []}
@@ -188,36 +193,43 @@ const UserManagement = () => {
 
         <PermissionsModal
           open={openPermissionsModal}
-          onClose={() => setOpenPermissionsModal(false)}
+          onClose={() => {
+            setOpenPermissionsModal(false);
+            setSelectedUser(null);
+          }}
           user={selectedUser}
-          permissionsGroups={permissionsGroups}
+          claims={claims} // Pass claims instead of permissionsGroups
           onSave={async () => {
             if (!selectedUser) return;
             const userData = {
-              ...selectedUser,
-              claimIds: selectedUser.permissions,
-              firstName: selectedUser.prenom || selectedUser.firstName,
-              lastName: selectedUser.nom || selectedUser.lastName,
-              phoneNumber: selectedUser.telephone || selectedUser.phoneNumber,
-              roleId: selectedUser.roleId || (selectedUser.role === 'chef_projet' ? 3 : 4),
-              jobTitle: selectedUser.jobTitle,
+              id: selectedUser.id,
+              email: selectedUser.email,
+              firstName: selectedUser.firstName,
+              lastName: selectedUser.lastName,
+              phoneNumber: selectedUser.phoneNumber || null,
+              claimIds: selectedUser.claimIds || [],
+              roleId: selectedUser.roleId,
+              jobTitle: selectedUser.jobTitle || '',
               isActive: selectedUser.isActive,
             };
+            console.log('Dispatching updateUser with:', userData);
             try {
-              await dispatch(updateUser({ id: selectedUser.id, userData }));
-              handleCloseSnackbar();
+              await dispatch(updateUser({ id: selectedUser.id, userData })).unwrap();
               setOpenPermissionsModal(false);
               setSelectedUser(null);
+              dispatch(fetchUsers());
             } catch (error) {
               // Snackbar is handled by useUsers
             }
           }}
           onPermissionChange={(permissionId) => {
             if (!selectedUser) return;
-            const claimIds = selectedUser.permissions.includes(permissionId)
-              ? selectedUser.permissions.filter((id) => id !== permissionId)
-              : [...selectedUser.permissions, permissionId];
-            setSelectedUser({ ...selectedUser, permissions: claimIds });
+            console.log('Permission toggled:', permissionId);
+            const updatedClaimIds = selectedUser.claimIds.includes(permissionId)
+              ? selectedUser.claimIds.filter((id) => id !== permissionId)
+              : [...selectedUser.claimIds, permissionId];
+            console.log('Updated claimIds:', updatedClaimIds);
+            setSelectedUser({ ...selectedUser, claimIds: updatedClaimIds });
           }}
         />
 

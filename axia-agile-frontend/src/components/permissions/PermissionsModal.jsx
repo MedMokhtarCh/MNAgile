@@ -3,23 +3,18 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typogra
 import PermissionForm from './PermissionForm';
 import { Security as SecurityIcon } from '@mui/icons-material';
 
-const PermissionsModal = ({ open, onClose, user, permissionsGroups, onSave, onPermissionChange }) => {
+const PermissionsModal = ({ open, onClose, user, claims, onSave, onPermissionChange }) => {
   if (!user) return null;
 
   const handleSave = () => {
-    const updatedUser = {
-      ...user,
-      claimIds: user.claimIds || [],
-    };
-    console.log('Saving updated user permissions:', updatedUser);
-    onSave(updatedUser);
+    onSave();
   };
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
       <DialogTitle>
-        <Box display="flex" alignItems="center">
-          <SecurityIcon sx={{ mr: 1 }} />
+        <Box display="flex" alignItems="center" gap={1}>
+          <SecurityIcon />
           <Typography variant="h6">
             Gestion des autorisations pour {user.email}
           </Typography>
@@ -27,14 +22,16 @@ const PermissionsModal = ({ open, onClose, user, permissionsGroups, onSave, onPe
       </DialogTitle>
       <DialogContent>
         <PermissionForm
-          permissionsGroups={permissionsGroups}
+          claims={claims}
           selectedPermissions={user.claimIds || []}
           onPermissionChange={onPermissionChange}
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined">Annuler</Button>
-        <Button variant="contained" onClick={handleSave} disabled={user.isSaving}>Enregistrer</Button>
+        <Button onClick={onClose}>Annuler</Button>
+        <Button onClick={handleSave} variant="contained" color="primary">
+          Enregistrer
+        </Button>
       </DialogActions>
     </Dialog>
   );

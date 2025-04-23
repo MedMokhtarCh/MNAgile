@@ -36,6 +36,20 @@ export const fetchRoles = createAsyncThunk('users/fetchRoles', async (_, { rejec
   }
 });
 
+// Fetch all claims
+export const fetchClaims = createAsyncThunk('users/fetchClaims', async (_, { rejectWithValue }) => {
+  try {
+    const response = await api.get('/Claims');
+    return response.data.map((claim) => ({
+      id: claim.Id || claim.id,
+      label: claim.Name || claim.name,
+      description: claim.Description || claim.description || '',
+    }));
+  } catch (error) {
+    return rejectWithValue(error.response?.data?.message || 'Failed to fetch claims');
+  }
+});
+
 // Fetch all users
 export const fetchUsers = createAsyncThunk('users/fetchUsers', async (_, { rejectWithValue }) => {
   try {
@@ -94,7 +108,6 @@ export const updateUser = createAsyncThunk(
         return rejectWithValue('Utilisateur non trouvé');
       }
 
-      // Skip email uniqueness check if email hasn't changed
       if (userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
           users.some(user => 
             user.email.toLowerCase() === userData.email.toLowerCase() && 
@@ -164,6 +177,7 @@ const usersSlice = createSlice({
   initialState: {
     users: [],
     roles: [],
+    claims: [],
     loading: false,
     error: null,
     snackbar: { open: false, message: '', severity: 'success' },
@@ -183,6 +197,21 @@ const usersSlice = createSlice({
         state.roles = action.payload;
       })
       .addCase(fetchRoles.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload,
+          severity: 'error',
+        };
+      })
+      .addCase(fetchClaims.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchClaims.fulfilled, (state, action) => {
+        state.loading = false;
+        state.claims = action.payload;
+      })
+      .addCase(fetchClaims.rejected, (state, action) => {
         state.loading = false;
         state.snackbar = {
           open: true,

@@ -7,19 +7,20 @@ import TableUsers from '../components/users/TableUsers';
 import PermissionsModal from '../components/permissions/PermissionsModal';
 import AlertUser from '../components/common/AlertUser';
 import FilterBar from '../components/users/FilterBarUsers';
-import { permissionsGroups } from '../constants/permissions';
 import { adminColumns } from '../components/users/tableColumnsUsers';
 import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { fetchUsers, updateUser, setSnackbar } from '../store/slices/usersSlice';
 
 const AdminManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
+  const { claims } = useSelector((state) => state.users); // Fetch claims from Redux
+
   const {
     users,
     loading,
@@ -153,15 +154,7 @@ const AdminManagement = () => {
           onSave={() => handleCreateUser(['email', 'firstName', 'lastName', 'entreprise'])}
           isEditMode={editMode}
           roles={availableRoles}
-          permissionsGroups={{
-            admin: {
-              ...permissionsGroups.admin,
-              permissions: permissionsGroups.admin.permissions.map((p) => ({
-                ...p,
-                id: p.id === 'create_users' ? 1 : p.id === 'create_project_managers' ? 2 : p.id,
-              })),
-            },
-          }}
+          claims={claims} // Pass claims instead of permissionsGroups
           requiredFields={['email', 'firstName', 'lastName', 'entreprise']}
           showFields={['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'entreprise', 'role', 'permissions']}
           disabledFields={editMode ? ['role'] : []}
@@ -174,15 +167,7 @@ const AdminManagement = () => {
             setSelectedAdmin(null);
           }}
           user={selectedAdmin}
-          permissionsGroups={{
-            admin: {
-              ...permissionsGroups.admin,
-              permissions: permissionsGroups.admin.permissions.map((p) => ({
-                ...p,
-                id: p.id === 'create_users' ? 1 : p.id === 'create_project_managers' ? 2 : p.id,
-              })),
-            },
-          }}
+          claims={claims} // Pass claims instead of permissionsGroups
           onSave={async () => {
             if (!selectedAdmin) return;
             setIsSaving(true);

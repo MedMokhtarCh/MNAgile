@@ -64,7 +64,7 @@ export const adminColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${admin.claimIds?.length || 0} autorisations`}
+          label={`${Array.isArray(admin.claimIds) ? admin.claimIds.length : 0} autorisations`} // Uses claimIds from backend-fetched claims
           size="small"
           color="info"
           onClick={() => onManagePermissions(admin)}
@@ -193,7 +193,7 @@ export const userColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${user.claimIds?.length || 0} autorisations`}
+          label={`${Array.isArray(user.claimIds) ? user.claimIds.length : 0} autorisations`} // Uses claimIds from backend-fetched claims
           size="small"
           color="info"
           onClick={() => onManagePermissions(user)}

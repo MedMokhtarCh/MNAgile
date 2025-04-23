@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchUsers,
   fetchRoles,
+  fetchClaims,
   createUser,
   updateUser,
   deleteUser,
@@ -15,7 +16,7 @@ import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, P
 
 export const useUsers = (storageKey) => {
   const dispatch = useDispatch();
-  const { users, roles, loading, error, snackbar } = useSelector((state) => state.users);
+  const { users, roles, claims, loading, error, snackbar } = useSelector((state) => state.users);
   const { currentUser } = useAuth();
 
   const [openModal, setOpenModal] = useState(false);
@@ -51,10 +52,11 @@ export const useUsers = (storageKey) => {
   useEffect(() => {
     dispatch(fetchUsers());
     dispatch(fetchRoles());
+    dispatch(fetchClaims());
   }, [dispatch]);
 
   useEffect(() => {
-    console.log('openModal state:', openModal); // Debug log
+    console.log('openModal state:', openModal);
   }, [openModal]);
 
   const handleCloseSnackbar = () => {
@@ -193,6 +195,7 @@ export const useUsers = (storageKey) => {
     currentUserId,
     setCurrentUserId,
     availableRoles,
+    claims,
     openModal,
     setOpenModal,
     handleCreateUser,
