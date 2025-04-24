@@ -1,76 +1,97 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Grid } from '@mui/material';
+import React, { useEffect } from 'react';
+import { Box, CircularProgress, Typography, Button } from '@mui/material';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchUsers } from '../store/slices/usersSlice';
 import PageTitle from '../components/common/PageTitle';
 import StatisticsCards from '../components/superAdminDashboard/StatisticsCards';
 import AdminDistributionChart from '../components/superAdminDashboard/AdminDistributionChart';
 import EnterpriseList from '../components/superAdminDashboard/EnterpriseList';
 
-const UserStatisticsDashboard = () => {
-  const [stats, setStats] = useState({
-    totalAdmins: 0,
-    activeAdmins: 0,
-    inactiveAdmins: 0,
-    totalEntreprises: 0
-  });
-  const [entrepriseData, setEntrepriseData] = useState([]);
+const SuperAdminStatistics = () => {
+  const dispatch = useDispatch();
+  const { users, loading, error } = useSelector((state) => state.users);
 
   useEffect(() => {
-    // Récupération des données du localStorage
-    const admins = JSON.parse(localStorage.getItem('admins')) || [];
-    
-    // Calcul des statistiques
-    const activeAdmins = admins.filter(admin => admin.isActive).length;
-    
-    // Groupement des admins par entreprise
-    const entrepriseMap = new Map();
-    
-    admins.forEach(admin => {
-      if (admin.entreprise) {
-        if (!entrepriseMap.has(admin.entreprise)) {
-          entrepriseMap.set(admin.entreprise, {
-            name: admin.entreprise,
+    dispatch(fetchUsers());
+  }, [dispatch]);
+
+  // Compute stats and entrepriseData
+  const { stats, entrepriseData } = React.useMemo(() => {
+    // Filter admins (roleId 2), exclude superadmin (roleId 1) and others
+    const admins = users.filter((user) => user.roleId === 2);
+
+    // Compute stats and group by entreprise in one pass
+    const { totalAdmins, activeAdmins, entrepriseMap } = admins.reduce(
+      (acc, admin) => {
+        acc.totalAdmins += 1;
+        if (admin.isActive) acc.activeAdmins += 1;
+        const entrepriseName = admin.entreprise || 'Non spécifié';
+        if (!acc.entrepriseMap.has(entrepriseName)) {
+          acc.entrepriseMap.set(entrepriseName, {
+            name: entrepriseName,
             adminCount: 1,
             activeCount: admin.isActive ? 1 : 0,
-            admins: [admin]
+            admins: [admin],
           });
         } else {
-          const data = entrepriseMap.get(admin.entreprise);
+          const data = acc.entrepriseMap.get(entrepriseName);
           data.adminCount += 1;
           data.activeCount += admin.isActive ? 1 : 0;
           data.admins.push(admin);
-          entrepriseMap.set(admin.entreprise, data);
+          acc.entrepriseMap.set(entrepriseName, data);
         }
-      }
-    });
-    
-    // Conversion en array pour l'affichage
-    const entrepriseArray = Array.from(entrepriseMap.values());
-    entrepriseArray.sort((a, b) => b.adminCount - a.adminCount);
-    
-    setStats({
-      totalAdmins: admins.length,
-      activeAdmins: activeAdmins,
-      inactiveAdmins: admins.length - activeAdmins,
-      totalEntreprises: entrepriseMap.size
-    });
-    
-    setEntrepriseData(entrepriseArray);
-  }, []);
+        return acc;
+      },
+      { totalAdmins: 0, activeAdmins: 0, entrepriseMap: new Map() }
+    );
+
+    const inactiveAdmins = totalAdmins - activeAdmins;
+    const entrepriseArray = Array.from(entrepriseMap.values()).sort((a, b) => b.adminCount - a.adminCount);
+
+    return {
+      stats: {
+        totalAdmins,
+        activeAdmins,
+        inactiveAdmins,
+        totalEntreprises: entrepriseMap.size,
+      },
+      entrepriseData: entrepriseArray,
+    };
+  }, [users]);
 
   return (
     <Box sx={{ p: 3 }}>
       <PageTitle>Rapport Statistique des Comptes Admin</PageTitle>
-      
-      {/* Cartes de statistiques */}
-      <StatisticsCards stats={stats} />
-      
-      {/* Graphiques */}
-      <AdminDistributionChart stats={stats} />
-      
-      {/* Liste des entreprises et de leurs admins */}
-      <EnterpriseList entrepriseData={entrepriseData} />
+
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+          <CircularProgress size={60} />
+        </Box>
+      ) : error ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+          <Typography color="error">Erreur: {error}</Typography>
+          <Button
+            onClick={() => dispatch(fetchUsers())}
+            variant="contained"
+            sx={{ ml: 2 }}
+          >
+            Réessayer
+          </Button>
+        </Box>
+      ) : (
+        <>
+          {/* Cartes de statistiques */}
+          <StatisticsCards stats={stats} />
+
+          {/* Graphiques */}
+          <AdminDistributionChart stats={stats} />
+
+          {/* Liste des entreprises et de leurs admins */}
+          <EnterpriseList entrepriseData={entrepriseData} />
+        </>
+      )}
     </Box>
   );
 };
 
-export default UserStatisticsDashboard;
+export default SuperAdminStatistics;

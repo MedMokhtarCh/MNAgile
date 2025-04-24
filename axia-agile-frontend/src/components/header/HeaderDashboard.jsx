@@ -1,27 +1,27 @@
 import React, { useState, useRef } from "react";
-import { 
-  Popper, 
-  Paper, 
-  MenuList, 
-  MenuItem, 
-  Grow, 
+import {
+  Popper,
+  Paper,
+  MenuList,
+  MenuItem,
+  Grow,
   ClickAwayListener,
   Typography,
   Avatar,
-  Tooltip
 } from "@mui/material";
-import { 
-  FiUser, 
-  FiLogOut, 
-  FiHelpCircle
+import {
+  FiUser,
+  FiLogOut,
+  FiHelpCircle,
 } from "react-icons/fi";
-import { 
-  AiOutlineMenuFold, 
-  AiOutlineMenuUnfold 
+import {
+  AiOutlineMenuFold,
+  AiOutlineMenuUnfold,
 } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import "./HeaderDashboard.css";
-import NotificationSystem from '../NotificationSystem';
+import NotificationSystem from "../NotificationSystem";
 import { useAvatar } from "../../hooks/useAvatar";
 
 const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
@@ -30,13 +30,25 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   const navigate = useNavigate();
   const { generateInitials, getAvatarColor } = useAvatar();
 
-  // Get current user data
-  const currentUser = JSON.parse(localStorage.getItem("currentUser")) || {};
+  // Get profile data from Redux store
+  const { profile } = useSelector((state) => state.profile);
+
+  // Fallback to localStorage if profile is not available (optional)
+  const currentUser = profile || JSON.parse(localStorage.getItem("currentUser")) || {};
+
   // Standardize fullName for consistent avatar color
-  const fullName = currentUser.prenom && currentUser.nom 
-    ? `${currentUser.prenom} ${currentUser.nom}` 
+  const fullName = currentUser.firstName && currentUser.lastName
+    ? `${currentUser.firstName} ${currentUser.lastName}`
     : currentUser.email || "Utilisateur";
-  
+
+  // Construct profile photo URL with cache-busting
+  const PROFILE_SERVICE_BASE_URL = "https://localhost:7240";
+  const profilePhotoUrl = currentUser.profilePhotoUrl
+    ? currentUser.profilePhotoUrl.startsWith("http")
+      ? `${currentUser.profilePhotoUrl}?t=${Date.now()}`
+      : `${PROFILE_SERVICE_BASE_URL}${currentUser.profilePhotoUrl}?t=${Date.now()}`
+    : null;
+
   const userInitial = generateInitials(fullName);
   const avatarColor = getAvatarColor(fullName);
 
@@ -90,7 +102,20 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
             aria-haspopup="true"
             onClick={handleToggle}
           >
-            <Avatar className="avatar" style={{ backgroundColor: avatarColor }}>
+            <Avatar
+              src={profilePhotoUrl}
+              className="avatar"
+              style={{ backgroundColor: avatarColor }}
+              imgProps={{
+                onError: (e) => {
+                  console.error("Error loading profile photo:", profilePhotoUrl);
+                  e.target.src = ""; // Force fallback to initials
+                },
+                onLoad: () => {
+                  console.log("Profile photo loaded successfully:", profilePhotoUrl);
+                },
+              }}
+            >
               {userInitial}
             </Avatar>
             <div className="user-info">
@@ -98,9 +123,13 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
                 {fullName}
               </Typography>
               <Typography variant="caption" className="user-role">
-                {currentUser.role === 'superadmin' ? 'Super Admin' : 
-                 currentUser.role === 'admin' ? 'Admin' : 
-                 currentUser.role === 'chef_projet' ? 'Chef de Projet' : 'Utilisateur'}
+                {currentUser.role === "superadmin"
+                  ? "Super Admin"
+                  : currentUser.role === "admin"
+                  ? "Admin"
+                  : currentUser.role === "chef_projet"
+                  ? "Chef de Projet"
+                  : "Utilisateur"}
               </Typography>
             </div>
           </div>
@@ -117,20 +146,36 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
             {({ TransitionProps, placement }) => (
               <Grow
                 {...TransitionProps}
-                style={{ transformOrigin: placement === "bottom" ? "center top" : "center bottom" }}
+                style={{
+                  transformOrigin:
+                    placement === "bottom" ? "center top" : "center bottom",
+                }}
               >
                 <Paper elevation={3} className="user-menu-paper">
                   <ClickAwayListener onClickAway={handleClose}>
-                    <MenuList autoFocusItem={open} id="menu-list-grow" className="user-menu-list">
-                      <MenuItem onClick={handleProfileNavigate} className="menu-item">
+                    <MenuList
+                      autoFocusItem={open}
+                      id="menu-list-grow"
+                      className="user-menu-list"
+                    >
+                      <MenuItem
+                        onClick={handleProfileNavigate}
+                        className="menu-item"
+                      >
                         <FiUser size={16} className="menu-icon" />
                         Mon Profil
                       </MenuItem>
-                      <MenuItem onClick={handleHelpNavigate} className="menu-item">
+                      <MenuItem
+                        onClick={handleHelpNavigate}
+                        className="menu-item"
+                      >
                         <FiHelpCircle size={16} className="menu-icon" />
                         Aide
                       </MenuItem>
-                      <MenuItem onClick={handleLogout} className="menu-item logout">
+                      <MenuItem
+                        onClick={handleLogout}
+                        className="menu-item logout"
+                      >
                         <FiLogOut size={16} className="menu-icon" />
                         Déconnexion
                       </MenuItem>

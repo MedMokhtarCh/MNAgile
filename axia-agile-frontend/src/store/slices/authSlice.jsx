@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/api';
+import { api } from '../../services/api';
+import { clearProfile } from './profileSlice';
 
 export const login = createAsyncThunk(
   'auth/login',
@@ -23,12 +24,14 @@ const authSlice = createSlice({
     error: null,
   },
   reducers: {
-    logout: (state) => {
+    logout: (state, action) => {
       state.currentUser = null;
       state.token = null;
       state.isAuthenticated = false;
       localStorage.removeItem('currentUser');
       localStorage.removeItem('token');
+      // Dispatch clearProfile to reset profile state
+      action.dispatch(clearProfile());
     },
   },
   extraReducers: (builder) => {

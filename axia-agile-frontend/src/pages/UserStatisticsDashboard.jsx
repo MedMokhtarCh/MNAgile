@@ -1,5 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Box, Grid, CircularProgress } from '@mui/material';
+import React, { useEffect, useMemo } from 'react';
+import { Box, Grid, CircularProgress, Typography } from '@mui/material';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchUsers } from '../store/slices/usersSlice';
 import PageTitle from '../components/common/PageTitle';
 import SummaryCards from '../components/adminDashboard/SummaryCards';
 import StatusDoughnutChart from '../components/adminDashboard/StatusDoughnutChart';
@@ -35,107 +37,122 @@ ChartJS.register(
   DoughnutController
 );
 
+// Role configuration for roleId 3 and 4
+const ROLE_CONFIG = {
+  3: { label: 'Chefs de projet', icon: 'ChefProjetIcon', color: '#86efac' },
+  4: { label: 'Utilisateurs', icon: 'UserIcon', color: '#93c5fd' },
+};
+
 const UserStatisticsDashboard = () => {
-  const [loading, setLoading] = useState(true);
-  const [userStats, setUserStats] = useState({
-    totalUsers: 0,
-    activeUsers: 0,
-    inactiveUsers: 0,
-    usersByRole: [],
-    usersByJobTitle: [],
-    recentUsers: [],
-    userCreationTrend: {},
-    userActivityStats: {},
-  });
+  const dispatch = useDispatch();
+  const { users, loading, error } = useSelector((state) => state.users);
 
   useEffect(() => {
-    
-    setTimeout(() => {
-      const storedUsers = JSON.parse(localStorage.getItem('users')) || [];
-      const totalUsers = storedUsers.length;
-      const activeUsers = storedUsers.filter((user) => user.isActive === true).length;
-      const inactiveUsers = totalUsers - activeUsers;
+    dispatch(fetchUsers());
+  }, [dispatch]);
 
-      // Users by role
-      const usersByRole = [
-        {
-          role: 'Utilisateurs',
-          count: storedUsers.filter((user) => user.role === 'user').length,
-          icon: 'UserIcon',
-          color: '#93c5fd',
-        },
-        {
-          role: 'Chefs de projet',
-          count: storedUsers.filter((user) => user.role === 'chef_projet').length,
-          icon: 'ChefProjetIcon',
-          color: '#86efac',
-        },
-      ];
+  const userStats = useMemo(() => {
+    // Only count users with roleId 3 (Chefs de projet) or 4 (Utilisateurs)
+    const relevantUsers = users.filter((user) => user.roleId === 3 || user.roleId === 4);
+    const totalUsers = relevantUsers.length;
+    const activeUsers = relevantUsers.filter((user) => user.isActive).length;
+    const inactiveUsers = totalUsers - activeUsers;
 
-      // Users by job title
-      const uniqueJobTitles = [...new Set(storedUsers.filter((user) => user.jobTitle).map((user) => user.jobTitle))];
-      const jobTitleColors = [
-        '#60a5fa', '#34d399', '#a78bfa', '#f87171', '#fbbf24',
-        '#f472b6', '#38bdf8', '#fb923c', '#a3e635', '#e879f9',
-      ];
-      
-      const usersByJobTitle = uniqueJobTitles.map((jobTitle, index) => ({
-        jobTitle: jobTitle || 'Non spécifié',
-        count: storedUsers.filter((user) => user.jobTitle === jobTitle).length,
-        color: jobTitleColors[index % jobTitleColors.length],
-        icon: 'JobTitleIcon',
+    // usersByRole for Chefs de projet and Utilisateurs
+    const usersByRole = [
+      {
+        role: ROLE_CONFIG[4].label,
+        count: relevantUsers.filter((user) => user.roleId === 4).length,
+        icon: ROLE_CONFIG[4].icon,
+        color: ROLE_CONFIG[4].color,
+      },
+      {
+        role: ROLE_CONFIG[3].label,
+        count: relevantUsers.filter((user) => user.roleId === 3).length,
+        icon: ROLE_CONFIG[3].icon,
+        color: ROLE_CONFIG[3].color,
+      },
+    ];
+
+    // Users by job title
+    const jobTitleCounts = relevantUsers.reduce((acc, user) => {
+      const jobTitle = user.jobTitle || 'Non spécifié';
+      acc[jobTitle] = (acc[jobTitle] || 0) + 1;
+      return acc;
+    }, {});
+
+    const jobTitleColors = [
+      '#60a5fa', '#34d399', '#a78bfa', '#f87171', '#fbbf24',
+      '#f472b6', '#38bdf8', '#fb923c', '#a3e635', '#e879f9',
+    ];
+
+    const usersByJobTitle = Object.entries(jobTitleCounts).map(([jobTitle, count], index) => ({
+      jobTitle,
+      count,
+      color: jobTitleColors[index % jobTitleColors.length],
+      icon: 'JobTitleIcon',
+    }));
+
+    // Recent users
+    const recentUsers = [...relevantUsers]
+      .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
+      .slice(0, 5)
+      .map((user) => ({
+        ...user,
+        prenom: user.firstName,
+        nom: user.lastName,
+        role: user.roleId === 3 ? 'chef_projet' : 'user',
       }));
 
-   
-      const noJobTitleCount = storedUsers.filter((user) => !user.jobTitle).length;
-      if (noJobTitleCount > 0) {
-        usersByJobTitle.push({
-          jobTitle: 'Non spécifié',
-          count: noJobTitleCount,
-          color: '#9ca3af',
-          icon: 'JobTitleIcon',
-        });
-      }
-
-      // Recent users
-      const recentUsers = [...storedUsers]
-        .sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated))
-        .slice(0, 5);
-
-      // Calculate data for charts
-      const chartData = prepareChartData(storedUsers);
-
-      // Update state
-      setUserStats({
-        totalUsers,
-        activeUsers,
-        inactiveUsers,
-        usersByRole,
-        usersByJobTitle,
-        recentUsers,
-        userCreationTrend: chartData.userCreationTrend,
-        userActivityStats: chartData.userActivityStats,
-      });
-      setLoading(false);
-    }, 1000);
-  }, []);
-
-  const prepareChartData = (storedUsers) => {
-    // User creation trend (last 6 months)
+    // Chart data
     const currentDate = new Date();
     const last6Months = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(currentDate);
       d.setMonth(d.getMonth() - i);
       return d;
     }).reverse();
-    
+
     const monthNames = last6Months.map((date) =>
       date.toLocaleDateString('fr-FR', { month: 'short' })
     );
 
-    // User activity logs simulation
-    let activityLogs = [];
-    storedUsers.forEach((user) => {
+    // User creation trend
+    const usersByMonth = monthNames.reduce((acc, month) => {
+      acc[month] = { user: 0, chef_projet: 0 };
+      return acc;
+    }, {});
+
+    relevantUsers.forEach((user) => {
+      const creationDate = new Date(user.dateCreated);
+      const monthKey = creationDate.toLocaleDateString('fr-FR', { month: 'short' });
+      if (monthNames.includes(monthKey)) {
+        if (user.roleId === 3) {
+          usersByMonth[monthKey].chef_projet += 1;
+        } else if (user.roleId === 4) {
+          usersByMonth[monthKey].user += 1;
+        }
+      }
+    });
+
+    const userCreationTrend = {
+      labels: monthNames,
+      datasets: [
+        {
+          label: 'Utilisateurs',
+          data: monthNames.map((month) => usersByMonth[month].user),
+          backgroundColor: '#93c5fd',
+        },
+        {
+          label: 'Chefs de projet',
+          data: monthNames.map((month) => usersByMonth[month].chef_projet),
+          backgroundColor: '#86efac',
+        },
+      ],
+    };
+
+    // User activity stats (simulated)
+    const activityLogs = [];
+    relevantUsers.forEach((user) => {
       const creationDate = new Date(user.dateCreated);
       activityLogs.push({
         userId: user.id,
@@ -156,15 +173,12 @@ const UserStatisticsDashboard = () => {
       }
     });
 
-    // Sort activity logs by date
     activityLogs.sort((a, b) => a.date - b.date);
 
-    // Calculate user status by month
-    const userStatusByMonth = {};
-    last6Months.forEach((date) => {
-      const monthKey = date.toLocaleDateString('fr-FR', { month: 'short' });
-      userStatusByMonth[monthKey] = { active: 0, inactive: 0, total: 0 };
-    });
+    const userStatusByMonth = monthNames.reduce((acc, month) => {
+      acc[month] = { active: 0, inactive: 0, total: 0 };
+      return acc;
+    }, {});
 
     let currentUserStatus = {};
     activityLogs.forEach((log) => {
@@ -193,49 +207,23 @@ const UserStatisticsDashboard = () => {
       }
     });
 
-    // User activity stats
     const userActivityStats = {
       labels: monthNames,
       activeData: monthNames.map((month) => userStatusByMonth[month]?.active || 0),
       inactiveData: monthNames.map((month) => userStatusByMonth[month]?.inactive || 0),
     };
 
-    // User creation trend
-    const usersByMonth = {};
-    monthNames.forEach((month) => {
-      usersByMonth[month] = { user: 0, chef_projet: 0 };
-    });
-    
-    storedUsers.forEach((user) => {
-      const creationDate = new Date(user.dateCreated);
-      const monthKey = creationDate.toLocaleDateString('fr-FR', { month: 'short' });
-      if (monthNames.includes(monthKey)) {
-        if (user.role === 'chef_projet') {
-          usersByMonth[monthKey].chef_projet += 1;
-        } else if (user.role === 'user') {
-          usersByMonth[monthKey].user += 1;
-        }
-      }
-    });
-
-    const userCreationTrend = {
-      labels: monthNames,
-      datasets: [
-        {
-          label: 'Utilisateurs',
-          data: monthNames.map((month) => usersByMonth[month].user),
-          backgroundColor: '#93c5fd',
-        },
-        {
-          label: 'Chefs de projet',
-          data: monthNames.map((month) => usersByMonth[month].chef_projet),
-          backgroundColor: '#86efac',
-        },
-      ],
+    return {
+      totalUsers,
+      activeUsers,
+      inactiveUsers,
+      usersByRole,
+      usersByJobTitle,
+      recentUsers,
+      userCreationTrend,
+      userActivityStats,
     };
-
-    return { userCreationTrend, userActivityStats };
-  };
+  }, [users]);
 
   return (
     <Box sx={{ p: 4 }}>
@@ -245,41 +233,41 @@ const UserStatisticsDashboard = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
           <CircularProgress size={60} />
         </Box>
+      ) : error ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+          <Typography color="error">Erreur: {error}</Typography>
+        </Box>
       ) : (
         <Grid container spacing={3}>
-          {/* Summary Cards */}
           <Grid item xs={12}>
-            <SummaryCards 
-              totalUsers={userStats.totalUsers} 
-              activeUsers={userStats.activeUsers} 
+            <SummaryCards
+              totalUsers={userStats.totalUsers}
+              activeUsers={userStats.activeUsers}
               inactiveUsers={userStats.inactiveUsers}
               usersByRole={userStats.usersByRole}
             />
           </Grid>
-
-          {/* Charts */}
           <Grid item xs={12} md={6}>
             <RolePieChart usersByRole={userStats.usersByRole} />
           </Grid>
-
           <Grid item xs={12} md={6}>
-            <StatusDoughnutChart activeUsers={userStats.activeUsers} inactiveUsers={userStats.inactiveUsers} />
+            <StatusDoughnutChart
+              activeUsers={userStats.activeUsers}
+              inactiveUsers={userStats.inactiveUsers}
+            />
           </Grid>
-
           <Grid item xs={12} md={6}>
             <CreationTrendChart data={userStats.userCreationTrend} />
           </Grid>
-
           <Grid item xs={12} md={6}>
             <ActivityTrendChart data={userStats.userActivityStats} />
           </Grid>
-
-          {/* Job Title Distribution */}
           <Grid item xs={12}>
-            <JobTitleDistribution usersByJobTitle={userStats.usersByJobTitle} totalUsers={userStats.totalUsers} />
+            <JobTitleDistribution
+              usersByJobTitle={userStats.usersByJobTitle}
+              totalUsers={userStats.totalUsers}
+            />
           </Grid>
-
-          {/* Recent Users List */}
           <Grid item xs={12}>
             <RecentUsersList recentUsers={userStats.recentUsers} />
           </Grid>

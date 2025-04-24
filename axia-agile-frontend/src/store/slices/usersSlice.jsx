@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import api from '../../services/api';
+import { api } from '../../services/api'; // Fixed: Changed from "import api" to "import { api }"
 
 const normalizeUser = (user) => {
   if (!user) return null;

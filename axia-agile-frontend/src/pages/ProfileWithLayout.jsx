@@ -1,20 +1,20 @@
-
-import React from "react";
-import { Navigate } from "react-router-dom";
-import AdminLayout from "../layouts/AdminLayout";
-import DashboardLayout from "../layouts/DashboardLayout";
-import Profile from "./Profile";
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+import AdminLayout from '../layouts/AdminLayout';
+import DashboardLayout from '../layouts/DashboardLayout';
+import Profile from './Profile';
+import { useSelector } from 'react-redux';
 
 const ProfileWithLayout = () => {
-  const currentUser = JSON.parse(localStorage.getItem("currentUser"));
+  const { isAuthenticated, currentUser } = useSelector((state) => state.auth);
 
-  if (!currentUser) {
+  if (!isAuthenticated || !currentUser) {
     return <Navigate to="/Login" replace />;
   }
 
-  const role = currentUser?.role;
+  const role = currentUser?.roleId === 1 || currentUser?.roleId === 2 ? 'admin' : 'user';
 
-  if (role === "superadmin" || role === "admin") {
+  if (role === 'admin') {
     return (
       <AdminLayout>
         <Profile />

@@ -7,25 +7,32 @@ const api = axios.create({
   },
 });
 
-// Add request interceptor to include JWT token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+const profileApi = axios.create({
+  baseURL: 'https://localhost:7240/api',
+  headers: {
+    'Content-Type': 'application/json',
   },
-  (error) => Promise.reject(error)
-);
+});
 
-// Add response interceptor to handle errors
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;
-    config.headers['Content-Type'] = 'application/json';
-  }
-  return config;
-}, (error) => Promise.reject(error));
-export default api;
+
+const addTokenInterceptor = (instance) => {
+  instance.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+  
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+};
+
+// Applique l'intercepteur aux deux instances
+addTokenInterceptor(api);
+addTokenInterceptor(profileApi);
+
+// Exporte les deux instances comme exports nommés
+// Pas d'export par défaut pour éviter l'erreur "does not provide an export named 'default'"
+export { api, profileApi };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -21,7 +21,9 @@ import {
   Card,
   CardHeader,
   CardContent,
-} from "@mui/material";
+  Alert,
+  Snackbar,
+} from '@mui/material';
 import {
   Email as EmailIcon,
   Phone as PhoneIcon,
@@ -30,91 +32,75 @@ import {
   Lock as LockIcon,
   Save as SaveIcon,
   PhotoCamera as PhotoCameraIcon,
-  Place as PlaceIcon,
   Work as WorkIcon,
   Edit as EditIcon,
   Visibility,
   VisibilityOff,
   Cancel as CancelIcon,
-} from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
-import { useAvatar } from "../hooks/useAvatar";
+} from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { useAvatar } from '../hooks/useAvatar';
+import {
+  fetchProfile,
+  updateProfile,
+  updatePassword,
+  uploadProfilePhoto,
+  setSnackbar,
+} from '../store/slices/profileSlice';
+
+// Base URL du ProfileService pour construire les URLs des photos
+const PROFILE_SERVICE_BASE_URL = 'https://localhost:7240';
 
 const Profile = () => {
   const theme = useTheme();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [profileImage, setProfileImage] = useState(null);
+  const { profile, loading, error, snackbar } = useSelector((state) => state.profile);
+  const { isAuthenticated } = useSelector((state) => state.auth);
+
   const [activeTab, setActiveTab] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [showPassword, setShowPassword] = useState({
-    current: false,
     new: false,
     confirm: false,
   });
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+    newPassword: '',
+    confirmPassword: '',
   });
   const [editData, setEditData] = useState({
-    nom: "",
-    prenom: "",
-    email: "",
-    telephone: "",
-    entreprise: "",
-    adresse: "",
-    jobTitle: "",
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    jobTitle: '',
   });
+  const [profileImageFile, setProfileImageFile] = useState(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
-    console.log("Profile component mounted");
-    const loadUserData = () => {
-      try {
-        const user = JSON.parse(localStorage.getItem("currentUser"));
-        console.log("Current user from localStorage:", user);
+    if (!isAuthenticated) {
+      navigate('/Login');
+      return;
+    }
 
-        if (!user || !user.email) {
-          console.log("No valid user found, redirecting to /login");
-          navigate("/Login");
-          return;
-        }
+    dispatch(fetchProfile());
+  }, [dispatch, isAuthenticated, navigate]);
 
-        let fullUserData = user;
-        if (user.role === "admin" || user.role === "superadmin") {
-          const admins = JSON.parse(localStorage.getItem("admins")) || [];
-          fullUserData = admins.find((admin) => admin.email === user.email) || user;
-        } else {
-          const users = JSON.parse(localStorage.getItem("users")) || [];
-          fullUserData = users.find((u) => u.email === user.email) || user;
-        }
-
-        console.log("Full user data:", fullUserData);
-        setCurrentUser(fullUserData);
-        setEditData({
-          nom: fullUserData.nom || "",
-          prenom: fullUserData.prenom || "",
-          email: fullUserData.email || "",
-          telephone: fullUserData.telephone || "",
-          entreprise: fullUserData.entreprise || "",
-          adresse: fullUserData.adresse || "",
-          jobTitle: fullUserData.jobTitle || "",
-        });
-        setLoading(false);
-      } catch (err) {
-        console.error("Error loading user data:", err);
-        setError("Erreur lors du chargement du profil");
-        setLoading(false);
-      }
-    };
-
-    setLoading(true);
-    loadUserData();
-  }, [navigate]);
+  useEffect(() => {
+    if (profile) {
+      setEditData({
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        phoneNumber: profile.phoneNumber || '',
+        jobTitle: profile.jobTitle || profile.entreprise || '',
+      });
+      console.log('Profile updated:', profile);
+      console.log('Profile photo URL:', profile.profilePhotoUrl);
+    }
+  }, [profile]);
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -138,14 +124,12 @@ const Profile = () => {
     setEditMode(!editMode);
     if (editMode) {
       setEditData({
-        nom: currentUser.nom || "",
-        prenom: currentUser.prenom || "",
-        email: currentUser.email || "",
-        telephone: currentUser.telephone || "",
-        entreprise: currentUser.entreprise || "",
-        adresse: currentUser.adresse || "",
-        jobTitle: currentUser.jobTitle || "",
+        firstName: profile.firstName || '',
+        lastName: profile.lastName || '',
+        phoneNumber: profile.phoneNumber || '',
+        jobTitle: profile.jobTitle || profile.entreprise || '',
       });
+      setProfileImageFile(null);
     }
   };
 
@@ -156,124 +140,92 @@ const Profile = () => {
   const handleClosePasswordDialog = () => {
     setPasswordDialogOpen(false);
     setPasswordData({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
+      newPassword: '',
+      confirmPassword: '',
     });
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     try {
-      const updatedUserData = {
-        ...currentUser,
-        nom: editData.nom,
-        prenom: editData.prenom,
-        email: editData.email,
-        telephone: editData.telephone,
-        jobTitle: editData.jobTitle,
-        entreprise: editData.entreprise,
-        adresse: editData.adresse,
-      };
-
-      if (profileImage) {
-        updatedUserData.profileImage = profileImage;
+      await dispatch(updateProfile(editData)).unwrap();
+      if (profileImageFile) {
+        setUploadingPhoto(true);
+        const result = await dispatch(uploadProfilePhoto(profileImageFile)).unwrap();
+        console.log('Photo upload result:', result);
+        // Refresh profile to ensure latest data
+        await dispatch(fetchProfile()).unwrap();
+        setUploadingPhoto(false);
       }
-
-      localStorage.setItem("currentUser", JSON.stringify(updatedUserData));
-
-      if (currentUser.role === "admin" || currentUser.role === "superadmin") {
-        const admins = JSON.parse(localStorage.getItem("admins")) || [];
-        const updatedAdmins = admins.map((admin) =>
-          admin.email === currentUser.email ? { ...admin, ...updatedUserData } : admin
-        );
-        localStorage.setItem("admins", JSON.stringify(updatedAdmins));
-      } else {
-        const users = JSON.parse(localStorage.getItem("users")) || [];
-        const updatedUsers = users.map((user) =>
-          user.email === currentUser.email ? { ...user, ...updatedUserData } : user
-        );
-        localStorage.setItem("users", JSON.stringify(updatedUsers));
-      }
-
-      setCurrentUser(updatedUserData);
       setEditMode(false);
+      setProfileImageFile(null);
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Profil mis à jour avec succès',
+          severity: 'success',
+        })
+      );
     } catch (error) {
-      console.error("Error updating profile:", error);
-      setError("Erreur lors de la sauvegarde du profil");
+      console.error('Error saving profile:', error);
+      setUploadingPhoto(false);
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Erreur lors de la sauvegarde du profil',
+          severity: 'error',
+        })
+      );
     }
   };
 
-  const handleChangePassword = () => {
-    if (passwordData.currentPassword !== currentUser.password) {
-      alert("Le mot de passe actuel est incorrect");
-      return;
-    }
-
+  const handleChangePassword = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert("Les nouveaux mots de passe ne correspondent pas");
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Les mots de passe ne correspondent pas',
+          severity: 'error',
+        })
+      );
       return;
     }
 
     try {
-      if (currentUser.role === "admin" || currentUser.role === "superadmin") {
-        const admins = JSON.parse(localStorage.getItem("admins")) || [];
-        const updatedAdmins = admins.map((admin) =>
-          admin.email === currentUser.email ? { ...admin, password: passwordData.newPassword } : admin
-        );
-        localStorage.setItem("admins", JSON.stringify(updatedAdmins));
-      } else {
-        const users = JSON.parse(localStorage.getItem("users")) || [];
-        const updatedUsers = users.map((user) =>
-          user.email === currentUser.email ? { ...user, password: passwordData.newPassword } : user
-        );
-        localStorage.setItem("users", JSON.stringify(updatedUsers));
-      }
-
-      const updatedUser = { ...currentUser, password: passwordData.newPassword };
-      localStorage.setItem("currentUser", JSON.stringify(updatedUser));
-      setCurrentUser(updatedUser);
-
+      await dispatch(updatePassword({ newPassword: passwordData.newPassword })).unwrap();
       handleClosePasswordDialog();
-      alert("Mot de passe changé avec succès");
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Mot de passe mis à jour avec succès',
+          severity: 'success',
+        })
+      );
     } catch (error) {
-      console.error("Error changing password:", error);
-      alert("Erreur lors du changement de mot de passe");
+      console.error('Error changing password:', error);
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Erreur lors de la mise à jour du mot de passe',
+          severity: 'error',
+        })
+      );
     }
   };
 
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setProfileImage(event.target.result);
-      };
-      reader.readAsDataURL(e.target.files[0]);
+      setProfileImageFile(e.target.files[0]);
     }
   };
 
-  if (error) {
-    return (
-      <Container maxWidth="lg">
-        <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "80vh" }}>
-          <Typography color="error">{error}</Typography>
-        </Box>
-      </Container>
-    );
-  }
+  const handleCloseSnackbar = () => {
+    dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
+  };
 
-  if (loading) {
-    console.log("Profile is in loading state");
+  if (loading && !profile) {
     return (
       <Container maxWidth="lg">
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "80vh",
-            flexDirection: "column",
-          }}
-        >
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh', flexDirection: 'column' }}>
           <CircularProgress color="primary" />
           <Typography sx={{ mt: 2 }}>Chargement du profil...</Typography>
         </Box>
@@ -281,15 +233,35 @@ const Profile = () => {
     );
   }
 
-  // Standardize fullName for consistent avatar color
-  const fullName = currentUser.prenom && currentUser.nom 
-    ? `${currentUser.prenom} ${currentUser.nom}` 
-    : currentUser.email || "Utilisateur";
+  if (error && !profile) {
+    return (
+      <Container maxWidth="lg">
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+          <Typography color="error">{error}</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (!profile) {
+    return null;
+  }
+
+  const fullName = profile.firstName && profile.lastName ? `${profile.firstName} ${profile.lastName}` : profile.email || 'Utilisateur';
+
+  // Construit l'URL complète de la photo de profil avec cache-busting
+  const profilePhotoUrl = profile.profilePhotoUrl
+    ? profile.profilePhotoUrl.startsWith('http')
+      ? `${profile.profilePhotoUrl}?t=${Date.now()}`
+      : `${PROFILE_SERVICE_BASE_URL}${profile.profilePhotoUrl}?t=${Date.now()}`
+    : null;
+
+  console.log('Rendering Avatar with URL:', profilePhotoUrl);
 
   const InfoField = ({ label, value, icon }) => (
-    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
       {icon && (
-        <Box sx={{ mr: 2, color: "text.secondary" }}>
+        <Box sx={{ mr: 2, color: 'text.secondary' }}>
           {icon}
         </Box>
       )}
@@ -297,39 +269,49 @@ const Profile = () => {
         <Typography variant="body2" color="text.secondary">
           {label}
         </Typography>
-        <Typography variant="body1">{value || "—"}</Typography>
+        <Typography variant="body1">{value || '—'}</Typography>
       </Box>
     </Box>
   );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Card sx={{ mb: 4, position: "relative", overflow: "visible" }}>
-        <CardContent
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            position: "relative",
-            p: 3,
-          }}
-        >
-          <Box sx={{ position: "relative" }}>
+      <Card sx={{ mb: 4, position: 'relative', overflow: 'visible' }}>
+        <CardContent sx={{ display: 'flex', alignItems: 'center', position: 'relative', p: 3 }}>
+          <Box sx={{ position: 'relative' }}>
             <Avatar
-              src={profileImage || currentUser.profileImage}
+              src={profilePhotoUrl}
               sx={{
                 width: 100,
                 height: 100,
                 fontSize: 40,
-                bgcolor: getAvatarColor(fullName), // Use standardized fullName
+                bgcolor: getAvatarColor(fullName),
+                position: 'relative',
+              }}
+              imgProps={{
+                onError: (e) => {
+                  console.error('Error loading profile photo:', profilePhotoUrl);
+                  dispatch(
+                    setSnackbar({
+                      open: true,
+                      message: 'Impossible de charger la photo de profil. Vérifiez que le fichier est accessible.',
+                      severity: 'error',
+                    })
+                  );
+                  e.target.src = ''; // Force fallback to initials
+                },
+                onLoad: () => {
+                  console.log('Profile photo loaded successfully:', profilePhotoUrl);
+                },
               }}
             >
-              {generateInitials(fullName)} {/* Use standardized fullName */}
+              {uploadingPhoto ? <CircularProgress size={24} /> : generateInitials(fullName)}
             </Avatar>
 
             {editMode && (
               <label htmlFor="upload-photo">
                 <input
-                  style={{ display: "none" }}
+                  style={{ display: 'none' }}
                   id="upload-photo"
                   name="upload-photo"
                   type="file"
@@ -341,12 +323,12 @@ const Profile = () => {
                   aria-label="upload picture"
                   component="span"
                   sx={{
-                    position: "absolute",
+                    position: 'absolute',
                     right: -10,
                     bottom: -10,
-                    bgcolor: "background.paper",
-                    "&:hover": { bgcolor: "background.default" },
-                    boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
+                    bgcolor: 'background.paper',
+                    '&:hover': { bgcolor: 'background.default' },
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
                   }}
                 >
                   <PhotoCameraIcon />
@@ -357,24 +339,24 @@ const Profile = () => {
 
           <Box sx={{ ml: 3 }}>
             <Typography variant="h5" fontWeight="bold">
-              {(currentUser.prenom || "") + " " + (currentUser.nom || "")}
+              {fullName}
             </Typography>
-            <Box sx={{ display: "flex", alignItems: "center", mt: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
               <EmailIcon fontSize="small" color="action" sx={{ mr: 0.5 }} />
               <Typography variant="body1" color="text.secondary">
-                {currentUser.email}
+                {profile.email}
               </Typography>
             </Box>
           </Box>
 
           <IconButton
             sx={{
-              position: "absolute",
+              position: 'absolute',
               top: 16,
               right: 16,
               bgcolor: editMode ? theme.palette.error.light : theme.palette.primary.light,
               color: editMode ? theme.palette.error.contrastText : theme.palette.primary.contrastText,
-              "&:hover": {
+              '&:hover': {
                 bgcolor: editMode ? theme.palette.error.main : theme.palette.primary.main,
               },
             }}
@@ -385,7 +367,7 @@ const Profile = () => {
         </CardContent>
       </Card>
 
-      <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={activeTab} onChange={handleTabChange} aria-label="profile tabs">
           <Tab label="Informations personnelles" />
           <Tab label="Mot de passe" />
@@ -400,19 +382,13 @@ const Profile = () => {
               <CardContent>
                 <Grid container spacing={4}>
                   <Grid item xs={12} md={6}>
-                    <InfoField label="Prénom" value={currentUser.prenom} icon={<PersonIcon />} />
-                    <InfoField label="Nom" value={currentUser.nom} icon={<PersonIcon />} />
-                    <InfoField label="Email" value={currentUser.email} icon={<EmailIcon />} />
-                    <InfoField label="Téléphone" value={currentUser.telephone} icon={<PhoneIcon />} />
+                    <InfoField label="Prénom" value={profile.firstName} icon={<PersonIcon />} />
+                    <InfoField label="Nom" value={profile.lastName} icon={<PersonIcon />} />
+                    <InfoField label="Email" value={profile.email} icon={<EmailIcon />} />
+                    <InfoField label="Téléphone" value={profile.phoneNumber} icon={<PhoneIcon />} />
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    {(currentUser.role === "admin" || currentUser.role === "chef_projet" || currentUser.role === "user") && (
-                      <>
-                        <InfoField label="Titre de poste" value={currentUser.jobTitle} icon={<WorkIcon />} />
-                        <InfoField label="Entreprise" value={currentUser.entreprise} icon={<BusinessIcon />} />
-                        <InfoField label="Adresse" value={currentUser.adresse} icon={<PlaceIcon />} />
-                      </>
-                    )}
+                    <InfoField label="Titre de poste" value={profile.jobTitle} icon={<WorkIcon />} />
                   </Grid>
                 </Grid>
               </CardContent>
@@ -426,8 +402,8 @@ const Profile = () => {
                     <TextField
                       fullWidth
                       label="Prénom"
-                      name="prenom"
-                      value={editData.prenom}
+                      name="firstName"
+                      value={editData.firstName}
                       onChange={handleEditChange}
                       InputProps={{
                         startAdornment: (
@@ -444,8 +420,8 @@ const Profile = () => {
                     <TextField
                       fullWidth
                       label="Nom"
-                      name="nom"
-                      value={editData.nom}
+                      name="lastName"
+                      value={editData.lastName}
                       onChange={handleEditChange}
                       InputProps={{
                         startAdornment: (
@@ -461,14 +437,14 @@ const Profile = () => {
                   <Grid item xs={12}>
                     <TextField
                       fullWidth
-                      label="Email"
-                      name="email"
-                      value={editData.email}
+                      label="Téléphone"
+                      name="phoneNumber"
+                      value={editData.phoneNumber}
                       onChange={handleEditChange}
                       InputProps={{
                         startAdornment: (
                           <InputAdornment position="start">
-                            <EmailIcon color="action" />
+                            <PhoneIcon color="action" />
                           </InputAdornment>
                         ),
                       }}
@@ -476,86 +452,26 @@ const Profile = () => {
                     />
                   </Grid>
 
-                  {currentUser.role !== "superadmin" && (
-                    <Grid item xs={12}>
-                      <TextField
-                        fullWidth
-                        label="Téléphone"
-                        name="telephone"
-                        value={editData.telephone}
-                        onChange={handleEditChange}
-                        InputProps={{
-                          startAdornment: (
-                            <InputAdornment position="start">
-                              <PhoneIcon color="action" />
-                            </InputAdornment>
-                          ),
-                        }}
-                        variant="outlined"
-                      />
-                    </Grid>
-                  )}
-
-                  {(currentUser.role === "admin" || currentUser.role === "chef_projet" || currentUser.role === "user") && (
-                    <>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Titre de poste"
-                          name="jobTitle"
-                          value={editData.jobTitle}
-                          onChange={handleEditChange}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <WorkIcon color="action" />
-                              </InputAdornment>
-                            ),
-                          }}
-                          variant="outlined"
-                        />
-                      </Grid>
-
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Entreprise"
-                          name="entreprise"
-                          value={editData.entreprise}
-                          onChange={handleEditChange}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <BusinessIcon color="action" />
-                              </InputAdornment>
-                            ),
-                          }}
-                          variant="outlined"
-                        />
-                      </Grid>
-
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          label="Adresse"
-                          name="adresse"
-                          value={editData.adresse}
-                          onChange={handleEditChange}
-                          InputProps={{
-                            startAdornment: (
-                              <InputAdornment position="start">
-                                <PlaceIcon color="action" />
-                              </InputAdornment>
-                            ),
-                          }}
-                          variant="outlined"
-                        />
-                      </Grid>
-                    </>
-                  )}
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      label="Titre de poste"
+                      name="jobTitle"
+                      value={editData.jobTitle}
+                      onChange={handleEditChange}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <WorkIcon color="action" />
+                          </InputAdornment>
+                        ),
+                      }}
+                      variant="outlined"
+                    />
+                  </Grid>
                 </Grid>
 
-                <Box sx={{ mt: 4, display: "flex", justifyContent: "flex-end", gap: 2 }}>
+                <Box sx={{ mt: 4, display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
                   <Button variant="outlined" color="error" startIcon={<CancelIcon />} onClick={toggleEditMode}>
                     Annuler
                   </Button>
@@ -564,6 +480,7 @@ const Profile = () => {
                     color="primary"
                     onClick={handleSaveProfile}
                     startIcon={<SaveIcon />}
+                    disabled={loading || uploadingPhoto}
                   >
                     Enregistrer
                   </Button>
@@ -602,28 +519,8 @@ const Profile = () => {
           <Box sx={{ pt: 1 }}>
             <TextField
               fullWidth
-              label="Mot de passe actuel"
-              type={showPassword.current ? "text" : "password"}
-              name="currentPassword"
-              value={passwordData.currentPassword}
-              onChange={handlePasswordChange}
-              margin="normal"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={() => handleClickShowPassword("current")} edge="end">
-                      {showPassword.current ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              variant="outlined"
-            />
-
-            <TextField
-              fullWidth
               label="Nouveau mot de passe"
-              type={showPassword.new ? "text" : "password"}
+              type={showPassword.new ? 'text' : 'password'}
               name="newPassword"
               value={passwordData.newPassword}
               onChange={handlePasswordChange}
@@ -631,7 +528,7 @@ const Profile = () => {
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => handleClickShowPassword("new")} edge="end">
+                    <IconButton onClick={() => handleClickShowPassword('new')} edge="end">
                       {showPassword.new ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -643,21 +540,21 @@ const Profile = () => {
             <TextField
               fullWidth
               label="Confirmer le mot de passe"
-              type={showPassword.confirm ? "text" : "password"}
+              type={showPassword.confirm ? 'text' : 'password'}
               name="confirmPassword"
               value={passwordData.confirmPassword}
               onChange={handlePasswordChange}
               margin="normal"
-              error={passwordData.newPassword !== passwordData.confirmPassword && passwordData.confirmPassword !== ""}
+              error={passwordData.newPassword !== passwordData.confirmPassword && passwordData.confirmPassword !== ''}
               helperText={
-                passwordData.newPassword !== passwordData.confirmPassword && passwordData.confirmPassword !== ""
-                  ? "Les mots de passe ne correspondent pas"
-                  : ""
+                passwordData.newPassword !== passwordData.confirmPassword && passwordData.confirmPassword !== ''
+                  ? 'Les mots de passe ne correspondent pas'
+                  : ''
               }
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => handleClickShowPassword("confirm")} edge="end">
+                    <IconButton onClick={() => handleClickShowPassword('confirm')} edge="end">
                       {showPassword.confirm ? <VisibilityOff /> : <Visibility />}
                     </IconButton>
                   </InputAdornment>
@@ -673,16 +570,27 @@ const Profile = () => {
             variant="contained"
             onClick={handleChangePassword}
             disabled={
-              !passwordData.currentPassword ||
               !passwordData.newPassword ||
               !passwordData.confirmPassword ||
-              passwordData.newPassword !== passwordData.confirmPassword
+              passwordData.newPassword !== passwordData.confirmPassword ||
+              loading
             }
           >
             Confirmer
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
