@@ -98,10 +98,10 @@ namespace UserService.Migrations
                 columns: new[] { "Id", "Description", "Name" },
                 values: new object[,]
                 {
-                    { 1, "Permission de créer des utilisateurs", "CanCreateUsers" },
-                    { 2, "Permission de modifier des utilisateurs", "CanEditUsers" },
-                    { 3, "Permission de créer des projets", "CanCreateProject" },
-                    { 4, "Permission de modifier des projets", "CanEditProject" }
+                    { 1, "Permission de voir les utilisateurs", "CanViewUsers" },
+                    { 2, "Permission de créer des utilisateurs", "CanCreateUsers" },
+                    { 3, "Permission de mettre à jour les utilisateurs", "CanUpdateUsers" },
+                    { 4, "Permission de supprimer des utilisateurs", "CanDeleteUsers" }
                 });
 
             migrationBuilder.InsertData(

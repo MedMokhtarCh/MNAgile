@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using UserService.DTOs;
 using UserService.Services;
 
 namespace UserService.Controllers
@@ -54,14 +55,11 @@ namespace UserService.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(ex.Message); 
+                return BadRequest(ex.Message);
             }
         }
 
-        public class LoginRequest
-        {
-            public string Email { get; set; }
-            public string Password { get; set; }
-        }
+
+
     }
 }

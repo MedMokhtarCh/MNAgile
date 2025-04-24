@@ -24,12 +24,12 @@ namespace UserService.Data
                 new Role { Id = 4, Name = "User" }
             );
 
-            // Seed claims
+            // Seed claims (fixed duplicate Id)
             modelBuilder.Entity<Claim>().HasData(
-                new Claim { Id = 1, Name = "CanCreateUsers", Description = "Permission de créer des utilisateurs" },
-                new Claim { Id = 2, Name = "CanEditUsers", Description = "Permission de modifier des utilisateurs" },
-                new Claim { Id = 3, Name = "CanCreateProject", Description = "Permission de créer des projets" },
-                new Claim { Id = 4, Name = "CanEditProject", Description = "Permission de modifier des projets" }
+                new Claim { Id = 1, Name = "CanViewUsers", Description = "Permission de voir les utilisateurs" },
+                new Claim { Id = 2, Name = "CanCreateUsers", Description = "Permission de créer des utilisateurs" },
+                new Claim { Id = 3, Name = "CanUpdateUsers", Description = "Permission de mettre à jour les utilisateurs" },
+                new Claim { Id = 4, Name = "CanDeleteUsers", Description = "Permission de supprimer des utilisateurs" }
             );
 
             // Configure composite key for UserClaim

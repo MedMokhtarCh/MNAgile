@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { login, logout } from '../store/slices/authSlice';
@@ -9,6 +9,30 @@ export const AuthProvider = ({ children }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+  // Vérifier l'authentification au chargement initial
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('token');
+      const user = localStorage.getItem('currentUser');
+      
+      if (token && user) {
+        // Dispatch l'action de connexion avec les données stockées
+        const userData = JSON.parse(user);
+        dispatch({
+          type: 'auth/login/fulfilled',
+          payload: {
+            token,
+            user: userData
+          }
+        });
+      }
+      setIsInitialized(true);
+    };
+    
+    checkAuth();
+  }, [dispatch]);
 
   const handleLogin = async (userData) => {
     const response = await dispatch(login(userData));
@@ -42,7 +66,13 @@ export const AuthProvider = ({ children }) => {
     logout: handleLogout,
     hasRole,
     isAuthenticated,
+    isInitialized
   };
+
+  // Ne rendre les enfants que lorsque l'authentification a été vérifiée
+  if (!isInitialized) {
+    return <div>Chargement...</div>; // Ou un composant de chargement
+  }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

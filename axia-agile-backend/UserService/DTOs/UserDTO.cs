@@ -13,6 +13,7 @@
         public DateTime DateCreated { get; set; }
         public DateTime? LastLogin { get; set; }
         public int RoleId { get; set; }
-        public List<int> ClaimIds { get; set; } 
+        public List<int> ClaimIds { get; set; } = new List<int>();
+        public List<ClaimDTO> Claims { get; set; } = new List<ClaimDTO>();
     }
 }

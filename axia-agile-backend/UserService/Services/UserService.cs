@@ -1,11 +1,7 @@
 ﻿using UserService.Data;
 using UserService.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+
 
 namespace UserService.Services
 {
@@ -30,6 +26,12 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Vérifier si l'email existe déjà
+                if (await _context.Users.AnyAsync(u => u.Email == user.Email))
+                {
+                    throw new InvalidOperationException("Un compte avec cet email existe déjà.");
+                }
+
                 user.DateCreated = DateTime.UtcNow;
                 user.IsActive = true;
                 _context.Users.Add(user);
@@ -77,14 +79,26 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Mettez à jour l'utilisateur
+                // Validate email uniqueness
+                if (await _context.Users.AnyAsync(u => u.Email == user.Email && u.Id != user.Id))
+                {
+                    throw new InvalidOperationException("Un compte avec cet email existe déjà.");
+                }
+
+                // Validate claimIds
+                foreach (var claimId in claimIds)
+                {
+                    if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
+                    {
+                        throw new InvalidOperationException($"Claim ID {claimId} does not exist.");
+                    }
+                }
+
                 _context.Users.Update(user);
 
-                // Supprimez les anciens claims
                 var existingClaims = await _context.UserClaims.Where(uc => uc.UserId == user.Id).ToListAsync();
                 _context.UserClaims.RemoveRange(existingClaims);
 
-                // Ajoutez les nouveaux claims
                 foreach (var claimId in claimIds)
                 {
                     _context.UserClaims.Add(new UserClaim { UserId = user.Id, ClaimId = claimId });
@@ -93,7 +107,7 @@ namespace UserService.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"User {user.Email} updated successfully.");
+                _logger.LogInformation($"User {user.Email} updated successfully with claimIds: {string.Join(", ", claimIds)}");
                 return user;
             }
             catch (Exception ex)
@@ -124,8 +138,8 @@ namespace UserService.Services
                 _logger.LogError($"Error deleting user with ID {id}: {ex.Message}");
                 throw;
             }
-
         }
+
         public async Task<bool> UserExistsAsync(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email);

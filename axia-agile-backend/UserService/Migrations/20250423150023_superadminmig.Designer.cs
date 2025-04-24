@@ -12,8 +12,8 @@ using UserService.Data;
 namespace UserService.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250319162411_firstMigration")]
-    partial class firstMigration
+    [Migration("20250423150023_superadminmig")]
+    partial class superadminmig
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -49,26 +49,26 @@ namespace UserService.Migrations
                         new
                         {
                             Id = 1,
+                            Description = "Permission de voir les utilisateurs",
+                            Name = "CanViewUsers"
+                        },
+                        new
+                        {
+                            Id = 2,
                             Description = "Permission de créer des utilisateurs",
                             Name = "CanCreateUsers"
                         },
                         new
                         {
-                            Id = 2,
-                            Description = "Permission de modifier des utilisateurs",
-                            Name = "CanEditUsers"
-                        },
-                        new
-                        {
                             Id = 3,
-                            Description = "Permission de créer des projets",
-                            Name = "CanCreateProject"
+                            Description = "Permission de mettre à jour les utilisateurs",
+                            Name = "CanUpdateUsers"
                         },
                         new
                         {
                             Id = 4,
-                            Description = "Permission de modifier des projets",
-                            Name = "CanEditProject"
+                            Description = "Permission de supprimer des utilisateurs",
+                            Name = "CanDeleteUsers"
                         });
                 });
 

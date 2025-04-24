@@ -1,6 +1,7 @@
 ﻿using System.Net;
 using System.Text.Json;
 
+
 namespace UserService.Middleware
 {
     public class ExceptionMiddleware
@@ -30,12 +31,20 @@ namespace UserService.Middleware
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
             context.Response.ContentType = "application/json";
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+            if (exception is InvalidOperationException)
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            }
+            else
+            {
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+            }
 
             var response = new
             {
                 StatusCode = context.Response.StatusCode,
-                Message = "Une erreur interne s'est produite.",
+                Message = exception is InvalidOperationException ? exception.Message : "Une erreur interne s'est produite.",
                 DetailedMessage = exception.Message
             };
 

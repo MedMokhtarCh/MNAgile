@@ -1,4 +1,5 @@
-﻿using UserService.Models;
+﻿using Microsoft.EntityFrameworkCore;
+using UserService.Models;
 
 namespace UserService.Data
 {
@@ -8,44 +9,12 @@ namespace UserService.Data
         {
             try
             {
-                
-                if (!context.Roles.Any())
-                {
-                    Console.WriteLine("Initialisation des rôles...");
-                    context.Roles.AddRange(
-                        new Role { Id = 1, Name = "SuperAdmin" },
-                        new Role { Id = 2, Name = "Admin" },
-                        new Role { Id = 3, Name = "ChefProjet" },
-                        new Role { Id = 4, Name = "User" }
-                    );
-                    context.SaveChanges();
-                    Console.WriteLine("Rôles initialisés avec succès.");
-                }
-                else
-                {
-                    Console.WriteLine("Les rôles existent déjà dans la base de données.");
-                }
+                Console.WriteLine("Starting database seeding...");
 
-                
-                if (!context.Claims.Any())
-                {
-                    Console.WriteLine("Initialisation des claims...");
-                    context.Claims.AddRange(
-                        new Claim { Id = 1, Name = "CanViewUsers", Description = "Permission de voir les utilisateurs" },
-                        new Claim { Id = 2, Name = "CanCreateUsers", Description = "Permission de créer des utilisateurs" },
-                        new Claim { Id = 3, Name = "CanUpdateUsers", Description = "Permission de mettre à jour les utilisateurs" },
-                        new Claim { Id = 4, Name = "CanDeleteUsers", Description = "Permission de supprimer des utilisateurs" }
-                    );
-                    context.SaveChanges();
-                    Console.WriteLine("Claims initialisés avec succès.");
-                }
-                else
-                {
-                    Console.WriteLine("Les claims existent déjà dans la base de données.");
-                }
-
-                // Créer le SuperAdmin
+                // Seed SuperAdmin
                 SeedSuperAdmin(context);
+
+                Console.WriteLine("Database seeding completed successfully.");
             }
             catch (Exception ex)
             {
@@ -54,50 +23,75 @@ namespace UserService.Data
                 {
                     Console.WriteLine($"Exception interne: {ex.InnerException.Message}");
                 }
+                throw;
             }
         }
 
-        public static void SeedSuperAdmin(AppDbContext context)
+        private static void SeedSuperAdmin(AppDbContext context)
         {
-            var superAdminUser = context.Users.FirstOrDefault(u => u.RoleId == 1);
-
-            if (superAdminUser == null)
+            try
             {
-                Console.WriteLine("Création du SuperAdmin...");
+                Console.WriteLine("Vérification du SuperAdmin...");
 
-                var superAdmin = new User
+                // Ensure SuperAdmin role exists
+                var superAdminRole = context.Roles.FirstOrDefault(r => r.Id == 1);
+                if (superAdminRole == null)
                 {
-                    Email = "superadmin@gmail.com",
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword("superadmin123"),
-                    FirstName = "Super",
-                    LastName = "Admin",
-                    PhoneNumber = "1234567890",
-                    RoleId = 1,
-                    IsActive = true,
-                    DateCreated = DateTime.UtcNow
-                };
-
-                context.Users.Add(superAdmin);
-                context.SaveChanges();
-
-                Console.WriteLine($"SuperAdmin créé avec succès. ID: {superAdmin.Id}");
-
-             
-                var claims = context.Claims.ToList();
-                foreach (var claim in claims)
-                {
-                    context.UserClaims.Add(new UserClaim { UserId = superAdmin.Id, ClaimId = claim.Id });
+                    throw new InvalidOperationException("Le rôle SuperAdmin (Id = 1) n'existe pas. Assurez-vous que les rôles sont correctement initialisés via migrations.");
                 }
 
-                context.SaveChanges();
+                // Check if SuperAdmin user exists
+                var superAdminUser = context.Users.FirstOrDefault(u => u.RoleId == 1 && u.Email == "superadmin@gmail.com");
+                if (superAdminUser == null)
+                {
+                    Console.WriteLine("Création du SuperAdmin...");
+
+                    var superAdmin = new User
+                    {
+                        Email = "superadmin@gmail.com",
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("123"),
+                        FirstName = "Super",
+                        LastName = "Admin",
+                        PhoneNumber = "1234567890",
+                        RoleId = 1,
+                        IsActive = true,
+                        DateCreated = DateTime.UtcNow
+                    };
+
+                    context.Users.Add(superAdmin);
+                    context.SaveChanges();
+
+                    Console.WriteLine($"SuperAdmin créé avec succès. ID: {superAdmin.Id}");
+
+                    // Assign all claims to SuperAdmin
+                    var claims = context.Claims.ToList();
+                    if (!claims.Any())
+                    {
+                        Console.WriteLine("Aucun claim trouvé. Les claims doivent être initialisés via migrations.");
+                    }
+                    else
+                    {
+                        foreach (var claim in claims)
+                        {
+                            context.UserClaims.Add(new UserClaim { UserId = superAdmin.Id, ClaimId = claim.Id });
+                        }
+                        context.SaveChanges();
+                        Console.WriteLine("Tous les claims attribués au SuperAdmin avec succès.");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"Le SuperAdmin existe déjà avec ID: {superAdminUser.Id}");
+                    // Optionally update password (uncomment if needed)
+                    // superAdminUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("123");
+                    // context.SaveChanges();
+                }
             }
-            else
+            catch (DbUpdateException ex)
             {
-                Console.WriteLine($"Le SuperAdmin existe déjà avec ID: {superAdminUser.Id}");
-                //  reset the password if needed
-              //  superAdminUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("superadmin123");
-                // context.SaveChanges();
+                Console.WriteLine($"Erreur lors de la création du SuperAdmin: {ex.InnerException?.Message ?? ex.Message}");
+                throw;
             }
         }
     }
-    }
+}

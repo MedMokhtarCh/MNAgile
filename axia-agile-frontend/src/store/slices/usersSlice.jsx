@@ -108,7 +108,8 @@ export const updateUser = createAsyncThunk(
         return rejectWithValue('Utilisateur non trouvé');
       }
 
-      if (userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
+      // Validate email uniqueness if provided
+      if (userData.email && userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
           users.some(user => 
             user.email.toLowerCase() === userData.email.toLowerCase() && 
             user.id !== id
@@ -116,35 +117,63 @@ export const updateUser = createAsyncThunk(
         return rejectWithValue('Cet email est déjà utilisé par un autre utilisateur');
       }
 
-      const payload = {
-        Email: userData.email,
-        FirstName: userData.firstName,
-        LastName: userData.lastName,
-        PhoneNumber: userData.phoneNumber || null,
-        Entreprise: userData.roleId === 2 ? userData.entreprise : '',
-        RoleId: userData.roleId,
-        ClaimIds: userData.claimIds || [],
-        JobTitle: userData.roleId === 3 ? userData.jobTitle : 'Administrateur',
-      };
+      // Build payload with only provided fields, fallback to existing user data
+      const payload = {};
 
+      // Required fields
+      if (userData.email) payload.Email = userData.email;
+      else payload.Email = existingUser.email;
+
+      // Optional fields
+      if (userData.firstName !== undefined) payload.FirstName = userData.firstName;
+      else payload.FirstName = existingUser.firstName;
+
+      if (userData.lastName !== undefined) payload.LastName = userData.lastName;
+      else payload.LastName = existingUser.lastName;
+
+      if (userData.phoneNumber !== undefined) payload.PhoneNumber = userData.phoneNumber || null;
+      else payload.PhoneNumber = existingUser.phoneNumber;
+
+      if (userData.roleId !== undefined) payload.RoleId = userData.roleId;
+      else payload.RoleId = existingUser.roleId;
+
+      if (userData.claimIds !== undefined) payload.ClaimIds = userData.claimIds || [];
+      else payload.ClaimIds = existingUser.claimIds;
+
+      // Handle JobTitle for RoleId 3 or 4
+      const targetRoleId = userData.roleId !== undefined ? userData.roleId : existingUser.roleId;
+      if (userData.jobTitle !== undefined) {
+        payload.JobTitle = userData.jobTitle || 'Non défini';
+      } else {
+        payload.JobTitle = [3, 4].includes(targetRoleId) ? (existingUser.jobTitle || 'Non défini') : existingUser.jobTitle;
+      }
+
+      // Handle Entreprise for RoleId 2
+      if (userData.entreprise !== undefined) {
+        payload.Entreprise = targetRoleId === 2 ? (userData.entreprise || '') : '';
+      } else {
+        payload.Entreprise = targetRoleId === 2 ? (existingUser.entreprise || '') : existingUser.entreprise;
+      }
+
+      // Password if provided
       if (userData.password) {
         payload.Password = userData.password;
       }
 
+      console.log('Sending update payload:', payload);
       const response = await api.put(`/Users/${id}`, payload);
       console.log('Update successful:', response.data);
       
       return normalizeUser(response.data);
     } catch (error) {
-      console.error('Update user error:', error);
+      console.error('Update user error:', error.response?.data);
       return rejectWithValue(
         error.response?.data?.message || 
         error.message || 
         'Échec de la mise à jour'
       );
     }
-  }
-);
+  });
 
 // Delete a user
 export const deleteUser = createAsyncThunk('users/deleteUser', async (id, { rejectWithValue }) => {
