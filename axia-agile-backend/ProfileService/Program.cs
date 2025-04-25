@@ -30,7 +30,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Configure HttpClient for UserService
 builder.Services.AddHttpClient<UserServiceClient>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5203");
+    client.BaseAddress = new Uri("https://localhost:7151");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator

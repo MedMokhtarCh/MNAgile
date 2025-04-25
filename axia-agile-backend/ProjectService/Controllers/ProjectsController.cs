@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using ProjectService.Models;
 using ProjectService.Services;
 using System.Collections.Generic;
@@ -8,6 +9,7 @@ namespace ProjectService.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class ProjectsController : ControllerBase
     {
         private readonly Services.ProjectService _projectService;
@@ -17,16 +19,16 @@ namespace ProjectService.Controllers
             _projectService = projectService;
         }
 
-        // Récupérer tous les projets
         [HttpGet]
+        [Authorize(Policy = "CanViewProjects")]
         public async Task<ActionResult<List<Project>>> GetAllProjects()
         {
             var projects = await _projectService.GetAllProjectsAsync();
             return Ok(projects);
         }
 
-        // Récupérer un projet par son ID
         [HttpGet("{id}")]
+        [Authorize(Policy = "CanViewProjects")]
         public async Task<ActionResult<Project>> GetProjectById(int id)
         {
             var project = await _projectService.GetProjectByIdAsync(id);
@@ -37,8 +39,8 @@ namespace ProjectService.Controllers
             return Ok(project);
         }
 
-        // Créer un nouveau projet
         [HttpPost]
+        [Authorize(Policy = "CanAddProjects")]
         public async Task<ActionResult<Project>> CreateProject([FromBody] Project project)
         {
             if (project == null)
@@ -57,8 +59,8 @@ namespace ProjectService.Controllers
             }
         }
 
-        // Mettre à jour un projet existant
         [HttpPut("{id}")]
+        [Authorize(Policy = "CanEditProjects")]
         public async Task<ActionResult<Project>> UpdateProject(int id, [FromBody] Project project)
         {
             if (id != project.Id)
@@ -77,8 +79,8 @@ namespace ProjectService.Controllers
             }
         }
 
-        // Supprimer un projet par son ID
         [HttpDelete("{id}")]
+        [Authorize(Policy = "CanDeleteProjects")]
         public async Task<ActionResult> DeleteProject(int id)
         {
             try

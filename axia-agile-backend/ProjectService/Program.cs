@@ -1,17 +1,34 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ProjectService.Data;
 using ProjectService.Services;
 using Swashbuckle.AspNetCore.SwaggerGen;
+using System.Text;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configuration du DbContext
+// Add CORS policy
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173") // Frontend URL
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// Configure DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Configuration du HttpClient pour UserService
+// Configure HttpClient for UserService
 builder.Services.AddHttpClient<UserServiceClient>(client =>
 {
     client.BaseAddress = new Uri("http://localhost:5203");
@@ -20,11 +37,48 @@ builder.Services.AddHttpClient<UserServiceClient>(client =>
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 });
 
-// Ajout des services
+// Add services
 builder.Services.AddScoped<ProjectService.Services.ProjectService>();
 builder.Services.AddControllers();
 
-// Configuration de Swagger
+// Configure JWT authentication
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = true;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+});
+
+// Configure authorization policies
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("CanViewProjects", policy => policy.RequireClaim("CanViewProjects"));
+    options.AddPolicy("CanAddProjects", policy => policy.RequireClaim("CanAddProjects"));
+    options.AddPolicy("CanEditProjects", policy => policy.RequireClaim("CanEditProjects"));
+    options.AddPolicy("CanDeleteProjects", policy => policy.RequireClaim("CanDeleteProjects"));
+
+    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
+// Configure Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -36,9 +90,35 @@ builder.Services.AddSwaggerGen(c =>
     });
     c.CustomOperationIds(e => $"{e.ActionDescriptor.RouteValues["controller"]}_{e.HttpMethod}");
     c.AddServer(new OpenApiServer { Url = "http://localhost:5273" });
+
+    // Add JWT Authentication
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
+    });
 });
 
-// Configuration du logging
+// Configure logging
 builder.Services.AddLogging(loggingBuilder =>
 {
     loggingBuilder.AddConsole();
@@ -47,27 +127,20 @@ builder.Services.AddLogging(loggingBuilder =>
 
 var app = builder.Build();
 
-// Configuration de Swagger UI avec middleware pour forcer la version 3.0.3
+// Configure Swagger UI
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger(c =>
-    {
-        c.SerializeAsV2 = false; // Assurer OpenAPI 3.0
-        c.PreSerializeFilters.Add((swaggerDoc, httpReq) =>
-        {
-            var originalJson = JsonSerializer.Serialize(swaggerDoc);
-            var modifiedJson = originalJson.Replace("\"openapi\": \"3.0.4\"", "\"openapi\": \"3.0.3\"")
-                                          .Replace("\"openapi\": \"3.0.0\"", "\"openapi\": \"3.0.3\"");
-            swaggerDoc = JsonSerializer.Deserialize<OpenApiDocument>(modifiedJson);
-        });
-    });
+    app.UseSwagger();
+
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "ProjectService v1");
     });
 }
 
+app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

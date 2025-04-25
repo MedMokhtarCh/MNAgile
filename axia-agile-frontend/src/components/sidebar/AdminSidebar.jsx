@@ -20,7 +20,7 @@ const AdminSidebar = ({ collapsed }) => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
 
-  // Get currentUser from Redux store
+  // Get currentUser and isAuthenticated from Redux store
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
   // Map backend roleId to frontend role string
@@ -39,8 +39,8 @@ const AdminSidebar = ({ collapsed }) => {
     navigate("/login"); // Use lowercase /login
   };
 
-  // If not authenticated, don't render the sidebar
-  if (!isAuthenticated || !role) {
+  // If not authenticated, no currentUser, or no valid role, don't render the sidebar
+  if (!isAuthenticated || !currentUser || !["superadmin", "admin"].includes(role)) {
     return null;
   }
 
@@ -143,7 +143,9 @@ const AdminSidebar = ({ collapsed }) => {
             transform: "translateX(-50%)",
           }}
         >
-          <FaSignOutAlt />
+          <Tooltip title="Déconnexion" placement="right">
+            <FaSignOutAlt />
+          </Tooltip>
         </IconButton>
       </div>
     </Drawer>

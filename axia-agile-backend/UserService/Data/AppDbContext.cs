@@ -29,7 +29,11 @@ namespace UserService.Data
                 new Claim { Id = 1, Name = "CanViewUsers", Description = "Permission de voir les utilisateurs" },
                 new Claim { Id = 2, Name = "CanCreateUsers", Description = "Permission de créer des utilisateurs" },
                 new Claim { Id = 3, Name = "CanUpdateUsers", Description = "Permission de mettre à jour les utilisateurs" },
-                new Claim { Id = 4, Name = "CanDeleteUsers", Description = "Permission de supprimer des utilisateurs" }
+                new Claim { Id = 4, Name = "CanDeleteUsers", Description = "Permission de supprimer des utilisateurs" },
+                new Claim { Id = 5, Name = "CanViewProjects", Description = "Permission de voir les projets" },
+                new Claim { Id = 6, Name = "CanAddProjects", Description = "Permission d'ajouter des projets" },
+                new Claim { Id = 7, Name = "CanEditProjects", Description = "Permission de modifier des projets" },
+               new Claim { Id = 8, Name = "CanDeleteProjects", Description = "Permission de supprimer des projets" }
             );
 
             // Configure composite key for UserClaim

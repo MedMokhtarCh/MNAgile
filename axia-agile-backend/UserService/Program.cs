@@ -15,10 +15,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Frontend URL
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+        policy.WithOrigins(
+                "http://localhost:5173", // Frontend
+                "http://localhost:5203", // UserService HTTP
+                "https://localhost:7151"  // UserService HTTPS
+            )
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+           .AllowCredentials();
     });
 });
 
@@ -67,6 +71,10 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanCreateUsers", policy => policy.RequireClaim("CanCreateUsers"));
     options.AddPolicy("CanUpdateUsers", policy => policy.RequireClaim("CanUpdateUsers"));
     options.AddPolicy("CanDeleteUsers", policy => policy.RequireClaim("CanDeleteUsers"));
+    options.AddPolicy("CanViewProjects", policy => policy.RequireClaim("CanViewProjects"));
+    options.AddPolicy("CanCreateProjects", policy => policy.RequireClaim("CanCreateProjects"));
+    options.AddPolicy("CanUpdateProjects", policy => policy.RequireClaim("CanUpdateProjects"));
+    options.AddPolicy("CanDeleteProjects", policy => policy.RequireClaim("CanDeleteProjects"));
 
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
@@ -90,7 +98,6 @@ builder.Services.AddSwaggerGen(c =>
         BearerFormat = "JWT"
     });
 
-    //  security requirement  to  endpoints
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -105,6 +112,18 @@ builder.Services.AddSwaggerGen(c =>
             new string[] {}
         }
     });
+
+    // Add multiple server URLs
+    c.AddServer(new OpenApiServer { Url = "https://localhost:7151" });
+    c.AddServer(new OpenApiServer { Url = "http://localhost:5203" });
+});
+
+// Configure logging
+builder.Services.AddLogging(loggingBuilder =>
+{
+    loggingBuilder.AddConsole();
+    loggingBuilder.AddDebug();
+    loggingBuilder.SetMinimumLevel(LogLevel.Debug); // Enable debug logs for troubleshooting
 });
 
 var app = builder.Build();
@@ -138,7 +157,10 @@ using (var scope = app.Services.CreateScope())
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserService API v1");
+    });
 }
 
 app.UseHttpsRedirection();
