@@ -10,13 +10,13 @@ const UserRoleSection = ({ title, users, getUserDisplayName, getAvatarColor, gen
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
         {Array.isArray(users) && users.length > 0 ? (
           users.map((email) => {
-            // Safeguard against invalid or missing email
+     
             if (!email || typeof email !== 'string') {
               return null;
             }
 
-            const displayName = getUserDisplayName(email) || email.split('@')[0]; // Fallback to email prefix
-            const initials = generateInitials(displayName) || '??'; // Fallback for initials
+            const displayName = getUserDisplayName(email) || email.split('@')[0]; 
+            const initials = generateInitials(displayName) || '??'; 
 
             return (
               <Chip
@@ -46,7 +46,7 @@ const UserRoleSection = ({ title, users, getUserDisplayName, getAvatarColor, gen
                 }}
               />
             );
-          }).filter(Boolean) // Remove null entries
+          }).filter(Boolean) 
         ) : (
           <Typography variant="body2" color="textSecondary">
             Aucun {title.toLowerCase()} assigné

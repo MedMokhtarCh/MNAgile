@@ -33,6 +33,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
 import InputUserAssignment from '../common/InputUserAssignment';
 
+
 // Styled Components
 const StepperContainer = styled(Box)(({ theme }) => ({
   margin: '24px 0',
@@ -120,6 +121,8 @@ const ProjectFormStepper = ({
   registeredUsers,
   projectManagers,
   setProjectManagers,
+  observers, // Added observers prop
+  setObservers, // Corrected to setObservers
   productOwners,
   setProductOwners,
   scrumMasters,
@@ -134,6 +137,15 @@ const ProjectFormStepper = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
+  // Helper function to get user display name
+  const getUserDisplayName = (user) => {
+    // Prioritize nom and prenom, fallback to name, then email
+    if (user.nom && user.prenom) {
+      return `${user.nom} ${user.prenom}`;
+    }
+    return user.name || user.email || 'Utilisateur inconnu';
+  };
+
   // Fonction pour rendre des chips d'utilisateurs à partir d'un tableau d'objets utilisateur
   const renderUserChips = (users) => (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
@@ -142,10 +154,11 @@ const ProjectFormStepper = ({
           <Chip
             key={user.email || user.id}
             avatar={
-              <Avatar sx={{ bgcolor: getAvatarColor(user.name || user.nom + ' ' + user.prenom) }}>
-                {generateInitials(user.name || user.nom + ' ' + user.prenom)}
+              <Avatar sx={{ bgcolor: getAvatarColor(getUserDisplayName(user)) }}>
+                {generateInitials(getUserDisplayName(user))}
               </Avatar>
-}            label={user.name || user.nom + ' ' + user.prenom}
+            }
+            label={getUserDisplayName(user)}
             size="small"
             sx={{ borderRadius: 16 }}
           />
@@ -247,6 +260,7 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les chefs de projet"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName} // Added to ensure consistent name display
             />
             <InputUserAssignment
               options={registeredUsers}
@@ -256,6 +270,7 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les product owners"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName}
             />
             <InputUserAssignment
               options={registeredUsers}
@@ -265,6 +280,7 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les scrum masters"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName}
             />
             <InputUserAssignment
               options={registeredUsers}
@@ -274,6 +290,7 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les développeurs"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName}
             />
             <InputUserAssignment
               options={registeredUsers}
@@ -283,6 +300,17 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les testeurs"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName}
+            />
+            <InputUserAssignment
+              options={registeredUsers}
+              value={observers}
+              onChange={(event, value) => setObservers(value)} // Corrected to setObservers
+              label="Observateurs"
+              placeholder="Sélectionner les observateurs"
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+              getOptionLabel={getUserDisplayName}
             />
           </FormSection>
         );
@@ -347,11 +375,17 @@ const ProjectFormStepper = ({
                 </Typography>
                 {renderUserChips(developers)}
               </Box>
-              <Box>
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
                   Testeurs:
                 </Typography>
                 {renderUserChips(testers)}
+              </Box>
+              <Box>
+                <Typography variant="body2" fontWeight="medium" sx={{ mb: 1 }}>
+                  Observateurs:
+                </Typography>
+                {renderUserChips(observers)}
               </Box>
             </Paper>
           </FormSection>

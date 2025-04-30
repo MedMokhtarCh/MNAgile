@@ -10,8 +10,19 @@ const InputUserAssignment = ({
   getAvatarColor,
   generateInitials,
 }) => {
-  const safeOptions = options || [];
-  const safeValue = value || [];
+  const safeOptions = Array.isArray(options) ? options : [];
+  const safeValue = Array.isArray(value) ? value : [];
+
+  // Helper function to get full name
+  const getFullName = (option) => {
+    if (option.firstName && option.lastName) {
+      return `${option.firstName} ${option.lastName}`;
+    }
+    if (option.nom && option.prenom) {
+      return `${option.nom} ${option.prenom}`;
+    }
+    return option.email || 'Utilisateur inconnu';
+  };
 
   return (
     <Autocomplete
@@ -19,13 +30,13 @@ const InputUserAssignment = ({
       options={safeOptions}
       value={safeValue}
       onChange={onChange}
-      getOptionLabel={(option) => `${option.firstName} ${option.lastName} (${option.email})`}
-      isOptionEqualToValue={(option, val) => option.email === val.email}
+      getOptionLabel={(option) => `${getFullName(option)} (${option.email})`}
+      isOptionEqualToValue={(option, val) => option.email === (val.email || val)}
       filterOptions={(options, params) => {
         const input = params.inputValue.toLowerCase();
         return options.filter((option) => {
-          const fullName = `${option.firstName} ${option.lastName}`.toLowerCase();
-          const email = option.email.toLowerCase();
+          const fullName = getFullName(option).toLowerCase();
+          const email = option.email?.toLowerCase() || '';
           return fullName.includes(input) || email.includes(input);
         });
       }}
@@ -40,13 +51,13 @@ const InputUserAssignment = ({
       renderTags={(tagValue, getTagProps) =>
         tagValue.map((option, index) => (
           <Chip
-            key={option.email}
+            key={option.email || index}
             avatar={
-              <Avatar sx={{ bgcolor: getAvatarColor(`${option.firstName} ${option.lastName}`) }}>
-                {generateInitials(`${option.firstName} ${option.lastName}`)}
+              <Avatar sx={{ bgcolor: getAvatarColor(getFullName(option)) }}>
+                {generateInitials(getFullName(option))}
               </Avatar>
             }
-            label={`${option.firstName} ${option.lastName}`}
+            label={getFullName(option)}
             {...getTagProps({ index })}
             sx={{ borderRadius: 16 }}
           />
@@ -56,16 +67,16 @@ const InputUserAssignment = ({
         <li {...props}>
           <Avatar
             sx={{
-              bgcolor: getAvatarColor(`${option.firstName} ${option.lastName}`),
+              bgcolor: getAvatarColor(getFullName(option)),
               width: 24,
               height: 24,
               fontSize: 12,
               marginRight: 1,
             }}
           >
-            {generateInitials(`${option.firstName} ${option.lastName}`)}
+            {generateInitials(getFullName(option))}
           </Avatar>
-          {`${option.firstName} ${option.lastName} (${option.email})`}
+          {`${getFullName(option)} (${option.email})`}
         </li>
       )}
       sx={{ mb: 2 }}

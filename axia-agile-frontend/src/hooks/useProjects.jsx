@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react'; 
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useUsers } from './useUsers';
 import { useNotification } from './useNotifications';
+
 import { useAuth } from '../contexts/AuthContext';
 import { validateProject } from '../utils/validators';
 import {
@@ -12,7 +13,6 @@ import {
   deleteProject,
   clearError,
 } from '../store/slices/projectsSlice';
-import { fetchCurrentUser } from '../store/slices/authSlice';
 
 export const useProject = () => {
   const navigate = useNavigate();
@@ -22,7 +22,6 @@ export const useProject = () => {
   const { currentUser, isAuthenticated, logout, hasRole } = useAuth();
 
   const { projects, status, error } = useSelector((state) => state.projects);
-  const authState = useSelector((state) => state.auth);
 
   const [projectForm, setProjectForm] = useState({
     id: '',
@@ -47,59 +46,39 @@ export const useProject = () => {
   const [scrumMasters, setScrumMasters] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [testers, setTesters] = useState([]);
+  const [observers, setObservers] = useState([]); 
   const [selectedProject, setSelectedProject] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
 
   const steps = ['Informations Projet', 'Équipe Projet', 'Confirmation'];
 
-  // Validate session on mount
   useEffect(() => {
-    if (!authState.isAuthenticated && !authState.loading) {
-      dispatch(fetchCurrentUser()).catch((err) => {
-        if (err.status === 401) {
-          logout();
-          navigate('/login', { replace: true });
-        }
-      });
-    }
-  }, [dispatch, navigate, logout, authState.isAuthenticated, authState.loading]);
-
-  // Fetch projects after session validation
-  useEffect(() => {
-    if (authState.isAuthenticated && currentUser && !authState.loading) {
-      dispatch(fetchProjects()).catch((err) => {
-        if (err.status === 401) {
-          logout();
-          navigate('/login', { replace: true });
-        }
-      });
-    } else if (!authState.loading && !authState.isAuthenticated) {
+    if (!isAuthenticated || !currentUser) {
       navigate('/login', { replace: true });
+      return;
     }
-  }, [
-    navigate,
-    dispatch,
-    authState.isAuthenticated,
-    currentUser,
-    logout,
-    authState.loading,
-  ]);
 
-  // Handle errors
+    dispatch(fetchProjects()).catch((err) => {
+      if (err.status === 401) {
+        logout();
+        navigate('/login', { replace: true });
+      }
+    });
+  }, [navigate, dispatch, isAuthenticated, currentUser, logout]);
+
   useEffect(() => {
     if (error) {
-      let message = 'Échec de l\'opération';
       if (typeof error === 'object' && error !== null) {
-        message =
+        const message =
           error.title ||
           error.message ||
           error.detail ||
           (error.errors ? JSON.stringify(error.errors) : null) ||
           'Une erreur est survenue lors de l\'opération';
-      } else if (typeof error === 'string') {
-        message = error;
+        setFormError(message);
+      } else {
+        setFormError(error || 'Échec de l\'opération');
       }
-      setFormError(message);
 
       if (error?.status === 401) {
         logout();
@@ -132,7 +111,7 @@ export const useProject = () => {
     });
 
     return filteredProjects;
-  }, [projects, searchQuery | dateFilter, sortOrder]);
+  }, [projects, searchQuery, dateFilter, sortOrder]);
 
   const navigateToProject = useCallback(
     (projectId) => {
@@ -171,6 +150,7 @@ export const useProject = () => {
         setScrumMasters(getUsersByEmails(project.scrumMasters));
         setDevelopers(getUsersByEmails(project.users));
         setTesters(getUsersByEmails(project.testers));
+        setObservers(getUsersByEmails(project.observers)); 
       } else {
         setProjectForm({
           id: '',
@@ -185,6 +165,7 @@ export const useProject = () => {
         setScrumMasters([]);
         setDevelopers([]);
         setTesters([]);
+        setObservers([]); // Initialize observers
       }
 
       setModalOpen(true);
@@ -211,6 +192,7 @@ export const useProject = () => {
     setScrumMasters([]);
     setDevelopers([]);
     setTesters([]);
+    setObservers([]); 
     dispatch(clearError());
   }, [dispatch]);
 
@@ -317,6 +299,7 @@ export const useProject = () => {
       notifyUsersByRole(projectData.scrumMasters || [], 'scrum master');
       notifyUsersByRole(projectData.developers || [], 'développeur');
       notifyUsersByRole(projectData.testers || [], 'testeur');
+      notifyUsersByRole(projectData.observers || [], 'observateur'); 
     },
     [createNotification, currentUser]
   );
@@ -328,6 +311,7 @@ export const useProject = () => {
       scrumMasters,
       developers,
       testers,
+      observers,
     };
 
     const errors = validateProject(projectForm, team, isEditing);
@@ -353,7 +337,10 @@ export const useProject = () => {
       scrumMaster: scrumMasters[0]?.email || '',
       developers: developers.map((dev) => dev.email),
       testers: testers.map((tester) => tester.email),
+      observers: observers.map((observer) => observer.email), 
     };
+
+    console.log('Saving Project Data:', projectData);
 
     try {
       if (isEditing) {
@@ -406,6 +393,7 @@ export const useProject = () => {
     scrumMasters,
     developers,
     testers,
+    observers,
     isEditing,
     projects,
     currentUser,
@@ -460,6 +448,8 @@ export const useProject = () => {
     setDevelopers,
     testers,
     setTesters,
+    observers, 
+    setObservers, 
     selectedProject,
     menuAnchorEl,
     steps,

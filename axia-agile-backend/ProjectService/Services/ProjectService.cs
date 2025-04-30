@@ -1,7 +1,7 @@
-﻿
-using Microsoft.EntityFrameworkCore;
-using global::ProjectService.Models;
-using global::ProjectService.Data;
+﻿using Microsoft.EntityFrameworkCore;
+using ProjectService.Data;
+using ProjectService.DTOs;
+using ProjectService.Models;
 
 namespace ProjectService.Services
 {
@@ -16,72 +16,144 @@ namespace ProjectService.Services
             _userServiceClient = userServiceClient;
         }
 
-        // Récupérer tous les projets
-        public async Task<List<Project>> GetAllProjectsAsync()
+        public async Task<List<ProjectDto>> GetAllProjectsAsync()
         {
-            return await _context.Projects.ToListAsync();
+            var projects = await _context.Projects.ToListAsync();
+            return projects.Select(p => MapToDto(p)).ToList();
         }
 
-        // Récupérer un projet par son ID
-        public async Task<Project> GetProjectByIdAsync(int id)
+        public async Task<ProjectDto> GetProjectByIdAsync(int id)
         {
-            return await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
+            return project != null ? MapToDto(project) : null;
         }
 
-        // Créer un nouveau projet
-        public async Task<Project> CreateProjectAsync(Project project)
+        public async Task<ProjectDto> CreateProjectAsync(CreateProjectDto createDto)
         {
-            // Vérifier si l'utilisateur qui crée le projet existe
-            if (!await _userServiceClient.UserExistsAsync(project.CreatedBy))
-            {
+            if (!await _userServiceClient.UserExistsAsync(createDto.CreatedBy))
                 throw new Exception("L'utilisateur qui crée le projet n'existe pas.");
-            }
 
-            
-            if (!await _userServiceClient.UserExistsAsync(project.ProductOwner))
-            {
-                throw new Exception("Le Product Owner n'existe pas.");
-            }
+            foreach (var pm in createDto.ProjectManagers)
+                if (!await _userServiceClient.UserExistsAsync(pm))
+                    throw new Exception($"Le gestionnaire de projet {pm} n'existe pas.");
 
-            
-            if (!await _userServiceClient.UserExistsAsync(project.ScrumMaster))
-            {
-                throw new Exception("Le Scrum Master n'existe pas.");
-            }
+            foreach (var po in createDto.ProductOwners)
+                if (!await _userServiceClient.UserExistsAsync(po))
+                    throw new Exception($"Le Product Owner {po} n'existe pas.");
 
-           
-            foreach (var developer in project.Developers)
-            {
-                if (!await _userServiceClient.UserExistsAsync(developer))
-                {
-                    throw new Exception($"Le développeur {developer} n'existe pas.");
-                }
-            }
+            foreach (var sm in createDto.ScrumMasters)
+                if (!await _userServiceClient.UserExistsAsync(sm))
+                    throw new Exception($"Le Scrum Master {sm} n'existe pas.");
 
-            
-            foreach (var tester in project.Testers)
-            {
+            foreach (var dev in createDto.Developers)
+                if (!await _userServiceClient.UserExistsAsync(dev))
+                    throw new Exception($"Le développeur {dev} n'existe pas.");
+
+            foreach (var tester in createDto.Testers)
                 if (!await _userServiceClient.UserExistsAsync(tester))
-                {
                     throw new Exception($"Le testeur {tester} n'existe pas.");
-                }
-            }
 
-            project.CreatedAt = DateTime.UtcNow;
+            foreach (var observer in createDto.Observers)
+                if (!await _userServiceClient.UserExistsAsync(observer))
+                    throw new Exception($"L'observateur {observer} n'existe pas.");
+
+            var project = new Project
+            {
+                Title = createDto.Title,
+                Description = createDto.Description,
+                StartDate = createDto.StartDate,
+                EndDate = createDto.EndDate,
+                Methodology = createDto.Methodology,
+                CreatedBy = createDto.CreatedBy,
+                ProjectManagers = createDto.ProjectManagers,
+                ProductOwners = createDto.ProductOwners,
+                ScrumMasters = createDto.ScrumMasters,
+                Developers = createDto.Developers,
+                Testers = createDto.Testers,
+                Observers = createDto.Observers,
+                CreatedAt = DateTime.UtcNow
+            };
+
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
-            return project;
+            return MapToDto(project);
         }
 
-        // Mettre à jour un projet existant
-        public async Task<Project> UpdateProjectAsync(Project project)
+        public async Task<ProjectDto> UpdateProjectAsync(UpdateProjectDto updateDto)
         {
+            var project = await _context.Projects.FindAsync(updateDto.Id);
+            if (project == null)
+                throw new Exception("Projet non trouvé.");
+
+            // Update only provided fields
+            if (updateDto.Title != null)
+                project.Title = updateDto.Title;
+
+            if (updateDto.Description != null)
+                project.Description = updateDto.Description;
+
+            if (updateDto.StartDate.HasValue)
+                project.StartDate = updateDto.StartDate.Value;
+
+            if (updateDto.EndDate.HasValue)
+                project.EndDate = updateDto.EndDate.Value;
+
+            if (updateDto.Methodology != null)
+                project.Methodology = updateDto.Methodology;
+
+            if (updateDto.ProjectManagers != null)
+            {
+                foreach (var pm in updateDto.ProjectManagers)
+                    if (!await _userServiceClient.UserExistsAsync(pm))
+                        throw new Exception($"Le gestionnaire de projet {pm} n'existe pas.");
+                project.ProjectManagers = updateDto.ProjectManagers;
+            }
+
+            if (updateDto.ProductOwners != null)
+            {
+                foreach (var po in updateDto.ProductOwners)
+                    if (!await _userServiceClient.UserExistsAsync(po))
+                        throw new Exception($"Le Product Owner {po} n'existe pas.");
+                project.ProductOwners = updateDto.ProductOwners;
+            }
+
+            if (updateDto.ScrumMasters != null)
+            {
+                foreach (var sm in updateDto.ScrumMasters)
+                    if (!await _userServiceClient.UserExistsAsync(sm))
+                        throw new Exception($"Le Scrum Master {sm} n'existe pas.");
+                project.ScrumMasters = updateDto.ScrumMasters;
+            }
+
+            if (updateDto.Developers != null)
+            {
+                foreach (var dev in updateDto.Developers)
+                    if (!await _userServiceClient.UserExistsAsync(dev))
+                        throw new Exception($"Le développeur {dev} n'existe pas.");
+                project.Developers = updateDto.Developers;
+            }
+
+            if (updateDto.Testers != null)
+            {
+                foreach (var tester in updateDto.Testers)
+                    if (!await _userServiceClient.UserExistsAsync(tester))
+                        throw new Exception($"Le testeur {tester} n'existe pas.");
+                project.Testers = updateDto.Testers;
+            }
+
+            if (updateDto.Observers != null)
+            {
+                foreach (var observer in updateDto.Observers)
+                    if (!await _userServiceClient.UserExistsAsync(observer))
+                        throw new Exception($"L'observateur {observer} n'existe pas.");
+                project.Observers = updateDto.Observers;
+            }
+
             _context.Projects.Update(project);
             await _context.SaveChangesAsync();
-            return project;
+            return MapToDto(project);
         }
 
-        // Supprimer un projet par son ID
         public async Task DeleteProjectAsync(int id)
         {
             var project = await _context.Projects.FindAsync(id);
@@ -90,6 +162,27 @@ namespace ProjectService.Services
                 _context.Projects.Remove(project);
                 await _context.SaveChangesAsync();
             }
+        }
+
+        private ProjectDto MapToDto(Project project)
+        {
+            return new ProjectDto
+            {
+                Id = project.Id,
+                Title = project.Title,
+                Description = project.Description,
+                CreatedAt = project.CreatedAt,
+                StartDate = project.StartDate,
+                EndDate = project.EndDate,
+                Methodology = project.Methodology,
+                CreatedBy = project.CreatedBy,
+                ProjectManagers = project.ProjectManagers,
+                ProductOwners = project.ProductOwners,
+                ScrumMasters = project.ScrumMasters,
+                Developers = project.Developers,
+                Testers = project.Testers,
+                Observers = project.Observers
+            };
         }
     }
 }

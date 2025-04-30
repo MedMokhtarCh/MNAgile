@@ -115,7 +115,7 @@ const ProjectOverview = () => {
                   overflowWrap: 'break-word',
                 }}
               >
-                {currentProject.description}
+                {currentProject.description || 'Aucune description disponible.'}
               </Typography>
             </Box>
 
@@ -163,7 +163,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Chefs de projet"
-              users={currentProject.projectManagers}
+              users={currentProject.projectManagers || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -174,34 +174,51 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Product Owners"
-              users={currentProject.productOwners}
+              users={currentProject.productOwners || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
+
+            <Divider sx={{ my: 2 }} />
 
             <UserRoleSection
               title="Scrum Masters"
-              users={currentProject.scrumMasters}
+              users={currentProject.scrumMasters || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
+
+            <Divider sx={{ my: 2 }} />
 
             <UserRoleSection
               title="Développeurs"
-              users={currentProject.users}
+              users={currentProject.users || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />
 
+            <Divider sx={{ my: 2 }} />
+
             <UserRoleSection
               title="Testeurs"
-              users={currentProject.testers}
+              users={currentProject.testers || []}
+              getUserDisplayName={getUserDisplayName}
+              getAvatarName={getAvatarName}
+              getAvatarColor={getAvatarColor}
+              generateInitials={generateInitials}
+            />
+
+            <Divider sx={{ my: 2 }} />
+
+            <UserRoleSection
+              title="Observateurs"
+              users={currentProject.observers || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}

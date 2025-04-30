@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Reflection.Emit;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using ProjectService.Models;
 
 namespace ProjectService.Data
@@ -14,16 +12,44 @@ namespace ProjectService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Configuration pour stocker les listes d'emails en tant que JSON
+            // Configuration pour stocker les listes en tant que JSON
+            modelBuilder.Entity<Project>()
+                .Property(p => p.ProjectManagers)
+                .HasConversion(
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                );
+
+            modelBuilder.Entity<Project>()
+                .Property(p => p.ProductOwners)
+                .HasConversion(
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                );
+
+            modelBuilder.Entity<Project>()
+                .Property(p => p.ScrumMasters)
+                .HasConversion(
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                );
+
             modelBuilder.Entity<Project>()
                 .Property(p => p.Developers)
                 .HasConversion(
-                    v => string.Join(',', v), // Convertir la liste en chaîne
-                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList() // Convertir la chaîne en liste
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
                 );
 
             modelBuilder.Entity<Project>()
                 .Property(p => p.Testers)
+                .HasConversion(
+                    v => string.Join(',', v),
+                    v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()
+                );
+
+            modelBuilder.Entity<Project>()
+                .Property(p => p.Observers)
                 .HasConversion(
                     v => string.Join(',', v),
                     v => v.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList()

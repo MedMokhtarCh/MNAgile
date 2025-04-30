@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ProjectService.Models;
+using ProjectService.DTOs;
 using ProjectService.Services;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -21,7 +21,7 @@ namespace ProjectService.Controllers
 
         [HttpGet]
         [Authorize(Policy = "CanViewProjects")]
-        public async Task<ActionResult<List<Project>>> GetAllProjects()
+        public async Task<ActionResult<List<ProjectDto>>> GetAllProjects()
         {
             var projects = await _projectService.GetAllProjectsAsync();
             return Ok(projects);
@@ -29,7 +29,7 @@ namespace ProjectService.Controllers
 
         [HttpGet("{id}")]
         [Authorize(Policy = "CanViewProjects")]
-        public async Task<ActionResult<Project>> GetProjectById(int id)
+        public async Task<ActionResult<ProjectDto>> GetProjectById(int id)
         {
             var project = await _projectService.GetProjectByIdAsync(id);
             if (project == null)
@@ -41,16 +41,16 @@ namespace ProjectService.Controllers
 
         [HttpPost]
         [Authorize(Policy = "CanAddProjects")]
-        public async Task<ActionResult<Project>> CreateProject([FromBody] Project project)
+        public async Task<ActionResult<ProjectDto>> CreateProject([FromBody] CreateProjectDto createDto)
         {
-            if (project == null)
+            if (createDto == null)
             {
                 return BadRequest("Les données du projet sont requises.");
             }
 
             try
             {
-                var createdProject = await _projectService.CreateProjectAsync(project);
+                var createdProject = await _projectService.CreateProjectAsync(createDto);
                 return CreatedAtAction(nameof(GetProjectById), new { id = createdProject.Id }, createdProject);
             }
             catch (Exception ex)
@@ -61,16 +61,16 @@ namespace ProjectService.Controllers
 
         [HttpPut("{id}")]
         [Authorize(Policy = "CanEditProjects")]
-        public async Task<ActionResult<Project>> UpdateProject(int id, [FromBody] Project project)
+        public async Task<ActionResult<ProjectDto>> UpdateProject(int id, [FromBody] UpdateProjectDto updateDto)
         {
-            if (id != project.Id)
+            if (id != updateDto.Id)
             {
                 return BadRequest("ID du projet non valide.");
             }
 
             try
             {
-                var updatedProject = await _projectService.UpdateProjectAsync(project);
+                var updatedProject = await _projectService.UpdateProjectAsync(updateDto);
                 return Ok(updatedProject);
             }
             catch (Exception ex)

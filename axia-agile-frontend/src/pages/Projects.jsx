@@ -24,7 +24,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SearchIcon from '@mui/icons-material/Search';
 import { useProject } from '../hooks/useProjects';
 import { useAvatar } from '../hooks/useAvatar';
-import { useUsers } from '../hooks/useUsers';
 import { useAuth } from '../contexts/AuthContext';
 import AlertUser from '../components/common/AlertUser';
 import ProjectCard from '../components/project/ProjectCard';
@@ -109,6 +108,8 @@ function Projects() {
     setDevelopers,
     testers,
     setTesters,
+    observers, 
+    setObservers, 
     selectedProject,
     menuAnchorEl,
     steps,
@@ -127,7 +128,6 @@ function Projects() {
     handleMenuClose,
   } = useProject();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const { users } = useUsers('users');
   const [errorAlertOpen, setErrorAlertOpen] = useState(false);
   const [successAlertOpen, setSuccessAlertOpen] = useState(false);
 
@@ -160,9 +160,14 @@ function Projects() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+ 
   const getUserDisplayName = (email) => {
-    const user = users.find((u) => u.email === email);
-    return user ? `${user.nom} ${user.prenom}` : 'Utilisateur inconnu';
+    const user = registeredUsers.find((u) => u.email === email);
+    if (!user) return 'Utilisateur inconnu';
+    if (user.nom && user.prenom) {
+      return `${user.nom} ${user.prenom}`;
+    }
+    return user.name || user.email || 'Utilisateur inconnu';
   };
 
   const getShortDescription = (description) => {
@@ -406,6 +411,8 @@ function Projects() {
         registeredUsers={registeredUsers}
         projectManagers={projectManagers}
         setProjectManagers={setProjectManagers}
+        observers={observers} 
+        setObservers={setObservers} 
         productOwners={productOwners}
         setProductOwners={setProductOwners}
         scrumMasters={scrumMasters}
@@ -416,6 +423,7 @@ function Projects() {
         setTesters={setTesters}
         getAvatarColor={getAvatarColor}
         generateInitials={generateInitials}
+        formError={formError} 
       />
 
       <AlertUser

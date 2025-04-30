@@ -1,34 +1,25 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { projectApi } from '../../services/api';
 
+// Normalize project data from backend to frontend format
 const normalizeProject = (project) => ({
-    id: String(project.id || project.projectId || project.Id || ''),
-    title: project.title || project.Title || project.name || '',
-    description: project.description || project.Description || project.desc || '',
-    method: project.methodology || project.Methodology || project.method || '',
-    createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
-    startDate: project.startDate || project.StartDate || new Date().toISOString(),
-    endDate: project.endDate || project.EndDate || new Date().toISOString(),
-    createdBy: project.createdBy || project.CreatedBy || '',
-    projectManagers: project.projectManager
-      ? [project.projectManager]
-      : project.ProjectManager
-      ? [project.ProjectManager]
-      : project.projectManagers || [],
-    productOwners: project.productOwner
-      ? [project.productOwner]
-      : project.ProductOwner
-      ? [project.ProductOwner]
-      : project.productOwners || [],
-    scrumMasters: project.scrumMaster
-      ? [project.scrumMaster]
-      : project.ScrumMaster
-      ? [project.ScrumMaster]
-      : project.scrumMasters || [],
-    users: project.developers || project.Developers || project.users || [],
-    testers: project.testers || project.Testers || [],
-  });
+  id: String(project.id || project.Id || ''), // Ensure ID is a string
+  title: project.title || project.Title || '',
+  description: project.description || project.Description || '',
+  method: project.methodology || project.Methodology || '', // Map backend methodology to frontend method
+  createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
+  startDate: project.startDate || project.StartDate || new Date().toISOString(),
+  endDate: project.endDate || project.EndDate || new Date().toISOString(),
+  createdBy: project.createdBy || project.CreatedBy || '',
+  projectManagers: project.projectManagers || project.ProjectManagers || [],
+  productOwners: project.productOwners || project.ProductOwners || [],
+  scrumMasters: project.scrumMasters || project.ScrumMasters || [],
+  users: project.developers || project.Developers || [], // Map developers to users
+  testers: project.testers || project.Testers || [],
+  observers: project.observers || project.Observers || [], // Add observers
+});
 
+// Fetch all projects
 export const fetchProjects = createAsyncThunk(
   'projects/fetchProjects',
   async (_, { rejectWithValue }) => {
@@ -51,11 +42,28 @@ export const fetchProjects = createAsyncThunk(
   }
 );
 
+// Create a new project
 export const createProject = createAsyncThunk(
   'projects/createProject',
   async (project, { rejectWithValue }) => {
     try {
-      const response = await projectApi.post('/Projects', project);
+      // Map frontend project to backend CreateProjectDto
+      const payload = {
+        title: project.title,
+        description: project.description,
+        startDate: project.startDate,
+        endDate: project.endDate,
+        methodology: project.methodology, // Corrected to use project.methodology
+        createdBy: project.createdBy,
+        projectManagers: project.projectManager ? [project.projectManager] : [], // Use projectManager
+        productOwners: project.productOwner ? [project.productOwner] : [], // Use productOwner
+        scrumMasters: project.scrumMaster ? [project.scrumMaster] : [], // Use scrumMaster
+        developers: project.developers || [], // Map developers directly
+        testers: project.testers || [],
+        observers: project.observers || [], // Include observers
+      };
+      console.log('Create Project Payload:', payload); // Debug log
+      const response = await projectApi.post('/Projects', payload);
       return normalizeProject(response.data);
     } catch (error) {
       const errorMessage =
@@ -65,6 +73,7 @@ export const createProject = createAsyncThunk(
           ? JSON.stringify(error.response.data.errors)
           : error.message) ||
         'Échec de la création du projet';
+      console.error('Create Project Error:', errorMessage); // Debug log
       return rejectWithValue({
         message: errorMessage.includes("n'existe pas")
           ? `Utilisateur non trouvé : ${errorMessage.split(' ').pop()}`
@@ -75,11 +84,26 @@ export const createProject = createAsyncThunk(
   }
 );
 
+// Update an existing project (partial updates)
 export const updateProject = createAsyncThunk(
   'projects/updateProject',
   async ({ id, project }, { rejectWithValue }) => {
     try {
-      const response = await projectApi.put(`/Projects/${id}`, project);
+      // Only include fields that are provided (partial update)
+      const payload = { id: parseInt(id) }; // Ensure ID is a number
+      if (project.title) payload.title = project.title;
+      if (project.description) payload.description = project.description;
+      if (project.startDate) payload.startDate = project.startDate;
+      if (project.endDate) payload.endDate = project.endDate;
+      if (project.methodology) payload.methodology = project.methodology; // Corrected to use project.methodology
+      if (project.projectManager) payload.projectManagers = [project.projectManager]; // Use projectManager
+      if (project.productOwner) payload.productOwners = [project.productOwner]; // Use productOwner
+      if (project.scrumMaster) payload.scrumMasters = [project.scrumMaster]; // Use scrumMaster
+      if (project.developers) payload.developers = project.developers; // Map developers directly
+      if (project.testers) payload.testers = project.testers;
+      if (project.observers) payload.observers = project.observers;
+      console.log('Update Project Payload:', payload); // Debug log
+      const response = await projectApi.put(`/Projects/${id}`, payload);
       return normalizeProject(response.data);
     } catch (error) {
       const errorMessage =
@@ -89,6 +113,7 @@ export const updateProject = createAsyncThunk(
           ? JSON.stringify(error.response.data.errors)
           : error.message) ||
         'Échec de la mise à jour du projet';
+      console.error('Update Project Error:', errorMessage); // Debug log
       return rejectWithValue({
         message: errorMessage.includes("n'existe pas")
           ? `Utilisateur non trouvé : ${errorMessage.split(' ').pop()}`
@@ -99,6 +124,7 @@ export const updateProject = createAsyncThunk(
   }
 );
 
+// Delete a project
 export const deleteProject = createAsyncThunk(
   'projects/deleteProject',
   async (id, { rejectWithValue }) => {
@@ -175,7 +201,7 @@ const projectsSlice = createSlice({
         };
       })
       .addCase(updateProject.fulfilled, (state, action) => {
-        const index = state.projects.findIndex((p) => p.id.toString() === action.payload.id.toString());
+        const index = state.projects.findIndex((p) => p.id === action.payload.id);
         if (index !== -1) {
           state.projects[index] = action.payload;
         }
@@ -195,7 +221,7 @@ const projectsSlice = createSlice({
         };
       })
       .addCase(deleteProject.fulfilled, (state, action) => {
-        state.projects = state.projects.filter((p) => p.id.toString() !== action.payload.toString());
+        state.projects = state.projects.filter((p) => p.id !== String(action.payload));
         state.error = null;
         state.snackbar = {
           open: true,

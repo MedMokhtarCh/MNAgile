@@ -20,6 +20,7 @@ import {
 } from 'chart.js';
 import { fetchProjects } from '../store/slices/projectsSlice';
 import PageTitle from '../components/common/PageTitle';
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth for currentUser
 
 ChartJS.register(
   CategoryScale,
@@ -36,41 +37,52 @@ const { Title: AntTitle, Text } = Typography;
 const ProjectsDashboard = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectOptions, setProjectOptions] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
 
   const dispatch = useDispatch();
-  const { projects, status, error } = useSelector((state) => state.projects); // Access projects from Redux store
+  const { projects, status, error } = useSelector((state) => state.projects);
+  const { currentUser } = useAuth(); // Use AuthContext instead of localStorage
 
   useEffect(() => {
-    // Load current user from localStorage (or update to Redux if user data is managed there)
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    setCurrentUser(user);
-
-    // Fetch projects from Redux
-    dispatch(fetchProjects());
+    console.log('Fetching projects...');
+    dispatch(fetchProjects()).then((result) => {
+      console.log('Fetch projects result:', result);
+    }).catch((err) => {
+      console.error('Fetch projects error:', err);
+    });
   }, [dispatch]);
 
   useEffect(() => {
-    // Filter projects based on user role and prepare project options
+    console.log('Current user:', currentUser);
+    console.log('Projects:', projects);
+
     if (currentUser && projects.length > 0) {
       let filteredProjects = [];
-      if (currentUser.role === 'chef_projet') {
-        filteredProjects = projects.filter(
-          (project) =>
-            project.createdBy === currentUser.email ||
-            project.projectManagers?.includes(currentUser.email)
-        );
+
+      // Normalize role for comparison
+      const isChefProjet = ['chef_projet', 'ChefProjet', 'Admin', 3].includes(currentUser.role || currentUser.roleId);
+
+      if (isChefProjet) {
+        filteredProjects = projects.filter((project) => {
+          const match = project.createdBy === currentUser.email ||
+                        project.projectManagers?.includes(currentUser.email) ||
+                        project.observers?.includes(currentUser.email); // Include observers
+          console.log(`Project ${project.title} (chef_projet):`, { createdBy: project.createdBy, projectManagers: project.projectManagers, observers: project.observers, match });
+          return match;
+        });
       } else {
-        filteredProjects = projects.filter(
-          (project) =>
-            project.users?.includes(currentUser.email) ||
-            project.scrumMasters?.includes(currentUser.email) ||
-            project.productOwners?.includes(currentUser.email) ||
-            project.testers?.includes(currentUser.email)
-        );
+        filteredProjects = projects.filter((project) => {
+          const match = project.users?.includes(currentUser.email) ||
+                        project.scrumMasters?.includes(currentUser.email) ||
+                        project.productOwners?.includes(currentUser.email) ||
+                        project.testers?.includes(currentUser.email) ||
+                        project.observers?.includes(currentUser.email); // Include observers
+          console.log(`Project ${project.title} (other roles):`, { users: project.users, scrumMasters: project.scrumMasters, productOwners: project.productOwners, testers: project.testers, observers: project.observers, match });
+          return match;
+        });
       }
 
-      // Prepare project options for Select
+      console.log('Filtered projects:', filteredProjects);
+
       const options = filteredProjects.map((project) => ({
         value: project.id,
         label: project.title,
@@ -78,19 +90,18 @@ const ProjectsDashboard = () => {
 
       setProjectOptions(options);
 
-      // Set initial selected project
-      if (filteredProjects.length > 0) {
+      if (filteredProjects.length > 0 && !selectedProject) {
         setSelectedProject(filteredProjects[0]);
       }
     }
-  }, [currentUser, projects]);
+  }, [currentUser, projects, selectedProject]);
 
   const handleProjectChange = (projectId) => {
     const project = projects.find((p) => p.id === projectId);
+    console.log('Selected project:', project);
     setSelectedProject(project);
   };
 
-  // Get team members for the selected project
   const getTeamMembers = () => {
     if (!selectedProject) return 0;
 
@@ -100,13 +111,12 @@ const ProjectsDashboard = () => {
       ...(selectedProject.scrumMasters || []),
       ...(selectedProject.users || []),
       ...(selectedProject.testers || []),
+      ...(selectedProject.observers || []), // Include observers
     ];
 
-    // Remove duplicates
     return [...new Set(allMembers)].length;
   };
 
-  // Placeholder data for tasks and sprints (kept as fake data)
   const getProjectData = () => {
     if (!selectedProject) {
       return {
@@ -121,7 +131,6 @@ const ProjectsDashboard = () => {
       };
     }
 
-    // Fake data for tasks, sprints, and burndown chart
     return {
       tasks: 12,
       activeTasks: 8,
@@ -211,12 +220,10 @@ const ProjectsDashboard = () => {
     },
   };
 
-  // Handle loading state
   if (status === 'loading') {
     return <div style={{ padding: '24px', textAlign: 'center' }}>Chargement...</div>;
   }
 
-  // Handle error state
   if (status === 'failed') {
     return (
       <div style={{ padding: '24px', textAlign: 'center' }}>
@@ -226,12 +233,13 @@ const ProjectsDashboard = () => {
     );
   }
 
-  // Handle no projects available
   if (projectOptions.length === 0) {
     return (
       <div style={{ padding: '24px', textAlign: 'center' }}>
         <AntTitle level={4}>Aucun projet disponible</AntTitle>
-        <Text>Vous n'avez accès à aucun projet ou aucun projet n'a été créé.</Text>
+        <Text>
+          Vous n'avez accès à aucun projet ou aucun projet n'a été créé. Vérifiez votre rôle et vos affectations.
+        </Text>
       </div>
     );
   }
@@ -258,7 +266,6 @@ const ProjectsDashboard = () => {
           </Col>
         </Row>
 
-        {/* Statistics Cards */}
         <Row gutter={16}>
           <Col span={8}>
             <Card style={statCardStyle}>
@@ -301,14 +308,12 @@ const ProjectsDashboard = () => {
           </Col>
         </Row>
 
-        {/* Burndown Chart */}
         <Card title="Burndown Chart du Sprint" style={cardStyle}>
           <div style={{ height: '400px', padding: '20px' }}>
             <Line data={burndownChartData} options={burndownChartOptions} />
           </div>
         </Card>
 
-        {/* Sprint Progress */}
         <Row gutter={16}>
           {currentProjectData.scrumData.map((sprint, index) => (
             <Col span={12} key={index}>

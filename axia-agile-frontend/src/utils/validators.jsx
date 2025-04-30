@@ -32,18 +32,7 @@ export const validateProject = (project, step) => {
   if (step === 0) {
     if (!project.title) {
       errors.push('Le nom du projet est requis.');
-    }
-    if (!project.method) {
-      errors.push('La méthode agile est requise.');
-    }
-    if (!project.startDate) {
-      errors.push('La date de début est requise.');
-    }
-    if (!project.endDate) {
-      errors.push('La date de fin est requise.');
-    }
-    if (project.startDate && project.endDate && new Date(project.startDate) > new Date(project.endDate)) {
-      errors.push('La date de fin doit être postérieure à la date de début.');
+
     }
   }
 

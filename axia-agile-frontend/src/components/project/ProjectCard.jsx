@@ -88,6 +88,7 @@ const ProjectCard = ({
     ...(project.scrumMasters || []),
     ...(project.users || []),
     ...(project.testers || []),
+    ...(project.observers || []), // Added observers
   ].filter((email, index, self) => self.indexOf(email) === index);
 
   const formattedDate = new Date(project.createdAt).toLocaleDateString('fr-FR', {
@@ -141,7 +142,6 @@ const ProjectCard = ({
             Méthodologie :{' '}
             {project.method ? project.method.charAt(0).toUpperCase() + project.method.slice(1) : 'Non renseignée'}
           </Typography>
-
         </CardContent>
       </ContentContainer>
 

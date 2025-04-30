@@ -2,7 +2,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { login, logoutUser, fetchCurrentUser } from '../store/slices/authSlice';
-import { fetchProfile, clearProfile } from '../store/slices/profileSlice';
 
 const AuthContext = createContext(null);
 
@@ -12,50 +11,37 @@ export const AuthProvider = ({ children }) => {
   const { currentUser, isAuthenticated, loading } = useSelector((state) => state.auth);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  // Check authentication on mount
+  // Vérifier l'authentification 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        await dispatch(fetchCurrentUser()).unwrap();
-        if (isAuthenticated) {
-          await dispatch(fetchProfile()).unwrap();
-        }
+  
+        await dispatch(fetchCurrentUser());
       } catch (error) {
-        console.error("Error checking authentication:", error);
+        console.error("Erreur lors de la vérification de l'authentification:", error);
       } finally {
         setIsInitialized(true);
       }
     };
 
     checkAuth();
-  }, [dispatch, isAuthenticated]);
+  }, [dispatch]);
 
   const handleLogin = async (userData) => {
-    try {
-      const response = await dispatch(login(userData)).unwrap();
-      // Fetch user and profile data immediately after login
-      await dispatch(fetchCurrentUser()).unwrap();
-      await dispatch(fetchProfile()).unwrap();
-      const role = response.user.role;
+    const response = await dispatch(login(userData));
+    if (login.fulfilled.match(response)) {
+      const role = response.payload.user.role;
       const redirectPath =
         role === 'SuperAdmin' ? '/SuperAdminStatistics' :
         role === 'Admin' ? '/UserStatisticsDashboard' :
         role === 'ChefProjet' ? '/dashboard' : '/projects';
       navigate(redirectPath);
-    } catch (error) {
-      console.error("Login failed:", error);
-      throw error;
     }
   };
 
   const handleLogout = async () => {
-    try {
-      await dispatch(logoutUser()).unwrap();
-      dispatch(clearProfile()); // Ensure profile state is cleared
-      navigate('/login');
-    } catch (error) {
-      console.error("Logout failed:", error);
-    }
+    await dispatch(logoutUser());
+    navigate('/login');
   };
 
   const hasRole = (requiredRoles) => {
@@ -73,11 +59,12 @@ export const AuthProvider = ({ children }) => {
     logout: handleLogout,
     hasRole,
     isAuthenticated,
-    isInitialized,
+    isInitialized
   };
 
+  // Ne rendre les enfants que lorsque l'authentification a été vérifiée
   if (!isInitialized) {
-    return <div>Chargement...</div>;
+    return <div>Chargement...</div>; 
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
