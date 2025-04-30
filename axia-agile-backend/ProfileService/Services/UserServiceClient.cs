@@ -16,43 +16,57 @@ namespace ProfileService.Services
             _httpContextAccessor = httpContextAccessor;
             _logger = logger;
         }
-    
+
         private void AddAuthorizationHeader()
         {
-            var token = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"].ToString();
-            _logger.LogInformation($"Original Authorization header: {token}");
+            string token = null;
 
+            // Try to get token from Authorization header
+            var authHeader = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"].ToString();
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                token = authHeader.Substring("Bearer ".Length).Trim();
+                _logger.LogInformation($"Extracted token from Authorization header: {token.Substring(0, Math.Min(10, token.Length))}...");
+            }
+
+            // If no token in header, try to get from AuthToken cookie
+            if (string.IsNullOrEmpty(token))
+            {
+                token = _httpContextAccessor.HttpContext?.Request.Cookies["AuthToken"];
+                if (!string.IsNullOrEmpty(token))
+                {
+                    _logger.LogInformation($"Extracted token from AuthToken cookie: {token.Substring(0, Math.Min(10, token.Length))}...");
+                }
+            }
+
+            // Add token to request if found
             if (!string.IsNullOrEmpty(token))
             {
-                // Authorization header
                 if (_httpClient.DefaultRequestHeaders.Contains("Authorization"))
                 {
                     _httpClient.DefaultRequestHeaders.Remove("Authorization");
                 }
-
-                // Extract just the token part without "Bearer "
-                string tokenValue = token;
-                if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    tokenValue = token.Substring(7);
-                    _logger.LogInformation($"Extracted token: {tokenValue.Substring(0, Math.Min(10, tokenValue.Length))}...");
-                }
-
-                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenValue);
+                _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 _logger.LogInformation("Authorization header added to request");
             }
             else
             {
-                _logger.LogWarning("No Authorization header found in the request.");
+                _logger.LogWarning("No Authorization header or AuthToken cookie found in the request.");
             }
         }
+
         public async Task<UserDTO> GetUserByIdAsync(int userId)
         {
             try
             {
                 AddAuthorizationHeader();
                 var response = await _httpClient.GetAsync($"users/{userId}");
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to fetch user {userId}. Status: {response.StatusCode}, Content: {errorContent}");
+                    throw new HttpRequestException($"Failed to fetch user: {errorContent}");
+                }
                 var user = await response.Content.ReadFromJsonAsync<UserDTO>();
                 return user;
             }
@@ -68,7 +82,6 @@ namespace ProfileService.Services
             try
             {
                 AddAuthorizationHeader();
-       
                 var updateRequest = new UpdateUserRequest
                 {
                     Email = user.Email,
@@ -82,7 +95,12 @@ namespace ProfileService.Services
                 };
 
                 var response = await _httpClient.PutAsJsonAsync($"users/{user.Id}", updateRequest);
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to update user {user.Id}. Status: {response.StatusCode}, Content: {errorContent}");
+                    throw new HttpRequestException($"Failed to update user: {errorContent}");
+                }
             }
             catch (HttpRequestException ex)
             {
@@ -97,18 +115,35 @@ namespace ProfileService.Services
             {
                 AddAuthorizationHeader();
 
-               
-                var updateRequest = new { Password = newPassword };
+                // Fetch current user data to preserve other fields
+                var user = await GetUserByIdAsync(userId);
+                if (user == null)
+                {
+                    _logger.LogError($"User with ID {userId} not found.");
+                    throw new InvalidOperationException("Utilisateur non trouvé.");
+                }
+
+                var updateRequest = new UpdateUserRequest
+                {
+                    Email = user.Email,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    PhoneNumber = user.PhoneNumber,
+                    JobTitle = user.JobTitle,
+                    Entreprise = user.Entreprise,
+                    RoleId = user.RoleId,
+                    ClaimIds = user.ClaimIds,
+                    Password = newPassword // Only update password
+                };
 
                 var response = await _httpClient.PutAsJsonAsync($"users/{userId}", updateRequest);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError($"User service returned non-success status code: {response.StatusCode}. Content: {errorContent}");
+                    _logger.LogError($"Failed to update password for user {userId}. Status: {response.StatusCode}, Content: {errorContent}");
+                    throw new HttpRequestException($"Failed to update password: {errorContent}");
                 }
-
-                response.EnsureSuccessStatusCode();
             }
             catch (HttpRequestException ex)
             {
@@ -117,6 +152,4 @@ namespace ProfileService.Services
             }
         }
     }
-
-    }
-    
+}

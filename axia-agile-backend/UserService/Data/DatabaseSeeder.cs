@@ -1,19 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 using UserService.Models;
 
 namespace UserService.Data
 {
     public static class DatabaseSeeder
     {
-        public static void SeedDatabase(AppDbContext context)
+        public static void SeedDatabase(AppDbContext context, IWebHostEnvironment environment)
         {
             try
             {
                 Console.WriteLine("Starting database seeding...");
-
-                // Seed SuperAdmin
-                SeedSuperAdmin(context);
-
+                SeedSuperAdmin(context, environment);
                 Console.WriteLine("Database seeding completed successfully.");
             }
             catch (Exception ex)
@@ -27,29 +25,48 @@ namespace UserService.Data
             }
         }
 
-        private static void SeedSuperAdmin(AppDbContext context)
+        private static void SeedSuperAdmin(AppDbContext context, IWebHostEnvironment environment)
         {
             try
             {
                 Console.WriteLine("Vérification du SuperAdmin...");
-
-                // Ensure SuperAdmin role exists
                 var superAdminRole = context.Roles.FirstOrDefault(r => r.Id == 1);
                 if (superAdminRole == null)
                 {
-                    throw new InvalidOperationException("Le rôle SuperAdmin (Id = 1) n'existe pas. Assurez-vous que les rôles sont correctement initialisés via migrations.");
+                    throw new InvalidOperationException("Le rôle SuperAdmin (Id = 1) n'existe pas.");
                 }
 
-                // Check if SuperAdmin user exists
                 var superAdminUser = context.Users.FirstOrDefault(u => u.RoleId == 1 && u.Email == "superadmin@gmail.com");
                 if (superAdminUser == null)
                 {
                     Console.WriteLine("Création du SuperAdmin...");
+                    var password = Environment.GetEnvironmentVariable("SUPERADMIN_PASSWORD");
+
+                    // Fallback for development only
+                    if (environment.IsDevelopment() && string.IsNullOrEmpty(password))
+                    {
+                        password = "DefaultSuperAdmin123!";
+                        Console.WriteLine("SUPERADMIN_PASSWORD non défini. Utilisation du mot de passe par défaut pour le développement: DefaultSuperAdmin123!");
+                    }
+
+                    if (string.IsNullOrEmpty(password))
+                    {
+                        throw new InvalidOperationException("Le mot de passe du SuperAdmin doit être défini dans SUPERADMIN_PASSWORD.");
+                    }
+
+                    if (password.Length < 12 ||
+                        !Regex.IsMatch(password, @"[A-Z]") ||
+                        !Regex.IsMatch(password, @"[a-z]") ||
+                        !Regex.IsMatch(password, @"[0-9]") ||
+                        !Regex.IsMatch(password, @"[!@#$%^&*]"))
+                    {
+                        throw new InvalidOperationException("Le mot de passe du SuperAdmin doit contenir au moins 12 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
+                    }
 
                     var superAdmin = new User
                     {
                         Email = "superadmin@gmail.com",
-                        PasswordHash = BCrypt.Net.BCrypt.HashPassword("123"),
+                        PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
                         FirstName = "Super",
                         LastName = "Admin",
                         PhoneNumber = "1234567890",
@@ -61,30 +78,17 @@ namespace UserService.Data
                     context.Users.Add(superAdmin);
                     context.SaveChanges();
 
-                    Console.WriteLine($"SuperAdmin créé avec succès. ID: {superAdmin.Id}");
-
-                    // Assign all claims to SuperAdmin
                     var claims = context.Claims.ToList();
-                    if (!claims.Any())
+                    foreach (var claim in claims)
                     {
-                        Console.WriteLine("Aucun claim trouvé. Les claims doivent être initialisés via migrations.");
+                        context.UserClaims.Add(new UserClaim { UserId = superAdmin.Id, ClaimId = claim.Id });
                     }
-                    else
-                    {
-                        foreach (var claim in claims)
-                        {
-                            context.UserClaims.Add(new UserClaim { UserId = superAdmin.Id, ClaimId = claim.Id });
-                        }
-                        context.SaveChanges();
-                        Console.WriteLine("Tous les claims attribués au SuperAdmin avec succès.");
-                    }
+                    context.SaveChanges();
+                    Console.WriteLine("SuperAdmin créé avec tous les claims.");
                 }
                 else
                 {
                     Console.WriteLine($"Le SuperAdmin existe déjà avec ID: {superAdminUser.Id}");
-                    // Optionally update password (uncomment if needed)
-                    // superAdminUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword("123");
-                    // context.SaveChanges();
                 }
             }
             catch (DbUpdateException ex)

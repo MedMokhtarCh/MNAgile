@@ -1,8 +1,10 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import { useAuth } from '../contexts/AuthContext'; // Assurez-vous que useAuth est importé
 
-const mapRoleIdToRole = (roleId) => {
+
+// Utilitaire pour mapper les roleId aux noms de rôles
+export const mapRoleIdToRole = (roleId) => {
   switch (roleId) {
     case 1:
       return 'superadmin';
@@ -18,27 +20,39 @@ const mapRoleIdToRole = (roleId) => {
 };
 
 export const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const { isAuthenticated, isInitialized, loading } = useAuth();
+  console.log(isAuthenticated)
   const location = useLocation();
+
+  if (!isInitialized || loading) {
+    return <div>Chargement...</div>; 
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
   return children ? children : <Outlet />;
 };
 
 export const RoleProtectedRoute = ({ allowedRoles, children }) => {
-  const { isAuthenticated, currentUser } = useSelector((state) => state.auth);
+  const { isAuthenticated, currentUser, isInitialized, loading } = useAuth();
   const location = useLocation();
   const role = currentUser ? mapRoleIdToRole(currentUser.roleId) : null;
+  console.log(role)
+  console.log(isAuthenticated)
+
+  if (!isInitialized || loading) {
+    return <div>Chargement...</div>; 
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (!role || !allowedRoles.includes(role)) {
-    return <Navigate to="/unauthorized" replace />;
+    console.log("here");
+    
+    return <Navigate to="/NotFound" replace />;
   }
 
   return children ? children : <Outlet />;

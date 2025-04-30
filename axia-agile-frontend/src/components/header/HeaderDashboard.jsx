@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Popper,
   Paper,
@@ -8,55 +8,94 @@ import {
   ClickAwayListener,
   Typography,
   Avatar,
+  CircularProgress,
 } from "@mui/material";
-import {
-  FiUser,
-  FiLogOut,
-  FiHelpCircle,
-} from "react-icons/fi";
-import {
-  AiOutlineMenuFold,
-  AiOutlineMenuUnfold,
-} from "react-icons/ai";
+import { FiUser, FiLogOut, FiHelpCircle } from "react-icons/fi";
+import { AiOutlineMenuFold, AiOutlineMenuUnfold } from "react-icons/ai";
 import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import "./HeaderDashboard.css";
 import NotificationSystem from "../NotificationSystem";
 import { useAvatar } from "../../hooks/useAvatar";
+import { fetchProfile } from "../../store/slices/profileSlice";
+import { fetchCurrentUser } from "../../store/slices/authSlice";
+import { useAuth } from "../../contexts/AuthContext";
+import { setSnackbar } from "../../store/slices/profileSlice";
 
 const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   const [open, setOpen] = useState(false);
   const anchorRef = useRef(null);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { generateInitials, getAvatarColor } = useAvatar();
+  const { logout } = useAuth();
 
-  // Get profile data from Redux store
-  const { profile } = useSelector((state) => state.profile);
+  // Select relevant state from Redux
+  const { currentUser, isAuthenticated, loading: authLoading } = useSelector(
+    (state) => state.auth
+  );
+  const { profile, loading: profileLoading, error: profileError } = useSelector(
+    (state) => state.profile
+  );
 
-  // Fallback to localStorage if profile is not available (optional)
-  const currentUser = profile || JSON.parse(localStorage.getItem("currentUser")) || {};
+  // Fetch user and profile data on mount or when authentication changes
+  useEffect(() => {
+    if (isAuthenticated && !currentUser && !authLoading) {
+      dispatch(fetchCurrentUser());
+    }
+    if (isAuthenticated && !profile && !profileLoading && !profileError) {
+      dispatch(fetchProfile());
+    }
+  }, [isAuthenticated, currentUser, profile, profileLoading, profileError, authLoading, dispatch]);
 
-  // Standardize fullName for consistent avatar color
-  const fullName = currentUser.firstName && currentUser.lastName
-    ? `${currentUser.firstName} ${currentUser.lastName}`
-    : currentUser.email || "Utilisateur";
+  // Memoize userData to prevent unnecessary recomputation
+  const userData = useMemo(() => {
+    return {
+      email: profile?.email || currentUser?.email || "",
+      firstName: profile?.firstName || currentUser?.firstName || "",
+      lastName: profile?.lastName || currentUser?.lastName || "",
+      profilePhotoUrl: profile?.profilePhotoUrl || null,
+      roleId: profile?.roleId || currentUser?.roleId || null,
+    };
+  }, [profile, currentUser]);
 
-  // Construct profile photo URL with cache-busting
-  const PROFILE_SERVICE_BASE_URL = "https://localhost:7240";
-  const profilePhotoUrl = currentUser.profilePhotoUrl
-    ? currentUser.profilePhotoUrl.startsWith("http")
-      ? `${currentUser.profilePhotoUrl}?t=${Date.now()}`
-      : `${PROFILE_SERVICE_BASE_URL}${currentUser.profilePhotoUrl}?t=${Date.now()}`
-    : null;
-
-  const userInitial = generateInitials(fullName);
-  const avatarColor = getAvatarColor(fullName);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("currentUser");
-    navigate("/Login");
+  // Define role name based on roleId
+  const getRoleName = (roleId) => {
+    switch (roleId) {
+      case 1:
+        return "Super Admin";
+      case 2:
+        return "Admin";
+      case 3:
+        return "Chef de Projet";
+      case 4:
+        return "Membre d'Équipe";
+      default:
+        return "Utilisateur";
+    }
   };
+
+  // Standardize fullName for consistent avatar color and display
+  const fullName = useMemo(
+    () =>
+      userData.firstName && userData.lastName
+        ? `${userData.firstName} ${userData.lastName}`
+        : userData.email || getRoleName(userData.roleId),
+    [userData.firstName, userData.lastName, userData.email, userData.roleId]
+  );
+
+  // Construct profile photo URL with cache-busting only when necessary
+  const PROFILE_SERVICE_BASE_URL = "https://localhost:7240";
+  const profilePhotoUrl = useMemo(() => {
+    if (!userData.profilePhotoUrl) return null;
+    const baseUrl = userData.profilePhotoUrl.startsWith("http")
+      ? userData.profilePhotoUrl
+      : `${PROFILE_SERVICE_BASE_URL}${userData.profilePhotoUrl}`;
+    return `${baseUrl}?t=${Date.now()}`;
+  }, [userData.profilePhotoUrl]);
+
+  const userInitial = useMemo(() => generateInitials(fullName), [fullName]);
+  const avatarColor = useMemo(() => getAvatarColor(fullName), [fullName]);
 
   const handleToggle = () => {
     setOpen((prevOpen) => !prevOpen);
@@ -79,6 +118,29 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     setOpen(false);
   };
 
+  const handleLogout = () => {
+    setOpen(false);
+    logout();
+  };
+
+  // Handle avatar image load errors
+  const handleAvatarError = (e) => {
+    console.error("Error loading profile photo:", profilePhotoUrl);
+    dispatch(
+      setSnackbar({
+        open: true,
+        message: "Impossible de charger la photo de profil.",
+        severity: "error",
+      })
+    );
+    e.target.src = ""; // Fallback to initials
+  };
+
+  // Don't render if not authenticated or still loading
+  if (!isAuthenticated || authLoading || (!currentUser && !profile)) {
+    return null;
+  }
+
   return (
     <header className="header-dashboard">
       <div className="header-left">
@@ -92,7 +154,7 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
       </div>
 
       <div className="header-right">
-        <NotificationSystem currentUser={currentUser} />
+        <NotificationSystem currentUser={userData} />
 
         <div className="user-profile">
           <div
@@ -107,29 +169,18 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
               className="avatar"
               style={{ backgroundColor: avatarColor }}
               imgProps={{
-                onError: (e) => {
-                  console.error("Error loading profile photo:", profilePhotoUrl);
-                  e.target.src = ""; // Force fallback to initials
-                },
-                onLoad: () => {
-                  console.log("Profile photo loaded successfully:", profilePhotoUrl);
-                },
+                onError: handleAvatarError,
+                onLoad: () => console.log("Profile photo loaded:", profilePhotoUrl),
               }}
             >
-              {userInitial}
+              {profileLoading ? <CircularProgress size={24} /> : userInitial}
             </Avatar>
             <div className="user-info">
               <Typography variant="subtitle2" className="user-name">
                 {fullName}
               </Typography>
               <Typography variant="caption" className="user-role">
-                {currentUser.role === "superadmin"
-                  ? "Super Admin"
-                  : currentUser.role === "admin"
-                  ? "Admin"
-                  : currentUser.role === "chef_projet"
-                  ? "Chef de Projet"
-                  : "Utilisateur"}
+                {getRoleName(userData.roleId)}
               </Typography>
             </div>
           </div>

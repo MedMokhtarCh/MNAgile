@@ -31,7 +31,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
-
 import InputUserAssignment from '../common/InputUserAssignment';
 
 // Styled Components
@@ -130,7 +129,7 @@ const ProjectFormStepper = ({
   testers,
   setTesters,
   getAvatarColor,
-  generateInitials
+  generateInitials,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -146,8 +145,7 @@ const ProjectFormStepper = ({
               <Avatar sx={{ bgcolor: getAvatarColor(user.name || user.nom + ' ' + user.prenom) }}>
                 {generateInitials(user.name || user.nom + ' ' + user.prenom)}
               </Avatar>
-            }
-            label={user.name || user.nom + ' ' + user.prenom}
+}            label={user.name || user.nom + ' ' + user.prenom}
             size="small"
             sx={{ borderRadius: 16 }}
           />
@@ -206,6 +204,32 @@ const ProjectFormStepper = ({
                 <MenuItem value="kanban">Kanban</MenuItem>
               </Select>
             </FormControl>
+            <TextField
+              fullWidth
+              label="Date de Début"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={projectForm.startDate ? projectForm.startDate.split('T')[0] : ''}
+              onChange={(e) =>
+                setProjectForm({
+                  ...projectForm,
+                  startDate: new Date(e.target.value).toISOString(),
+                })
+              }
+            />
+            <TextField
+              fullWidth
+              label="Date de Fin"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              value={projectForm.endDate ? projectForm.endDate.split('T')[0] : ''}
+              onChange={(e) =>
+                setProjectForm({
+                  ...projectForm,
+                  endDate: new Date(e.target.value).toISOString(),
+                })
+              }
+            />
           </FormSection>
         );
       case 1:
@@ -285,6 +309,12 @@ const ProjectFormStepper = ({
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Méthode Agile: {projectForm.method ? projectForm.method.charAt(0).toUpperCase() + projectForm.method.slice(1) : 'Non spécifié'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Date de Début: {projectForm.startDate ? new Date(projectForm.startDate).toLocaleDateString('fr-FR') : 'Non spécifié'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Date de Fin: {projectForm.endDate ? new Date(projectForm.endDate).toLocaleDateString('fr-FR') : 'Non spécifié'}
                 </Typography>
               </Box>
 

@@ -33,7 +33,7 @@ namespace UserService.Services
             {
                 return null;
             }
-
+            
             // Vérifiez si l'utilisateur est actif
             if (!user.IsActive)
             {
@@ -45,18 +45,19 @@ namespace UserService.Services
 
             return user;
         }
+
         public string GenerateJwtToken(User user)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
             var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
 
             var claims = new List<Claim>
-    {
-        new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-        new Claim(JwtRegisteredClaimNames.Email, user.Email),
-        new Claim("RoleId", user.RoleId.ToString()),
-        new Claim("Role", user.Role.Name)
-    };
+            {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Email, user.Email),
+                new Claim("RoleId", user.RoleId.ToString()),
+                new Claim("Role", user.Role.Name)
+            };
 
             foreach (var userClaim in user.UserClaims)
             {
@@ -66,8 +67,8 @@ namespace UserService.Services
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(24), // Expiration dans 24 heures
-                NotBefore = DateTime.UtcNow, // Valide immédiatement
+                Expires = DateTime.UtcNow.AddHours(24),
+                NotBefore = DateTime.UtcNow,
                 Issuer = jwtSettings["Issuer"],
                 Audience = jwtSettings["Audience"],
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -78,6 +79,7 @@ namespace UserService.Services
 
             return tokenHandler.WriteToken(token);
         }
+
         public bool IsValidEmail(string email)
         {
             if (string.IsNullOrWhiteSpace(email))
@@ -85,7 +87,6 @@ namespace UserService.Services
 
             try
             {
-                // Utilisation d'une expression régulière pour valider l'e-mail
                 var regex = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
                 return regex.IsMatch(email);
             }
@@ -95,4 +96,4 @@ namespace UserService.Services
             }
         }
     }
-    }
+}

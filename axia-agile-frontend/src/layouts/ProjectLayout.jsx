@@ -1,81 +1,76 @@
-import React, { useState, useEffect } from "react";
-import { Outlet, useParams } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Outlet, useParams, useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
 import ProjectSidebar from "../components/sidebar/ProjectSidebar";
 import HeaderDashboard from "../components/header/HeaderDashboard";
-import { Typography, Box } from "@mui/material";
+import { Typography, Box, CircularProgress } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
+import { fetchProjects } from "../store/slices/projectsSlice";
 import "./ProjectLayout.css";
 
 const ProjectLayout = () => {
-  const [collapsed, setCollapsed] = useState(false);
-  const [currentProject, setCurrentProject] = useState(null);
+  const [collapsed, setCollapsed] = React.useState(false);
   const { projectId } = useParams();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+
+  const { projects, status, error } = useSelector((state) => state.projects);
+  const currentProject = projects.find((p) => p.id === projectId);
 
   useEffect(() => {
-    // Load project details from localStorage
-    const storedProjects = JSON.parse(localStorage.getItem('projects')) || [];
-    const project = storedProjects.find(p => p.id === projectId);
-    if (project) {
-      setCurrentProject(project);
-      // Set document title to include project name
-      document.title = `${project.title} | Axia Agile`;
+    if (status === 'idle') {
+      dispatch(fetchProjects());
     }
-  }, [projectId]);
+  }, [status, dispatch]);
+
+  useEffect(() => {
+    if (status === 'succeeded' && !currentProject) {
+      navigate('/projects');
+    }
+  }, [status, currentProject, navigate]);
 
   const toggleSidebar = () => {
     setCollapsed(!collapsed);
   };
 
+  if (status === 'loading') {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <Typography color="error">Erreur: {error}</Typography>
+      </Box>
+    );
+  }
+
+  if (!currentProject) {
+    return null;
+  }
+
   return (
-    <div className="project-layout">
-      <ProjectSidebar
-        collapsed={collapsed}
-        projectId={projectId}
-        projectTitle={currentProject?.title}
+    <Box display="flex" flexDirection="column" minHeight="100vh">
+      <HeaderDashboard 
+        title={currentProject.title}
+        icon={<FolderIcon />}
+        isProjectView={true}
       />
-      <div className="main-content">
-        <HeaderDashboard
+      <Box display="flex" flexGrow={1}>
+        <ProjectSidebar
+          projectId={projectId}
           collapsed={collapsed}
           toggleSidebar={toggleSidebar}
-          title={
-            <Box 
-              sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 1.5,
-                py: 0.5
-              }}
-            >
-              <FolderIcon 
-                color="primary" 
-                sx={{ 
-                  fontSize: 28,
-                  filter: 'drop-shadow(0px 1px 2px rgba(0, 0, 0, 0.1))'
-                }} 
-              />
-              <Typography 
-                variant="h6" 
-                component="span" 
-                sx={{ 
-                  fontWeight: 600,
-                  letterSpacing: '0.015em',
-                  background: 'linear-gradient(45deg, #3a8ef6, #6f42c1)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  textShadow: '0px 1px 1px rgba(0, 0, 0, 0.05)'
-                }}
-              >
-                {currentProject?.title || "Project"}
-              </Typography>
-            </Box>
-          }
-          isProjectView={true}
         />
-        <div className="content">
-          <Outlet context={[currentProject, setCurrentProject]} />
-        </div>
-      </div>
-    </div>
+        <Box component="main" flexGrow={1} p={3}>
+          <Outlet />
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

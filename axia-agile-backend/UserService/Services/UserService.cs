@@ -1,7 +1,6 @@
-﻿using UserService.Data;
+﻿using Microsoft.EntityFrameworkCore;
+using UserService.Data;
 using UserService.Models;
-using Microsoft.EntityFrameworkCore;
-
 
 namespace UserService.Services
 {
@@ -26,7 +25,6 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Vérifier si l'email existe déjà
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email))
                 {
                     throw new InvalidOperationException("Un compte avec cet email existe déjà.");
@@ -37,8 +35,36 @@ namespace UserService.Services
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
+                // Assign default claims based on role
+                if (user.RoleId == 1) // SuperAdmin
+                {
+                    claimIds = await _context.Claims.Select(c => c.Id).ToListAsync();
+                }
+                else if (user.RoleId == 2) // Admin
+                {
+                    var defaultAdminClaims = await _context.Claims
+                        .Where(c => c.Name == "CanViewUsers" || c.Name == "CanCreateUsers")
+                        .Select(c => c.Id)
+                        .ToListAsync();
+                    claimIds.AddRange(defaultAdminClaims);
+                }
+                else if (user.RoleId == 3) // ChefProjet
+                {
+                    var defaultChefProjetClaims = await _context.Claims
+                        .Where(c => c.Name == "CanViewUsers")
+                        .Select(c => c.Id)
+                        .ToListAsync();
+                    claimIds.AddRange(defaultChefProjetClaims);
+                }
+
+                // Ensure claimIds are unique and valid
+                claimIds = claimIds.Distinct().ToList();
                 foreach (var claimId in claimIds)
                 {
+                    if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
+                    {
+                        throw new InvalidOperationException($"Claim ID {claimId} n'existe pas.");
+                    }
                     _context.UserClaims.Add(new UserClaim { UserId = user.Id, ClaimId = claimId });
                 }
 
@@ -79,13 +105,11 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Validate email uniqueness
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email && u.Id != user.Id))
                 {
                     throw new InvalidOperationException("Un compte avec cet email existe déjà.");
                 }
 
-                // Validate claimIds
                 foreach (var claimId in claimIds)
                 {
                     if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
@@ -117,6 +141,7 @@ namespace UserService.Services
                 throw;
             }
         }
+
         public async Task DeleteUserAsync(int id)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -128,7 +153,6 @@ namespace UserService.Services
                     _context.Users.Remove(user);
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
-
                     _logger.LogInformation($"User {user.Email} deleted successfully.");
                 }
             }

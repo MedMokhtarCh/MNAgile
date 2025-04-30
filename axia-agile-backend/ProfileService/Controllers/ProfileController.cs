@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ProfileService.DTOs;
 using ProfileService.Services;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 
 namespace ProfileService.Controllers
@@ -117,7 +118,8 @@ namespace ProfileService.Controllers
 
         private int GetCurrentUserId()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userIdClaim = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ??
+                              User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out var userId))
             {
                 _logger.LogError("Unable to retrieve UserId from JWT token.");
@@ -125,12 +127,5 @@ namespace ProfileService.Controllers
             }
             return userId;
         }
-    }
-
-
-
-    public class UpdatePasswordRequest
-    {
-        public string NewPassword { get; set; }
     }
 }

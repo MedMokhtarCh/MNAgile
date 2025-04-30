@@ -101,7 +101,11 @@ namespace UserService.Migrations
                     { 1, "Permission de voir les utilisateurs", "CanViewUsers" },
                     { 2, "Permission de créer des utilisateurs", "CanCreateUsers" },
                     { 3, "Permission de mettre à jour les utilisateurs", "CanUpdateUsers" },
-                    { 4, "Permission de supprimer des utilisateurs", "CanDeleteUsers" }
+                    { 4, "Permission de supprimer des utilisateurs", "CanDeleteUsers" },
+                    { 5, "Permission de voir les projets", "CanViewProjects" },
+                    { 6, "Permission d'ajouter des projets", "CanAddProjects" },
+                    { 7, "Permission de modifier des projets", "CanEditProjects" },
+                    { 8, "Permission de supprimer des projets", "CanDeleteProjects" }
                 });
 
             migrationBuilder.InsertData(

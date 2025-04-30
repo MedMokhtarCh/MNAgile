@@ -26,40 +26,29 @@ export const validateUser = (user, requiredFields, isEditMode) => {
   return errors;
 };
 
-export const validateProject = (project, team, isEditMode) => {
+export const validateProject = (project, step) => {
   const errors = [];
 
-  const requiredFields = ['title', 'description', 'method'];
-
-  // Champs requis (si création)
-  if (!isEditMode) {
-    requiredFields.forEach((field) => {
-      if (!project[field]) {
-        errors.push(`Le champ ${field} est requis`);
-      }
-    });
-  }
-
-  // Méthode agile
-  const validMethods = ['scrum', 'scrumban', 'kanban'];
-  if (project.method && !validMethods.includes(project.method)) {
-    errors.push('La méthode agile doit être Scrum, Scrumban ou Kanban');
-  }
-
-  // Validation des emails de tous les membres
-  const allMembers = [
-    ...(team.projectManagers || []),
-    ...(team.productOwners || []),
-    ...(team.scrumMasters || []),
-    ...(team.developers || []),
-    ...(team.testers || []),
-  ];
-
-  allMembers.forEach((member) => {
-    if (!validateEmail(member.email)) {
-      errors.push(`L'email ${member.email} est invalide`);
+  if (step === 0) {
+    if (!project.title) {
+      errors.push('Le nom du projet est requis.');
     }
-  });
+    if (!project.method) {
+      errors.push('La méthode agile est requise.');
+    }
+    if (!project.startDate) {
+      errors.push('La date de début est requise.');
+    }
+    if (!project.endDate) {
+      errors.push('La date de fin est requise.');
+    }
+    if (project.startDate && project.endDate && new Date(project.startDate) > new Date(project.endDate)) {
+      errors.push('La date de fin doit être postérieure à la date de début.');
+    }
+  }
+
+
+  
 
   return errors;
 };

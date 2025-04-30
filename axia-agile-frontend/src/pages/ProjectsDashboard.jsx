@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { Select, Card, Row, Col, Typography, Progress, Space } from 'antd';
 import {
   ProjectOutlined,
@@ -15,8 +16,9 @@ import {
   LineElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
 } from 'chart.js';
+import { fetchProjects } from '../store/slices/projectsSlice';
 import PageTitle from '../components/common/PageTitle';
 
 ChartJS.register(
@@ -33,78 +35,78 @@ const { Title: AntTitle, Text } = Typography;
 
 const ProjectsDashboard = () => {
   const [selectedProject, setSelectedProject] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [projectOptions, setProjectOptions] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  const dispatch = useDispatch();
+  const { projects, status, error } = useSelector((state) => state.projects); // Access projects from Redux store
 
   useEffect(() => {
-    // Load current user
+    // Load current user from localStorage (or update to Redux if user data is managed there)
     const user = JSON.parse(localStorage.getItem('currentUser'));
     setCurrentUser(user);
 
-    // Load projects from localStorage
-    const storedProjects = JSON.parse(localStorage.getItem('projects')) || [];
-    setProjects(storedProjects);
+    // Fetch projects from Redux
+    dispatch(fetchProjects());
+  }, [dispatch]);
 
-    // Load users from localStorage
-    const storedUsers = JSON.parse(localStorage.getItem('users')) || [];
-    setUsers(storedUsers);
-
-    // Filter projects based on user role
-    if (user) {
+  useEffect(() => {
+    // Filter projects based on user role and prepare project options
+    if (currentUser && projects.length > 0) {
       let filteredProjects = [];
-      if (user.role === 'chef_projet') {
-        filteredProjects = storedProjects.filter(
-          project => project.createdBy === user.email || 
-          project.projectManagers?.includes(user.email)
+      if (currentUser.role === 'chef_projet') {
+        filteredProjects = projects.filter(
+          (project) =>
+            project.createdBy === currentUser.email ||
+            project.projectManagers?.includes(currentUser.email)
         );
       } else {
-        filteredProjects = storedProjects.filter(
-          project => project.users?.includes(user.email) ||
-          project.scrumMasters?.includes(user.email) ||
-          project.productOwners?.includes(user.email) ||
-          project.testers?.includes(user.email)
+        filteredProjects = projects.filter(
+          (project) =>
+            project.users?.includes(currentUser.email) ||
+            project.scrumMasters?.includes(currentUser.email) ||
+            project.productOwners?.includes(currentUser.email) ||
+            project.testers?.includes(currentUser.email)
         );
       }
 
       // Prepare project options for Select
-      const options = filteredProjects.map(project => ({
+      const options = filteredProjects.map((project) => ({
         value: project.id,
         label: project.title,
       }));
 
       setProjectOptions(options);
-      
+
       // Set initial selected project
       if (filteredProjects.length > 0) {
         setSelectedProject(filteredProjects[0]);
       }
     }
-  }, []);
+  }, [currentUser, projects]);
 
   const handleProjectChange = (projectId) => {
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find((p) => p.id === projectId);
     setSelectedProject(project);
   };
 
   // Get team members for the selected project
   const getTeamMembers = () => {
     if (!selectedProject) return 0;
-    
+
     const allMembers = [
       ...(selectedProject.projectManagers || []),
       ...(selectedProject.productOwners || []),
       ...(selectedProject.scrumMasters || []),
       ...(selectedProject.users || []),
-      ...(selectedProject.testers || [])
+      ...(selectedProject.testers || []),
     ];
-    
+
     // Remove duplicates
     return [...new Set(allMembers)].length;
   };
 
-  // Sample data for tasks and sprints (to be replaced with real data later)
+  // Placeholder data for tasks and sprints (kept as fake data)
   const getProjectData = () => {
     if (!selectedProject) {
       return {
@@ -114,24 +116,35 @@ const ProjectsDashboard = () => {
         burndownData: {
           labels: [],
           remaining: [],
-          ideal: []
-        }
+          ideal: [],
+        },
       };
     }
 
-    // Placeholder data - to be replaced with real data from backend/localStorage
+    // Fake data for tasks, sprints, and burndown chart
     return {
-      tasks: 12, // This should come from project data
-      activeTasks: 8, // This should come from project data
+      tasks: 12,
+      activeTasks: 8,
       scrumData: [
         { name: 'Sprint 1', activeTasks: 5, totalTasks: 12 },
         { name: 'Sprint 2', activeTasks: 8, totalTasks: 20 },
       ],
       burndownData: {
-        labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
+        labels: [
+          'Jour 1',
+          'Jour 2',
+          'Jour 3',
+          'Jour 4',
+          'Jour 5',
+          'Jour 6',
+          'Jour 7',
+          'Jour 8',
+          'Jour 9',
+          'Jour 10',
+        ],
         remaining: [20, 18, 15, 14, 12, 10, 8, 5, 3, 0],
-        ideal: [20, 18, 16, 14, 12, 10, 8, 6, 4, 2]
-      }
+        ideal: [20, 18, 16, 14, 12, 10, 8, 6, 4, 2],
+      },
     };
   };
 
@@ -157,7 +170,7 @@ const ProjectsDashboard = () => {
         borderColor: '#0958d9',
         backgroundColor: 'rgba(9, 88, 217, 0.1)',
         tension: 0.4,
-        fill: true
+        fill: true,
       },
       {
         label: 'Ligne idéale',
@@ -165,9 +178,9 @@ const ProjectsDashboard = () => {
         borderColor: '#91caff',
         borderDash: [5, 5],
         tension: 0.4,
-        fill: false
-      }
-    ]
+        fill: false,
+      },
+    ],
   };
 
   const burndownChartOptions = {
@@ -179,29 +192,41 @@ const ProjectsDashboard = () => {
       },
       title: {
         display: false,
-      }
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
         title: {
           display: true,
-          text: 'Points restants'
-        }
+          text: 'Points restants',
+        },
       },
       x: {
         title: {
           display: true,
-          text: 'Jours du Sprint'
-        }
-      }
-    }
+          text: 'Jours du Sprint',
+        },
+      },
+    },
   };
 
-  if (!selectedProject && projectOptions.length > 0) {
+  // Handle loading state
+  if (status === 'loading') {
     return <div style={{ padding: '24px', textAlign: 'center' }}>Chargement...</div>;
   }
 
+  // Handle error state
+  if (status === 'failed') {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <AntTitle level={4}>Erreur</AntTitle>
+        <Text>{error || 'Une erreur est survenue lors du chargement des projets.'}</Text>
+      </div>
+    );
+  }
+
+  // Handle no projects available
   if (projectOptions.length === 0) {
     return (
       <div style={{ padding: '24px', textAlign: 'center' }}>
@@ -216,9 +241,7 @@ const ProjectsDashboard = () => {
       <Space direction="vertical" size="large" style={{ width: '100%', marginBottom: '24px' }}>
         <Row justify="space-between" align="middle">
           <Col>
-            <PageTitle>
-              Tableau de Bord
-            </PageTitle>
+            <PageTitle>Tableau de Bord</PageTitle>
           </Col>
           <Col span={8}>
             <Select
@@ -301,7 +324,9 @@ const ProjectsDashboard = () => {
                 <Space direction="vertical" style={{ width: '100%' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Text type="secondary">Progression</Text>
-                    <Text strong>{Math.round((sprint.activeTasks / sprint.totalTasks) * 100)}%</Text>
+                    <Text strong>
+                      {Math.round((sprint.activeTasks / sprint.totalTasks) * 100)}%
+                    </Text>
                   </div>
                   <Progress
                     percent={Math.round((sprint.activeTasks / sprint.totalTasks) * 100)}

@@ -1,5 +1,6 @@
 import React from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import {
   Box,
   Typography,
@@ -41,28 +42,36 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
 }));
 
 const ProjectOverview = () => {
-  const [currentProject] = useOutletContext();
+  const { projectId } = useParams();
+  const { projects, status } = useSelector((state) => state.projects);
+  const currentProject = projects.find((p) => p.id === projectId);
   const { generateInitials, getAvatarColor } = useAvatar();
   const { users } = useUsers('users');
 
-  // Function to get display name (for display purposes)
   const getUserDisplayName = (email) => {
     const user = users.find((u) => u.email === email);
-    return user ? `${user.nom} ${user.prenom}` : email;
+    return user ? `${user.firstName} ${user.lastName}` : email;
   };
 
-  // Function to get avatar name (for consistent avatar color)
   const getAvatarName = (email) => {
     const user = users.find((u) => u.email === email);
-    return user && user.prenom && user.nom 
-      ? `${user.prenom} ${user.nom}` 
-      : email || "Utilisateur";
+    return user && user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : email || 'Utilisateur';
   };
+
+  if (status === 'loading') {
+    return (
+      <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
+        <Typography>Chargement des détails du projet...</Typography>
+      </Box>
+    );
+  }
 
   if (!currentProject) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography>Chargement des détails du projet...</Typography>
+        <Typography>Projet non trouvé.</Typography>
       </Box>
     );
   }
@@ -72,7 +81,6 @@ const ProjectOverview = () => {
       <PageTitle>Aperçu du projet</PageTitle>
 
       <Grid container spacing={3}>
-        {/* Informations du projet */}
         <Grid item xs={12} md={6}>
           <StyledPaper>
             <SectionTitle variant="h6">
@@ -86,11 +94,11 @@ const ProjectOverview = () => {
               <Typography variant="body2" color="textSecondary">
                 Titre
               </Typography>
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  wordBreak: 'break-word', 
-                  overflowWrap: 'break-word' 
+              <Typography
+                variant="h6"
+                sx={{
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
                 }}
               >
                 {currentProject.title}
@@ -101,10 +109,10 @@ const ProjectOverview = () => {
               <Typography variant="body2" color="textSecondary">
                 Description
               </Typography>
-              <Typography 
-                sx={{ 
-                  wordBreak: 'break-word', 
-                  overflowWrap: 'break-word' 
+              <Typography
+                sx={{
+                  wordBreak: 'break-word',
+                  overflowWrap: 'break-word',
                 }}
               >
                 {currentProject.description}
@@ -112,26 +120,38 @@ const ProjectOverview = () => {
             </Box>
 
             <Box sx={{ mb: 3 }}>
-              <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ display: 'flex', alignItems: 'center' }}
+              >
                 <SettingsIcon fontSize="small" sx={{ mr: 1 }} />
                 Méthode Agile
               </Typography>
               <Typography>
-                {currentProject.method ? currentProject.method.charAt(0).toUpperCase() + currentProject.method.slice(1) : 'Non spécifié'}
+                {currentProject.method
+                  ? currentProject.method.charAt(0).toUpperCase() +
+                    currentProject.method.slice(1)
+                  : 'Non spécifié'}
               </Typography>
             </Box>
 
             <Box>
-              <Typography variant="body2" color="textSecondary" sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography
+                variant="body2"
+                color="textSecondary"
+                sx={{ display: 'flex', alignItems: 'center' }}
+              >
                 <CalendarTodayIcon fontSize="small" sx={{ mr: 1 }} />
                 Créé le
               </Typography>
-              <Typography>{new Date(currentProject.createdAt).toLocaleDateString('fr-FR')}</Typography>
+              <Typography>
+                {new Date(currentProject.createdAt).toLocaleDateString('fr-FR')}
+              </Typography>
             </Box>
           </StyledPaper>
         </Grid>
 
-        {/* Équipe du projet */}
         <Grid item xs={12} md={6}>
           <StyledPaper>
             <SectionTitle variant="h6">
@@ -145,7 +165,7 @@ const ProjectOverview = () => {
               title="Chefs de projet"
               users={currentProject.projectManagers}
               getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName} // Pass getAvatarName
+              getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
             />

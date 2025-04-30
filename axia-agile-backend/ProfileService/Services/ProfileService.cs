@@ -2,6 +2,7 @@
 using ProfileService.Data;
 using ProfileService.DTOs;
 using ProfileService.Models;
+using System.Text.RegularExpressions;
 
 namespace ProfileService.Services
 {
@@ -88,10 +89,14 @@ namespace ProfileService.Services
         public async Task UpdatePasswordAsync(int userId, string newPassword)
         {
             _logger.LogInformation($"Updating password for UserId: {userId}");
-            if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 6)
+            if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 12 ||
+                !Regex.IsMatch(newPassword, @"[A-Z]") ||
+                !Regex.IsMatch(newPassword, @"[a-z]") ||
+                !Regex.IsMatch(newPassword, @"[0-9]") ||
+                !Regex.IsMatch(newPassword, @"[!@#$%^&*]"))
             {
-                _logger.LogWarning("Password must be at least 6 characters.");
-                throw new InvalidOperationException("Le mot de passe doit contenir au moins 6 caractères.");
+                _logger.LogWarning("Password does not meet requirements.");
+                throw new InvalidOperationException("Le mot de passe doit contenir au moins 12 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
             }
 
             var user = await _userServiceClient.GetUserByIdAsync(userId);

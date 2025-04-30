@@ -27,7 +27,6 @@ import {
 import {
   Email as EmailIcon,
   Phone as PhoneIcon,
-  Business as BusinessIcon,
   Person as PersonIcon,
   Lock as LockIcon,
   Save as SaveIcon,
@@ -49,7 +48,6 @@ import {
   setSnackbar,
 } from '../store/slices/profileSlice';
 
-// Base URL du ProfileService pour construire les URLs des photos
 const PROFILE_SERVICE_BASE_URL = 'https://localhost:7240';
 
 const Profile = () => {
@@ -150,9 +148,8 @@ const Profile = () => {
       await dispatch(updateProfile(editData)).unwrap();
       if (profileImageFile) {
         setUploadingPhoto(true);
-        const result = await dispatch(uploadProfilePhoto(profileImageFile)).unwrap();
-        console.log('Photo upload result:', result);
-        // Refresh profile to ensure latest data
+        await dispatch(uploadProfilePhoto(profileImageFile)).unwrap();
+        // Refresh profile to ensure latest data, including profilePhotoUrl
         await dispatch(fetchProfile()).unwrap();
         setUploadingPhoto(false);
       }

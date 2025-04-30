@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
 using System.Text;
 using UserService.Data;
 using UserService.Middleware;
 using UserService.Services;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,21 +15,17 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:5173", // Frontend
-                "http://localhost:5203", // UserService HTTP
-                "https://localhost:7151"  // UserService HTTPS
-            )
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-           .AllowCredentials();
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
-// Configure DbContext with sensitive data logging
+// Configure DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
-           .EnableSensitiveDataLogging() // Enable detailed error logging
+           .EnableSensitiveDataLogging()
            .EnableDetailedErrors());
 
 // Register services
@@ -39,7 +35,12 @@ builder.Services.AddHttpContextAccessor();
 
 // Configure JWT authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
+var keyValue = jwtSettings["Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY");
+if (string.IsNullOrEmpty(keyValue))
+{
+    throw new InvalidOperationException("JWT Key is not configured.");
+}
+var key = Encoding.ASCII.GetBytes(keyValue);
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -59,6 +60,24 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // Vérifier l'en-tête Authorization
+            string authHeader = context.Request.Headers["Authorization"];
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Token = authHeader.Substring("Bearer ".Length).Trim();
+            }
+            // Si pas d'en-tête, vérifier le cookie AuthToken
+            else if (context.Request.Cookies.ContainsKey("AuthToken"))
+            {
+                context.Token = context.Request.Cookies["AuthToken"];
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
 // Configure authorization policies
@@ -67,37 +86,36 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("SuperAdminOnly", policy => policy.RequireClaim("RoleId", "1"));
     options.AddPolicy("AdminOnly", policy => policy.RequireClaim("RoleId", "2"));
     options.AddPolicy("SuperAdminOrAdmin", policy => policy.RequireClaim("RoleId", "1", "2"));
-    options.AddPolicy("CanViewUsers", policy => policy.RequireClaim("CanViewUsers"));
-    options.AddPolicy("CanCreateUsers", policy => policy.RequireClaim("CanCreateUsers"));
-    options.AddPolicy("CanUpdateUsers", policy => policy.RequireClaim("CanUpdateUsers"));
-    options.AddPolicy("CanDeleteUsers", policy => policy.RequireClaim("CanDeleteUsers"));
-    options.AddPolicy("CanViewProjects", policy => policy.RequireClaim("CanViewProjects"));
-    options.AddPolicy("CanCreateProjects", policy => policy.RequireClaim("CanCreateProjects"));
-    options.AddPolicy("CanUpdateProjects", policy => policy.RequireClaim("CanUpdateProjects"));
-    options.AddPolicy("CanDeleteProjects", policy => policy.RequireClaim("CanDeleteProjects"));
-
+    options.AddPolicy("CanViewUsers", policy => policy.RequireAssertion(context =>
+        context.User.HasClaim("RoleId", "1") || context.User.HasClaim(c => c.Type == "CanViewUsers")));
+    options.AddPolicy("CanCreateUsers", policy => policy.RequireAssertion(context =>
+        context.User.HasClaim("RoleId", "1") || context.User.HasClaim(c => c.Type == "CanCreateUsers")));
+    options.AddPolicy("CanUpdateUsers", policy => policy.RequireAssertion(context =>
+        context.User.HasClaim("RoleId", "1") || context.User.HasClaim(c => c.Type == "CanUpdateUsers")));
+    options.AddPolicy("CanDeleteUsers", policy => policy.RequireAssertion(context =>
+        context.User.HasClaim("RoleId", "1") || context.User.HasClaim(c => c.Type == "CanDeleteUsers")));
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 });
+
+// Add CSRF protection
+builder.Services.AddAntiforgery();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "UserService API", Version = "v1" });
-
-    // Add JWT Authentication
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\"",
+        Description = "JWT Authorization header using the Bearer scheme.",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT"
     });
-
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -112,18 +130,6 @@ builder.Services.AddSwaggerGen(c =>
             new string[] {}
         }
     });
-
-    // Add multiple server URLs
-    c.AddServer(new OpenApiServer { Url = "https://localhost:7151" });
-    c.AddServer(new OpenApiServer { Url = "http://localhost:5203" });
-});
-
-// Configure logging
-builder.Services.AddLogging(loggingBuilder =>
-{
-    loggingBuilder.AddConsole();
-    loggingBuilder.AddDebug();
-    loggingBuilder.SetMinimumLevel(LogLevel.Debug); // Enable debug logs for troubleshooting
 });
 
 var app = builder.Build();
@@ -140,30 +146,24 @@ using (var scope = app.Services.CreateScope())
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     try
     {
-        dbContext.Database.Migrate(); // Apply migrations to ensure schema and HasData seeding
-        DatabaseSeeder.SeedDatabase(dbContext); // Seed SuperAdmin
+        dbContext.Database.Migrate();
+        DatabaseSeeder.SeedDatabase(dbContext, app.Environment);
     }
     catch (Exception ex)
     {
         Console.WriteLine($"Erreur lors de l'initialisation de la base de données: {ex.Message}");
-        if (ex.InnerException != null)
-        {
-            Console.WriteLine($"Exception interne: {ex.InnerException.Message}");
-        }
-        throw; // Rethrow to make the error visible
+        throw;
     }
 }
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "UserService API v1");
-    });
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
+app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

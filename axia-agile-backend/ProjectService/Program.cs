@@ -31,7 +31,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Configure HttpClient for UserService
 builder.Services.AddHttpClient<UserServiceClient>(client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5203");
+    client.BaseAddress = new Uri("https://localhost:7151");
 }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
 {
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
@@ -40,10 +40,16 @@ builder.Services.AddHttpClient<UserServiceClient>(client =>
 // Add services
 builder.Services.AddScoped<ProjectService.Services.ProjectService>();
 builder.Services.AddControllers();
+builder.Services.AddHttpContextAccessor(); // Added to support accessing HTTP context (e.g., for user claims)
 
 // Configure JWT authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
+var keyValue = jwtSettings["Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY");
+if (string.IsNullOrEmpty(keyValue))
+{
+    throw new InvalidOperationException("JWT Key is not configured.");
+}
+var key = Encoding.ASCII.GetBytes(keyValue);
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -62,6 +68,25 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtSettings["Issuer"],
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
+    };
+    // Add logic to check for token in AuthToken cookie
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // Check Authorization header
+            string authHeader = context.Request.Headers["Authorization"];
+            if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Token = authHeader.Substring("Bearer ".Length).Trim();
+            }
+            // If no header, check AuthToken cookie
+            else if (context.Request.Cookies.ContainsKey("AuthToken"))
+            {
+                context.Token = context.Request.Cookies["AuthToken"];
+            }
+            return Task.CompletedTask;
+        }
     };
 });
 
@@ -131,7 +156,6 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-
     app.UseSwaggerUI(c =>
     {
         c.SwaggerEndpoint("/swagger/v1/swagger.json", "ProjectService v1");

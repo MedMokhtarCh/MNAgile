@@ -8,6 +8,8 @@ import {
   updateUser,
   deleteUser,
   toggleUserActive,
+  checkUserExists,
+  clearUserExists,
   setSnackbar,
 } from '../store/slices/usersSlice';
 import { validateUser } from '../utils/validators';
@@ -16,7 +18,7 @@ import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, P
 
 export const useUsers = (storageKey) => {
   const dispatch = useDispatch();
-  const { users, roles, claims, loading, error, snackbar } = useSelector((state) => state.users);
+  const { users, roles, claims, loading, snackbar, userExists } = useSelector((state) => state.users);
   const { currentUser } = useAuth();
 
   const [openModal, setOpenModal] = useState(false);
@@ -32,9 +34,9 @@ export const useUsers = (storageKey) => {
     claimIds: [],
     isActive: true,
   });
-
   const [editMode, setEditMode] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [emailChecked, setEmailChecked] = useState(false);
 
   const availableRoles = roles
     .filter((role) => {
@@ -45,22 +47,39 @@ export const useUsers = (storageKey) => {
     .map((role) => ({
       id: role.id,
       label: role.label,
-      icon: role.iconName === 'Security' ? <SecurityIcon /> :
-            role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
+      icon:
+        role.iconName === 'Security' ? <SecurityIcon /> :
+        role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
     }));
 
   useEffect(() => {
-    dispatch(fetchUsers());
-    dispatch(fetchRoles());
-    dispatch(fetchClaims());
-  }, [dispatch]);
+    // Fetch data only if authenticated
+    if (currentUser) {
+      dispatch(fetchUsers());
+      dispatch(fetchRoles());
+      dispatch(fetchClaims());
+    }
+  }, [dispatch, currentUser]);
 
   useEffect(() => {
-    console.log('openModal state:', openModal);
   }, [openModal]);
 
   const handleCloseSnackbar = () => {
     dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
+  };
+
+  const handleCheckEmail = async (email) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailChecked(false);
+      dispatch(setSnackbar({ open: true, message: 'Veuillez entrer un email valide.', severity: 'error' }));
+      return;
+    }
+    try {
+      await dispatch(checkUserExists(email)).unwrap();
+      setEmailChecked(true);
+    } catch (error) {
+      setEmailChecked(false);
+    }
   };
 
   const handleCreateUser = async (requiredFields) => {
@@ -70,9 +89,27 @@ export const useUsers = (storageKey) => {
       return;
     }
 
+    if (!editMode && userExists[newUser.email] === true) {
+      dispatch(setSnackbar({ open: true, message: 'Cet email est déjà utilisé.', severity: 'error' }));
+      return;
+    }
+
+    if (
+      editMode &&
+      newUser.email !== users.find((u) => u.id === currentUserId)?.email &&
+      userExists[newUser.email] === true
+    ) {
+      dispatch(setSnackbar({
+        open: true,
+        message: 'Cet email est déjà utilisé par un autre utilisateur.',
+        severity: 'error',
+      }));
+      return;
+    }
+
     const userData = {
       email: newUser.email,
-      password: newUser.password,
+      password: editMode ? newUser.password || undefined : newUser.password, // Only send password if provided in edit mode
       firstName: newUser.firstName,
       lastName: newUser.lastName,
       phoneNumber: newUser.phoneNumber,
@@ -84,19 +121,13 @@ export const useUsers = (storageKey) => {
     };
 
     try {
-      const action = editMode
-        ? updateUser({ id: currentUserId, userData })
-        : createUser(userData);
-
+      const action = editMode ? updateUser({ id: currentUserId, userData }) : createUser(userData);
       const result = await dispatch(action).unwrap();
       resetUserForm();
+      dispatch(clearUserExists(newUser.email));
       return result;
     } catch (error) {
-      dispatch(setSnackbar({
-        open: true,
-        message: error.message || 'Une erreur est survenue',
-        severity: 'error',
-      }));
+      // Error is already handled in usersSlice
       throw error;
     }
   };
@@ -117,45 +148,32 @@ export const useUsers = (storageKey) => {
     setEditMode(false);
     setCurrentUserId(null);
     setOpenModal(false);
+    setEmailChecked(false);
+    dispatch(clearUserExists());
   };
 
   const handleEditUser = (user) => {
     if (!user) {
       console.error('No user provided for editing');
-      dispatch(setSnackbar({
-        open: true,
-        message: 'Utilisateur non valide',
-        severity: 'error',
-      }));
+      dispatch(setSnackbar({ open: true, message: 'Utilisateur non valide.', severity: 'error' }));
       return;
     }
     console.log('Édition de l\'utilisateur:', user);
     setNewUser({
       ...user,
-      password: '',
+      password: '', // Don't prefill password
     });
     setEditMode(true);
     setCurrentUserId(user.id);
-    setOpenModal((prev) => {
-      console.log('Setting openModal to true, previous state:', prev);
-      return true;
-    });
+    setOpenModal(true);
+    setEmailChecked(true); // Assume current email is valid
   };
 
   const handleDeleteUser = async (id) => {
     try {
       await dispatch(deleteUser(id)).unwrap();
-      dispatch(setSnackbar({
-        open: true,
-        message: 'Utilisateur supprimé avec succès',
-        severity: 'success',
-      }));
     } catch (error) {
-      dispatch(setSnackbar({
-        open: true,
-        message: error.message || 'Échec de la suppression',
-        severity: 'error',
-      }));
+      // Error is already handled in usersSlice
     }
   };
 
@@ -164,16 +182,9 @@ export const useUsers = (storageKey) => {
     if (!user) return;
 
     try {
-      await dispatch(toggleUserActive({
-        id,
-        isActive: !user.isActive,
-      })).unwrap();
+      await dispatch(toggleUserActive({ id, isActive: !user.isActive })).unwrap();
     } catch (error) {
-      dispatch(setSnackbar({
-        open: true,
-        message: error.message || 'Échec du changement de statut',
-        severity: 'error',
-      }));
+      // Error is already handled in usersSlice
     }
   };
 
@@ -206,5 +217,8 @@ export const useUsers = (storageKey) => {
     snackbar,
     handleCloseSnackbar,
     getUserByEmail,
+    handleCheckEmail,
+    emailChecked,
+    userExists,
   };
 };
