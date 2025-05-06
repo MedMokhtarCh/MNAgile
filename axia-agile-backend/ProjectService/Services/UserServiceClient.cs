@@ -1,6 +1,8 @@
 ﻿using System.Net.Http;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
+using System;
 
 namespace ProjectService.Services
 {
@@ -24,15 +26,28 @@ namespace ProjectService.Services
                 {
                     var content = await response.Content.ReadAsStringAsync();
                     _logger.LogInformation($"Réponse de UserService pour l'email {email} : {content}");
-                    return JsonSerializer.Deserialize<bool>(content);
+
+                    // Parse the correct response structure from UserService
+                    var userExistenceResponse = JsonSerializer.Deserialize<UserExistenceResponse>(content,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                    return userExistenceResponse?.Exists ?? false;
                 }
+
                 _logger.LogError($"Erreur lors de la vérification de l'existence de l'utilisateur {email}. Statut : {response.StatusCode}");
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Erreur lors de la connexion à UserService : {ex.Message}");
             }
+
             return false;
+        }
+
+        private class UserExistenceResponse
+        {
+            public bool Exists { get; set; }
+            public int? UserId { get; set; }
         }
     }
 }

@@ -1,22 +1,40 @@
-import React from 'react';
-import { useParams } from 'react-router-dom';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
   Paper,
   Grid,
   Divider,
+  CircularProgress,
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { styled } from '@mui/material/styles';
+import { projectApi } from '../services/api';
 import { useAvatar } from '../hooks/useAvatar';
 import { useUsers } from '../hooks/useUsers';
 import UserRoleSection from '../components/common/UserRoleSection';
 import PageTitle from '../components/common/PageTitle';
+
+const normalizeProject = (project) => ({
+  id: String(project.id || project.Id || ''),
+  title: project.title || project.Title || '',
+  description: project.description || project.Description || '',
+  methodology: project.methodology || project.Methodology || '',
+  createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
+  startDate: project.startDate || project.StartDate || new Date().toISOString(),
+  endDate: project.endDate || project.EndDate || new Date().toISOString(),
+  createdBy: project.createdBy || project.CreatedBy || '',
+  projectManagers: project.projectManagers || project.ProjectManagers || [],
+  productOwners: project.productOwners || project.ProductOwners || [],
+  scrumMasters: project.scrumMasters || project.ScrumMasters || [],
+  users: project.developers || project.Developers || [],
+  testers: project.testers || project.Testers || [],
+  observers: project.observers || project.Observers || [],
+});
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
@@ -43,35 +61,89 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
 
 const ProjectOverview = () => {
   const { projectId } = useParams();
-  const { projects, status } = useSelector((state) => state.projects);
-  const currentProject = projects.find((p) => p.id === projectId);
+  const navigate = useNavigate();
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const { generateInitials, getAvatarColor } = useAvatar();
   const { users } = useUsers('users');
 
+  useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await projectApi.get(`/Projects/${projectId}`);
+        const normalizedProject = normalizeProject(response.data);
+        setProject(normalizedProject);
+      } catch (err) {
+        if (err.response?.status === 401) {
+          navigate('/login', { replace: true });
+        } else if (err.response?.status === 404) {
+          setError(`Le projet avec l'ID ${projectId} n'existe pas.`);
+        } else {
+          setError(
+            err.response?.data?.message ||
+              err.response?.data?.detail ||
+              'Échec de la récupération des détails du projet.'
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (projectId) {
+      fetchProject();
+    } else {
+      setError('ID du projet manquant.');
+      setLoading(false);
+    }
+  }, [projectId, navigate]);
+
   const getUserDisplayName = (email) => {
     const user = users.find((u) => u.email === email);
-    return user ? `${user.firstName} ${user.lastName}` : email;
+    return user
+      ? `${user.firstName || user.nom || ''} ${user.lastName || user.prenom || ''}`.trim() || user.email
+      : email;
   };
 
   const getAvatarName = (email) => {
     const user = users.find((u) => u.email === email);
-    return user && user.firstName && user.lastName
-      ? `${user.firstName} ${user.lastName}`
+    return user && (user.firstName || user.nom) && (user.lastName || user.prenom)
+      ? `${user.firstName || user.nom} ${user.lastName || user.prenom}`
       : email || 'Utilisateur';
   };
 
-  if (status === 'loading') {
+  if (loading) {
     return (
       <Box sx={{ p: 3, display: 'flex', justifyContent: 'center' }}>
-        <Typography>Chargement des détails du projet...</Typography>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Chargement des détails du projet...</Typography>
       </Box>
     );
   }
 
-  if (!currentProject) {
+  if (error) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography>Projet non trouvé.</Typography>
+        <Typography color="error">Erreur : {error}</Typography>
+        {error.includes("n'existe pas") && (
+          <Typography>
+            Le projet avec l'ID {projectId} n'existe pas ou vous n'y avez pas accès.
+          </Typography>
+        )}
+      </Box>
+    );
+  }
+
+  if (!project) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography color="error">Projet non trouvé.</Typography>
+        <Typography>
+          Le projet avec l'ID {projectId} n'existe pas ou vous n'y avez pas accès.
+        </Typography>
       </Box>
     );
   }
@@ -101,7 +173,7 @@ const ProjectOverview = () => {
                   overflowWrap: 'break-word',
                 }}
               >
-                {currentProject.title}
+                {project.title}
               </Typography>
             </Box>
 
@@ -115,7 +187,7 @@ const ProjectOverview = () => {
                   overflowWrap: 'break-word',
                 }}
               >
-                {currentProject.description || 'Aucune description disponible.'}
+                {project.description || 'Aucune description disponible.'}
               </Typography>
             </Box>
 
@@ -129,9 +201,9 @@ const ProjectOverview = () => {
                 Méthode Agile
               </Typography>
               <Typography>
-                {currentProject.method
-                  ? currentProject.method.charAt(0).toUpperCase() +
-                    currentProject.method.slice(1)
+                {project.methodology
+                  ? project.methodology.charAt(0).toUpperCase() +
+                    project.methodology.slice(1)
                   : 'Non spécifié'}
               </Typography>
             </Box>
@@ -146,7 +218,7 @@ const ProjectOverview = () => {
                 Créé le
               </Typography>
               <Typography>
-                {new Date(currentProject.createdAt).toLocaleDateString('fr-FR')}
+                {new Date(project.createdAt).toLocaleDateString('fr-FR')}
               </Typography>
             </Box>
           </StyledPaper>
@@ -163,7 +235,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Chefs de projet"
-              users={currentProject.projectManagers || []}
+              users={project.projectManagers || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -174,7 +246,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Product Owners"
-              users={currentProject.productOwners || []}
+              users={project.productOwners || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -185,7 +257,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Scrum Masters"
-              users={currentProject.scrumMasters || []}
+              users={project.scrumMasters || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -196,7 +268,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Développeurs"
-              users={currentProject.users || []}
+              users={project.users || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -207,7 +279,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Testeurs"
-              users={currentProject.testers || []}
+              users={project.testers || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}
@@ -218,7 +290,7 @@ const ProjectOverview = () => {
 
             <UserRoleSection
               title="Observateurs"
-              users={currentProject.observers || []}
+              users={project.observers || []}
               getUserDisplayName={getUserDisplayName}
               getAvatarName={getAvatarName}
               getAvatarColor={getAvatarColor}

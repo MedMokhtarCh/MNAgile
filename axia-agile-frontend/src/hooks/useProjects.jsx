@@ -115,7 +115,8 @@ export const useProject = () => {
 
   const navigateToProject = useCallback(
     (projectId) => {
-      navigate(`/project/${projectId}`);
+      // Ensure projectId is always a string for navigation
+      navigate(`/project/${String(projectId)}`);
     },
     [navigate]
   );
@@ -134,7 +135,7 @@ export const useProject = () => {
 
       if (editMode && project) {
         setProjectForm({
-          id: project.id || '',
+          id: String(project.id || ''), // Ensure ID is stored as string in form
           title: project.title || '',
           description: project.description || '',
           method: project.method || '',
@@ -165,7 +166,7 @@ export const useProject = () => {
         setScrumMasters([]);
         setDevelopers([]);
         setTesters([]);
-        setObservers([]); // Initialize observers
+        setObservers([]); 
       }
 
       setModalOpen(true);
@@ -267,7 +268,7 @@ export const useProject = () => {
   const notifyProjectUsers = useCallback(
     (projectData, isEditing) => {
       const projectTitle = projectData.title;
-      const projectId = projectData.id;
+      const projectId = projectData.id; // This should already be normalized to string from the API response
 
       const notifyUsersByRole = (users, roleName) => {
         users.forEach((userEmail) => {
@@ -321,12 +322,12 @@ export const useProject = () => {
     }
 
     const projectData = {
-      id: isEditing ? projectForm.id : undefined,
+      id: isEditing ? projectForm.id : undefined, // Keep ID as string in form data
       title: projectForm.title,
       description: projectForm.description,
       methodology: projectForm.method,
       createdAt: isEditing
-        ? projects.find((p) => p.id.toString() === projectForm.id)?.createdAt ||
+        ? projects.find((p) => p.id === projectForm.id)?.createdAt ||
           new Date().toISOString()
         : new Date().toISOString(),
       startDate: projectForm.startDate,
@@ -343,25 +344,30 @@ export const useProject = () => {
     console.log('Saving Project Data:', projectData);
 
     try {
+      let savedProject;
+      
       if (isEditing) {
-        await dispatch(
+        // For updates, pass id separately from the project data
+        savedProject = await dispatch(
           updateProject({ id: projectForm.id, project: projectData })
         ).unwrap();
       } else {
-        const response = await dispatch(createProject(projectData)).unwrap();
-        projectData.id = response.id;
+        // For new projects, we get the ID from the response
+        savedProject = await dispatch(createProject(projectData)).unwrap();
       }
 
+      // Now use the returned project from the API response which has normalized ID
       createNotification({
         recipient: currentUser.email,
         type: 'project',
-        message: `Projet "${projectData.title}" ${
+        message: `Projet "${savedProject.title}" ${
           isEditing ? 'mis à jour' : 'créé'
         } avec succès`,
-        metadata: { projectId: projectData.id },
+        metadata: { projectId: savedProject.id },
       });
 
-      notifyProjectUsers(projectData, isEditing);
+      // Use the normalized project data for notifications
+      notifyProjectUsers(savedProject, isEditing);
 
       setFormSuccess(
         isEditing

@@ -22,9 +22,9 @@ export const fetchCurrentUser = createAsyncThunk(
       return response.data;
     } catch (error) {
       if (error.response?.status === 401) {
-        return rejectWithValue('utilisateur déconnecter');
+        return rejectWithValue('');
       }
-      return rejectWithValue(error.response?.data?.message || 'Échec de récupération des données utilisateur');
+      return rejectWithValue(error.response?.data?.message || '');
     }
   }
 );
@@ -34,7 +34,7 @@ export const logoutUser = createAsyncThunk(
   async (_, { dispatch, rejectWithValue }) => {
     try {
       await userApi.post('/Auth/logout');
-      dispatch(logout()); // Clear auth state
+      dispatch(logout()); 
       dispatch(clearProfile()); // Clear profile state
       return true;
     } catch (error) {

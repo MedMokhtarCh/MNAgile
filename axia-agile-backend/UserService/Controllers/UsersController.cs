@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using UserService.DTOs;
 using UserService.Models;
 using UserService.Services;
+using Microsoft.EntityFrameworkCore;
+using UserService.Data;
 
 namespace UserService.Controllers
 {
@@ -14,15 +16,25 @@ namespace UserService.Controllers
     {
         private readonly Services.UserService _userService;
         private readonly AuthService _authService;
+        private readonly EmailService _emailService; // Ajout de EmailService
         private readonly ILogger<UsersController> _logger;
         private readonly IWebHostEnvironment _environment;
+        private readonly AppDbContext _context;
 
-        public UsersController(Services.UserService userService, AuthService authService, ILogger<UsersController> logger, IWebHostEnvironment environment)
+        public UsersController(
+            Services.UserService userService,
+            AuthService authService,
+            EmailService emailService, // Injection de EmailService
+            ILogger<UsersController> logger,
+            IWebHostEnvironment environment,
+            AppDbContext context)
         {
             _userService = userService;
             _authService = authService;
+            _emailService = emailService; // Initialisation
             _logger = logger;
             _environment = environment;
+            _context = context;
         }
 
         [HttpPost]
@@ -31,7 +43,7 @@ namespace UserService.Controllers
         {
             _logger.LogInformation("Received create user request: {@Request}", request);
 
-            // Manual validation
+            // Validation manuelle
             if (request == null)
             {
                 _logger.LogWarning("Create user request is null");
@@ -72,7 +84,7 @@ namespace UserService.Controllers
                 return BadRequest("Un rôle valide est requis.");
             }
 
-            // Restrict SuperAdmin creation to SuperAdmins only
+            // Restreindre la création de SuperAdmin aux SuperAdmins uniquement
             if (request.RoleId == 1)
             {
                 var isSuperAdmin = User.HasClaim("RoleId", "1");
@@ -83,7 +95,7 @@ namespace UserService.Controllers
                 }
             }
 
-            // Prevent SuperAdmin creation in production
+            // Empêcher la création de SuperAdmin en production
             if (request.RoleId == 1 && _environment.IsProduction())
             {
                 _logger.LogWarning("SuperAdmin creation attempted in production: {Email}", request.Email);
@@ -131,6 +143,25 @@ namespace UserService.Controllers
 
                 var createdUser = await _userService.CreateUserAsync(user, request.ClaimIds ?? new List<int>());
                 _logger.LogInformation($"User {user.Email} created successfully.");
+
+                // Envoyer l'email de confirmation avec l'identifiant et le mot de passe
+                var emailSent = await _emailService.SendAccountCreationEmailAsync(
+                    user.Email,
+                    user.FirstName,
+                    user.LastName,
+                    request.Password // Utiliser le mot de passe brut avant hachage
+                );
+
+                if (!emailSent)
+                {
+                    _logger.LogWarning($"Échec de l'envoi de l'email de création de compte à {user.Email}.");
+                    // Note : On ne renvoie pas une erreur ici pour ne pas interrompre la création
+                }
+                else
+                {
+                    _logger.LogInformation($"Email de création de compte envoyé avec succès à {user.Email}.");
+                }
+
                 return CreatedAtAction(nameof(GetUserById), new { id = createdUser.Id }, MapUserToDTO(createdUser));
             }
             catch (Exception ex)
@@ -170,7 +201,7 @@ namespace UserService.Controllers
                 return NotFound("Utilisateur non trouvé.");
             }
 
-            // Manual validation
+            // Validation manuelle
             if (!string.IsNullOrEmpty(request.Email) && !_authService.IsValidEmail(request.Email))
             {
                 _logger.LogWarning("Invalid email: {Email}", request.Email);
@@ -180,13 +211,13 @@ namespace UserService.Controllers
                 (request.Password.Length < 12 ||
                  !Regex.IsMatch(request.Password, @"[A-Z]") ||
                  !Regex.IsMatch(request.Password, @"[a-z]") ||
-                 !Regex.IsMatch(request.Password, @"[0-3]") ||
+                 !Regex.IsMatch(request.Password, @"[0-9]") ||
                  !Regex.IsMatch(request.Password, @"[!@#$%^&*]")))
             {
                 _logger.LogWarning("Invalid password for user: {Email}", user.Email);
-                return BadRequest("Le mot de passe doit contenir au moins 6 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
+                return BadRequest("Le mot de passe doit contenir au moins 12 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
             }
-            if (!string.IsNullOrEmpty(request.PhoneNumber) && !Regex.IsMatch(request.PhoneNumber, @"^\+?[1-3]\d{1,14}$"))
+            if (!string.IsNullOrEmpty(request.PhoneNumber) && !Regex.IsMatch(request.PhoneNumber, @"^\+?[1-9]\d{1,14}$"))
             {
                 _logger.LogWarning("Invalid phone number for user: {Email}", user.Email);
                 return BadRequest("Un numéro de téléphone valide est requis.");
@@ -198,6 +229,22 @@ namespace UserService.Controllers
                 {
                     _logger.LogWarning($"Email {request.Email} already exists.");
                     return BadRequest("Un compte avec cet email existe déjà.");
+                }
+                // Si l'email change, envoyer un email de notification
+                var emailSent = await _emailService.SendAccountCreationEmailAsync(
+                    request.Email,
+                    user.FirstName,
+                    user.LastName,
+                    request.Password
+                );
+
+                if (!emailSent)
+                {
+                    _logger.LogWarning($"Échec de l'envoi de l'email de changement de compte à {request.Email}.");
+                }
+                else
+                {
+                    _logger.LogInformation($"Email de changement de compte envoyé avec succès à {request.Email}.");
                 }
             }
 
@@ -268,14 +315,31 @@ namespace UserService.Controllers
         }
 
         [HttpGet("exists")]
-        public async Task<ActionResult<bool>> UserExists([FromQuery] string email)
+        public async Task<ActionResult<UserExistenceResponse>> UserExists([FromQuery] string email)
         {
             if (string.IsNullOrEmpty(email) || !_authService.IsValidEmail(email))
             {
+                _logger.LogWarning("UserExists: Invalid email format: {Email}", email);
                 return BadRequest("Un email valide est requis.");
             }
-            var userExists = await _userService.UserExistsAsync(email);
-            return Ok(userExists);
+
+            try
+            {
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email && u.IsActive);
+                if (user == null)
+                {
+                    _logger.LogInformation("UserExists: User with email {Email} not found or inactive.", email);
+                    return Ok(new UserExistenceResponse { Exists = false });
+                }
+
+                _logger.LogInformation("UserExists: User with email {Email} found with ID {UserId}.", email, user.Id);
+                return Ok(new UserExistenceResponse { Exists = true, UserId = user.Id });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "UserExists: Error checking user existence for email {Email}", email);
+                return StatusCode(500, "Une erreur interne est survenue.");
+            }
         }
 
         [HttpPatch("{id}/status")]
@@ -323,6 +387,12 @@ namespace UserService.Controllers
         public class UpdateUserStatusRequest
         {
             public bool IsActive { get; set; }
+        }
+
+        public class UserExistenceResponse
+        {
+            public bool Exists { get; set; }
+            public int? UserId { get; set; }
         }
     }
 }

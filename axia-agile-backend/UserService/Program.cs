@@ -24,13 +24,19 @@ builder.Services.AddCors(options =>
 
 // Configure DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
-           .EnableSensitiveDataLogging()
-           .EnableDetailedErrors());
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging()
+               .EnableDetailedErrors();
+    }
+});
 
 // Register services
 builder.Services.AddScoped<UserService.Services.UserService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpContextAccessor();
 
 // Configure JWT authentication
@@ -64,13 +70,11 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
-            // Vérifier l'en-tête Authorization
             string authHeader = context.Request.Headers["Authorization"];
             if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 context.Token = authHeader.Substring("Bearer ".Length).Trim();
             }
-            // Si pas d'en-tête, vérifier le cookie AuthToken
             else if (context.Request.Cookies.ContainsKey("AuthToken"))
             {
                 context.Token = context.Request.Cookies["AuthToken"];

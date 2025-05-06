@@ -1,0 +1,913 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Box, Typography, IconButton, Paper, Card, CardContent, Avatar, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Button, FormControl, InputLabel, Select as MuiSelect, OutlinedInput, useMediaQuery, useTheme, Grid, Container,
+  Tooltip, Fade, AppBar, Toolbar, Menu, MenuItem, AvatarGroup, Divider, Badge,CircularProgress, InputAdornment,Autocomplete
+} from '@mui/material';
+import { styled } from '@mui/material/styles';
+import AddIcon from '@mui/icons-material/Add';
+import FlagIcon from '@mui/icons-material/Flag';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CommentIcon from '@mui/icons-material/Comment';
+import SearchIcon  from '@mui/icons-material/Search';
+
+import SubtasksIcon from '@mui/icons-material/CheckCircleOutline';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import { DndContext, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useParams } from 'react-router-dom';
+import { useAvatar } from '../hooks/useAvatar';
+
+// Styled Components
+const KanbanColumn = styled(Paper)(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  padding: theme.spacing(1.5),
+  width: '300px',
+  minHeight: '400px',
+  margin: theme.spacing(1),
+  borderRadius: 12,
+  boxShadow: '0 2px 10px rgba(0,0,0,0.08)',
+  display: 'flex',
+  flexDirection: 'column',
+  transition: 'box-shadow 0.2s ease',
+  '&:hover': {
+    boxShadow: '0 4px 15px rgba(0,0,0,0.12)',
+  },
+}));
+
+const ColumnHeader = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: theme.spacing(1, 1.5),
+  background: theme.palette.grey[50],
+  borderRadius: 8,
+  marginBottom: theme.spacing(1),
+}));
+
+const TaskCard = styled(Card)(({ theme, priority }) => {
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case 'high': return theme.palette.error.main;
+      case 'medium': return theme.palette.warning.main;
+      case 'low': return theme.palette.success.main;
+      default: return theme.palette.grey[400];
+    }
+  };
+
+  return {
+    marginBottom: theme.spacing(1.5),
+    borderRadius: 10,
+    border: `1px solid ${theme.palette.grey[200]}`,
+    borderLeft: `4px solid ${getPriorityColor(priority)}`,
+    background: theme.palette.background.paper,
+    transition: 'all 0.2s ease',
+    '&:hover': {
+      boxShadow: theme.shadows[2],
+      transform: 'translateY(-2px)',
+    },
+  };
+});
+
+const PriorityChip = styled(Chip)(({ theme, priority }) => {
+  const getPriorityStyles = (priority) => {
+    switch (priority) {
+      case 'high': return { bg: theme.palette.error.light, color: theme.palette.error.contrastText };
+      case 'medium': return { bg: theme.palette.warning.light, color: theme.palette.warning.contrastText };
+      case 'low': return { bg: theme.palette.success.light, color: theme.palette.success.contrastText };
+      default: return { bg: theme.palette.grey[200], color: theme.palette.text.primary };
+    }
+  };
+
+  const styles = getPriorityStyles(priority);
+  return {
+    backgroundColor: styles.bg,
+    color: styles.color,
+    fontSize: '0.7rem',
+    height: 20,
+    fontWeight: 500,
+    '& .MuiChip-label': { padding: '0 8px' },
+  };
+});
+
+const StyledButton = styled(Button)(({ theme }) => ({
+  textTransform: 'none',
+  borderRadius: 8,
+  padding: theme.spacing(0.8, 1.5),
+  fontWeight: 500,
+}));
+
+// Sortable Task Component
+function SortableTask({ task, users, onEdit, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+  const { generateInitials, getAvatarColor } = useAvatar();
+  const theme = useTheme();
+
+  const getPriorityLabel = (priority) => {
+    switch (priority) {
+      case 'high': return 'High';
+      case 'medium': return 'Medium';
+      case 'low': return 'Low';
+      default: return 'None';
+    }
+  };
+
+  const getUserDisplayName = (email) => {
+    const user = users.find((u) => u.email === email);
+    return user ? `${user.firstName} ${user.lastName}` : email;
+  };
+
+  const formatDueDate = (date) => {
+    if (!date) return '';
+    return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <TaskCard ref={setNodeRef} style={style} priority={task.priority}>
+      <CardContent sx={{ p: 1.5, pb: '8px !important' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+            <IconButton
+              size="small"
+              {...attributes}
+              {...listeners}
+              sx={{ mr: 0.5, p: 0.3, color: 'text.secondary', cursor: 'grab' }}
+            >
+              <DragIndicatorIcon fontSize="small" />
+            </IconButton>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.4, flex: 1 }}
+            >
+              {task.title}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title="Edit Task">
+              <IconButton size="small" onClick={() => onEdit(task)}>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete Task">
+              <IconButton size="small" onClick={() => onDelete(task.id)}>
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+        {task.description && (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              fontSize: '0.8rem',
+              mb: 1,
+              display: '-webkit-box',
+              WebkitBoxOrient: 'vertical',
+              WebkitLineClamp: 2,
+              overflow: 'hidden',
+            }}
+          >
+            {task.description}
+          </Typography>
+        )}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {task.assignedUsers?.length > 0 ? (
+              <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.7rem' } }}>
+                {task.assignedUsers.map((email) => (
+                  <Tooltip key={email} title={getUserDisplayName(email)}>
+                    <Avatar sx={{ bgcolor: getAvatarColor(getUserDisplayName(email)) }}>
+                      {generateInitials(getUserDisplayName(email))}
+                    </Avatar>
+                  </Tooltip>
+                ))}
+              </AvatarGroup>
+            ) : (
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+                Unassigned
+              </Typography>
+            )}
+            {task.subtasks?.length > 0 && (
+              <Tooltip title={`${task.subtasks.length} Subtasks`}>
+                <Chip
+                  icon={<SubtasksIcon fontSize="small" />}
+                  label={task.subtasks.length}
+                  size="small"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              </Tooltip>
+            )}
+            {task.comments?.length > 0 && (
+              <Tooltip title={`${task.comments.length} Comments`}>
+                <Chip
+                  icon={<CommentIcon fontSize="small" />}
+                  label={task.comments.length}
+                  size="small"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              </Tooltip>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {task.dueDate && (
+              <Tooltip title={`Due: ${formatDueDate(task.dueDate)}`}>
+                <Chip
+                  icon={<CalendarTodayIcon fontSize="small" />}
+                  label={formatDueDate(task.dueDate)}
+                  size="small"
+                  sx={{ height: 20, fontSize: '0.7rem' }}
+                />
+              </Tooltip>
+            )}
+            <PriorityChip
+              priority={task.priority}
+              label={getPriorityLabel(task.priority)}
+              size="small"
+            />
+          </Box>
+        </Box>
+      </CardContent>
+    </TaskCard>
+  );
+}
+
+// Main Kanban Component
+function Kanban() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { delay: 100, tolerance: 5 } }));
+  const { projectId } = useParams();
+  const { generateInitials, getAvatarColor } = useAvatar();
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [currentUser] = useState(() => JSON.parse(localStorage.getItem('currentUser') || '{}'));
+  const [users, setUsers] = useState(() => {
+    const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const storedAdmins = JSON.parse(localStorage.getItem('admins') || '[]');
+    return [...storedUsers, ...storedAdmins].map((user) => ({
+      id: user.id || '',
+      name: `${user.nom || ''} ${user.prenom || ''}`.trim() || user.email,
+      firstName: user.nom || '',
+      lastName: user.prenom || '',
+      email: user.email || '',
+    }));
+  });
+  const [projectTitle, setProjectTitle] = useState(() => {
+    const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+    const project = projects.find((p) => p.id === projectId);
+    return project?.title || `Project ${projectId}`;
+  });
+  const [projectUsers, setProjectUsers] = useState([]);
+  const [columns, setColumns] = useState(() => {
+    const storedKanbans = JSON.parse(localStorage.getItem('kanban_tasks') || '{}');
+    return (
+      storedKanbans[projectId] || {
+        todo: [],
+        inProgress: [],
+        closed: [],
+      }
+    );
+  });
+  const [columnOrder, setColumnOrder] = useState(() => {
+    const storedKanbans = JSON.parse(localStorage.getItem('kanban_tasks') || '{}');
+    return storedKanbans[projectId] ? Object.keys(storedKanbans[projectId]) : ['todo', 'inProgress', 'closed'];
+  });
+
+  const [selectedUser, setSelectedUser] = useState('');
+  const [selectedPriority, setSelectedPriority] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [newColumnName, setNewColumnName] = useState('');
+  const [isAddingColumn, setIsAddingColumn] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentColumn, setCurrentColumn] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
+  const [formValues, setFormValues] = useState({
+    title: '',
+    description: '',
+    assignedUsers: [],
+    priority: 'medium',
+    dueDate: '',
+    subtasks: [],
+  });
+    const [menuAnchorEl, setMenuAnchorEl] = useState(null);
+    const [columnMenuAnchorEl, setColumnMenuAnchorEl] = useState(null);
+    const [showClosed, setShowClosed] = useState(true);
+  const columnLabels = {
+    todo: 'To Do',
+    inProgress: 'In Progress',
+    closed: 'Closed',
+  };
+
+  // Fetch project-specific users
+  useEffect(() => {
+    try {
+      const projects = JSON.parse(localStorage.getItem('projects') || '[]');
+      const project = projects.find((p) => p.id === projectId);
+      if (project) {
+        const projectUserEmails = [
+          ...(project.projectManagers || []),
+          ...(project.productOwners || []),
+          ...(project.scrumMasters || []),
+          ...(project.users || []),
+          ...(project.testers || []),
+        ].filter((email, index, self) => self.indexOf(email) === index && email);
+        const projectUsersData = users.filter((user) => projectUserEmails.includes(user.email));
+        setProjectUsers(projectUsersData);
+        if (projectUsersData.length === 0) {
+          setError('No users assigned to this project.');
+        }
+      } else {
+        setError('Project not found.');
+      }
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading project users:', err);
+      setError('Error loading users.');
+      setLoading(false);
+    }
+  }, [projectId, users]);
+
+  const createNotification = (userEmail, taskTitle) => {
+    try {
+      const notification = {
+        id: Date.now() + Math.random().toString(36).substring(2, 9),
+        type: 'task',
+        sender: { name: 'System', avatar: null },
+        message: `You have been assigned to the task "${taskTitle}" in project "${projectTitle}".`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        recipient: userEmail,
+      };
+      const storedNotifications = JSON.parse(localStorage.getItem('notifications') || '[]');
+      storedNotifications.push(notification);
+      localStorage.setItem('notifications', JSON.stringify(storedNotifications));
+      window.dispatchEvent(new Event('newNotification'));
+    } catch (err) {
+      console.error('Error creating notification:', err);
+    }
+  };
+
+  const handleAddColumn = () => {
+    if (!newColumnName.trim()) return;
+    try {
+      const columnId = newColumnName.toLowerCase().replace(/\s+/g, '');
+      const newColumns = { ...columns, [columnId]: [] };
+      const newColumnOrder = [...columnOrder, columnId];
+      setColumns(newColumns);
+      setColumnOrder(newColumnOrder);
+      const storedKanbans = JSON.parse(localStorage.getItem('kanban_tasks') || '{}');
+      storedKanbans[projectId] = newColumns;
+      localStorage.setItem('kanban_tasks', JSON.stringify(storedKanbans));
+      setNewColumnName('');
+      setIsAddingColumn(false);
+    } catch (err) {
+      console.error('Error adding column:', err);
+      setError('Error adding column.');
+    }
+  };
+
+  const handleDeleteColumn = (columnId) => {
+    try {
+      const newColumns = { ...columns };
+      delete newColumns[columnId];
+      const newColumnOrder = columnOrder.filter((id) => id !== columnId);
+      setColumns(newColumns);
+      setColumnOrder(newColumnOrder);
+      const storedKanbans = JSON.parse(localStorage.getItem('kanban_tasks') || '{}');
+      storedKanbans[projectId] = newColumns;
+      localStorage.setItem('kanban_tasks', JSON.stringify(storedKanbans));
+      setColumnMenuAnchorEl(null);
+    } catch (err) {
+      console.error('Error deleting column:', err);
+      setError('Error deleting column.');
+    }
+  };
+
+  const filteredColumns = Object.keys(columns).reduce((acc, columnId) => {
+    if (!showClosed && columnId === 'closed') return acc;
+    acc[columnId] = columns[columnId].filter((task) => {
+      const matchesUser = selectedUser ? task.assignedUsers?.includes(selectedUser) : true;
+      const matchesPriority = selectedPriority ? task.priority === selectedPriority : true;
+      const matchesSearch = searchQuery
+        ? task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          task.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        : true;
+      return matchesUser && matchesPriority && matchesSearch;
+    });
+    return acc;
+  }, {});
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (!active || !over) return;
+    try {
+      const activeId = active.id;
+      const overId = over.id;
+      let sourceColumn = null;
+      let sourceIndex = -1;
+      Object.keys(columns).forEach((columnId) => {
+        const taskIndex = columns[columnId].findIndex((task) => task.id === activeId);
+        if (taskIndex !== -1) {
+          sourceColumn = columnId;
+          sourceIndex = taskIndex;
+        }
+      });
+      if (!sourceColumn) return;
+
+      // Same-column reordering
+      if (activeId !== overId && columns[sourceColumn].some((task) => task.id === overId)) {
+        const destIndex = columns[sourceColumn].findIndex((task) => task.id === overId);
+        if (destIndex !== -1) {
+          const newColumnTasks = arrayMove(columns[sourceColumn], sourceIndex, destIndex);
+          const newColumns = { ...columns, [sourceColumn]: newColumnTasks };
+          updateColumns(newColumns);
+          return;
+        }
+      }
+
+      // Cross-column movement
+      let destColumn = null;
+      Object.keys(columns).forEach((columnId) => {
+        if (columns[columnId].some((task) => task.id === overId) || overId === columnId) {
+          destColumn = columnId;
+        }
+      });
+      if (destColumn && destColumn !== sourceColumn) {
+        const task = columns[sourceColumn][sourceIndex];
+        // Validate status transition (e.g., prevent moving to 'closed' if subtasks are incomplete)
+        if (destColumn === 'closed' && task.subtasks?.some((subtask) => !subtask.completed)) {
+          setError('Cannot close task with incomplete subtasks.');
+          return;
+        }
+        const newSourceTasks = [...columns[sourceColumn]];
+        newSourceTasks.splice(sourceIndex, 1);
+        const newDestTasks = [...columns[destColumn]];
+        const destIndex = columns[destColumn].findIndex((task) => task.id === overId);
+        newDestTasks.splice(destIndex !== -1 ? destIndex : newDestTasks.length, 0, task);
+        const newColumns = {
+          ...columns,
+          [sourceColumn]: newSourceTasks,
+          [destColumn]: newDestTasks,
+        };
+        updateColumns(newColumns);
+      }
+    } catch (err) {
+      console.error('Error during drag-and-drop:', err);
+      setError('Error moving task.');
+    }
+  };
+
+  const updateColumns = (newColumns) => {
+    try {
+      setColumns(newColumns);
+      const storedKanbans = JSON.parse(localStorage.getItem('kanban_tasks') || '{}');
+      storedKanbans[projectId] = newColumns;
+      localStorage.setItem('kanban_tasks', JSON.stringify(storedKanbans));
+    } catch (err) {
+      console.error('Error updating columns:', err);
+      setError('Error updating tasks.');
+    }
+  };
+
+  const handleColumnMenuOpen = (event, columnId) => {
+    setColumnMenuAnchorEl(event.currentTarget);
+    setCurrentColumn(columnId);
+  };
+
+  const handleColumnMenuClose = () => {
+    setColumnMenuAnchorEl(null);
+  };
+
+  const handleAddTask = (columnId) => {
+    setCurrentColumn(columnId);
+    setEditingTask(null);
+    setFormValues({
+      title: '',
+      description: '',
+      assignedUsers: [],
+      priority: 'medium',
+      dueDate: '',
+      subtasks: [],
+    });
+    setDialogOpen(true);
+    handleColumnMenuClose();
+  };
+
+  const handleEditTask = (task) => {
+    setEditingTask(task);
+    setCurrentColumn(Object.keys(columns).find((col) => columns[col].includes(task)));
+    setFormValues({
+      title: task.title,
+      description: task.description || '',
+      assignedUsers: users.filter((u) => task.assignedUsers?.includes(u.email)),
+      priority: task.priority,
+      dueDate: task.dueDate || '',
+      subtasks: task.subtasks || [],
+    });
+    setDialogOpen(true);
+  };
+
+  const handleDeleteTask = (taskId) => {
+    try {
+      const newColumns = { ...columns };
+      Object.keys(newColumns).forEach((columnId) => {
+        newColumns[columnId] = newColumns[columnId].filter((task) => task.id !== taskId);
+      });
+      updateColumns(newColumns);
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      setError('Error deleting task.');
+    }
+  };
+
+  const handleFormChange = (field) => (event, value) => {
+    try {
+      if (field === 'assignedUsers') {
+        setFormValues((prev) => ({ ...prev, [field]: value || [] }));
+      } else if (field === 'dueDate') {
+        setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
+      } else {
+        setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
+      }
+    } catch (err) {
+      console.error('Error handling form change:', err);
+      setError('Error updating form.');
+    }
+  };
+
+  const handleCreateOrUpdateTask = () => {
+    if (!currentColumn || !formValues.title) return;
+    try {
+      const taskData = {
+        id: editingTask ? editingTask.id : `task-${Date.now()}`,
+        title: formValues.title,
+        description: formValues.description,
+        assignedUsers: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+        priority: formValues.priority,
+        dueDate: formValues.dueDate || null,
+        subtasks: formValues.subtasks,
+        comments: editingTask ? editingTask.comments || [] : [],
+        createdAt: editingTask ? editingTask.createdAt : new Date().toISOString(),
+        createdBy: currentUser.email || '',
+      };
+      const newColumns = { ...columns };
+      if (editingTask) {
+        // Update existing task
+        Object.keys(newColumns).forEach((columnId) => {
+          newColumns[columnId] = newColumns[columnId].map((task) =>
+            task.id === editingTask.id ? taskData : task
+          );
+        });
+      } else {
+        // Create new task
+        newColumns[currentColumn] = [...newColumns[currentColumn], taskData];
+        formValues.assignedUsers.forEach((user) => {
+          if (user.email) {
+            createNotification(user.email, formValues.title);
+          }
+        });
+      }
+      updateColumns(newColumns);
+      setDialogOpen(false);
+      setEditingTask(null);
+    } catch (err) {
+      console.error('Error creating/updating task:', err);
+      setError('Error creating/updating task.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ minHeight: '100vh', bgcolor: theme.palette.grey[50] }}>
+      <AppBar position="static" elevation={0} sx={{ bgcolor: 'white', borderBottom: `1px solid ${theme.palette.grey[200]}` }}>
+        <Toolbar>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Kanban Board for {projectTitle}
+          </Typography>
+        </Toolbar>
+      </AppBar>
+      <Container maxWidth="xl" sx={{ mt: 3, mb: 6 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+            {error}
+          </Alert>
+        )}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3, alignItems: 'center' }}>
+          <TextField
+            size="small"
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ width: 200, bgcolor: 'white', borderRadius: 2 }}
+          />
+          <FormControl sx={{ minWidth: 160 }}>
+            <InputLabel id="filter-user-label">Filter by User</InputLabel>
+            <MuiSelect
+              labelId="filter-user-label"
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              input={<OutlinedInput label="Filter by User" />}
+              sx={{ borderRadius: 2, bgcolor: 'white' }}
+            >
+              <MenuItem value="">All Users</MenuItem>
+              {projectUsers.map((user) => (
+                <MenuItem key={user.email} value={user.email}>
+                  {user.name}
+                </MenuItem>
+              ))}
+            </MuiSelect>
+          </FormControl>
+          <FormControl sx={{ minWidth: 160 }}>
+            <InputLabel id="filter-priority-label">Filter by Priority</InputLabel>
+            <MuiSelect
+              labelId="filter-priority-label"
+              value={selectedPriority}
+              onChange={(e) => setSelectedPriority(e.target.value)}
+              input={<OutlinedInput label="Filter by Priority" />}
+              sx={{ borderRadius: 2, bgcolor: 'white' }}
+            >
+              <MenuItem value="">All Priorities</MenuItem>
+              <MenuItem value="high">High</MenuItem>
+              <MenuItem value="medium">Medium</MenuItem>
+              <MenuItem value="low">Low</MenuItem>
+            </MuiSelect>
+          </FormControl>
+          <StyledButton
+            onClick={() => setShowClosed(!showClosed)}
+            variant={showClosed ? 'contained' : 'outlined'}
+          >
+            {showClosed ? 'Hide Closed' : 'Show Closed'}
+          </StyledButton>
+          {isAddingColumn ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TextField
+                size="small"
+                placeholder="Column Name"
+                value={newColumnName}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                sx={{ width: 160, bgcolor: 'white' }}
+              />
+              <StyledButton onClick={handleAddColumn} variant="contained">
+                Add
+              </StyledButton>
+              <StyledButton onClick={() => setIsAddingColumn(false)} variant="outlined">
+                Cancel
+              </StyledButton>
+            </Box>
+          ) : (
+            <StyledButton onClick={() => setIsAddingColumn(true)} variant="outlined" startIcon={<AddIcon />}>
+              New Column
+            </StyledButton>
+          )}
+        </Box>
+        <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd} sensors={sensors}>
+          <Grid container spacing={2} sx={{ flexWrap: 'nowrap', overflowX: 'auto', pb: 2 }}>
+            {columnOrder.map((columnId) => (
+              filteredColumns[columnId] && (
+                <Grid item key={columnId}>
+                  <SortableContext
+                    id={columnId}
+                    items={filteredColumns[columnId].map((task) => task.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <KanbanColumn id={columnId}>
+                      <ColumnHeader>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="subtitle1" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                            {columnLabels[columnId] || columnId.charAt(0).toUpperCase() + columnId.slice(1)}
+                          </Typography>
+                          <Chip
+                            label={filteredColumns[columnId].length}
+                            size="small"
+                            sx={{ height: 20, fontSize: '0.7rem', bgcolor: theme.palette.grey[200] }}
+                          />
+                        </Box>
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleColumnMenuOpen(e, columnId)}
+                          sx={{ color: theme.palette.text.secondary }}
+                        >
+                          <MoreVertIcon fontSize="small" />
+                        </IconButton>
+                      </ColumnHeader>
+                      <Box sx={{ overflow: 'auto', flex: 1, maxHeight: 'calc(100vh - 300px)', p: 1 }}>
+                        {filteredColumns[columnId].length === 0 ? (
+                          <Box
+                            sx={{
+                              p: 2,
+                              textAlign: 'center',
+                              color: theme.palette.text.secondary,
+                              bgcolor: theme.palette.grey[50],
+                              borderRadius: 8,
+                              fontSize: '0.85rem',
+                            }}
+                          >
+                            No tasks
+                          </Box>
+                        ) : (
+                          filteredColumns[columnId].map((task) => (
+                            <SortableTask
+                              key={task.id}
+                              task={task}
+                              users={users}
+                              onEdit={handleEditTask}
+                              onDelete={handleDeleteTask}
+                            />
+                          ))
+                        )}
+                      </Box>
+                      <Divider sx={{ my: 1 }} />
+                      <StyledButton
+                        fullWidth
+                        variant="text"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleAddTask(columnId)}
+                        sx={{ justifyContent: 'flex-start', color: theme.palette.primary.main }}
+                      >
+                        Add task
+                      </StyledButton>
+                    </KanbanColumn>
+                  </SortableContext>
+                </Grid>
+              )
+            ))}
+          </Grid>
+        </DndContext>
+        <Menu
+          anchorEl={columnMenuAnchorEl}
+          open={Boolean(columnMenuAnchorEl)}
+          onClose={handleColumnMenuClose}
+          PaperProps={{ sx: { borderRadius: 2, minWidth: 180 } }}
+        >
+          <MenuItem onClick={() => handleAddTask(currentColumn)} sx={{ fontSize: '0.85rem' }}>
+            Add Task
+          </MenuItem>
+          <MenuItem
+            onClick={() => {
+              setNewColumnName(columnLabels[currentColumn] || currentColumn);
+              setIsAddingColumn(true);
+              handleColumnMenuClose();
+            }}
+            sx={{ fontSize: '0.85rem' }}
+          >
+            Rename Column
+          </MenuItem>
+          <MenuItem
+            onClick={() => handleDeleteColumn(currentColumn)}
+            sx={{ fontSize: '0.85rem', color: theme.palette.error.main }}
+          >
+            Delete Column
+          </MenuItem>
+        </Menu>
+        <Dialog
+          open={dialogOpen}
+          onClose={() => setDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          fullScreen={isMobile}
+          PaperProps={{ sx: { borderRadius: 3, p: 2 } }}
+        >
+          <DialogTitle sx={{ fontWeight: 600, fontSize: '1.3rem' }}>
+            {editingTask ? 'Edit Task' : 'New Task'} in {currentColumn ? (columnLabels[currentColumn] || currentColumn) : ''}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ my: 2, display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <TextField
+                label="Title"
+                variant="outlined"
+                fullWidth
+                required
+                value={formValues.title}
+                onChange={handleFormChange('title')}
+                sx={{ bgcolor: 'white' }}
+              />
+              <TextField
+                label="Description"
+                variant="outlined"
+                fullWidth
+                multiline
+                rows={4}
+                value={formValues.description}
+                onChange={handleFormChange('description')}
+                sx={{ bgcolor: 'white' }}
+              />
+              <TextField
+                label="Due Date"
+                type="date"
+                variant="outlined"
+                fullWidth
+                value={formValues.dueDate}
+                onChange={handleFormChange('dueDate')}
+                InputLabelProps={{ shrink: true }}
+                sx={{ bgcolor: 'white' }}
+              />
+              <FormControl fullWidth>
+                <InputLabel id="task-priority-label">Priority</InputLabel>
+                <MuiSelect
+                  labelId="task-priority-label"
+                  value={formValues.priority}
+                  onChange={handleFormChange('priority')}
+                  input={<OutlinedInput label="Priority" />}
+                  sx={{ bgcolor: 'white' }}
+                >
+                  <MenuItem value="high">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FlagIcon sx={{ color: theme.palette.error.main, mr: 1 }} fontSize="small" />
+                      High
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="medium">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FlagIcon sx={{ color: theme.palette.warning.main, mr: 1 }} fontSize="small" />
+                      Medium
+                    </Box>
+                  </MenuItem>
+                  <MenuItem value="low">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FlagIcon sx={{ color: theme.palette.success.main, mr: 1 }} fontSize="small" />
+                      Low
+                    </Box>
+                  </MenuItem>
+                </MuiSelect>
+              </FormControl>
+              {projectUsers.length > 0 ? (
+                <Autocomplete
+                  multiple
+                  options={projectUsers}
+                  getOptionLabel={(option) => option.name}
+                  value={formValues.assignedUsers}
+                  onChange={handleFormChange('assignedUsers')}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Assigned to"
+                      placeholder="Select users"
+                      sx={{ bgcolor: 'white' }}
+                    />
+                  )}
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        key={option.email}
+                        avatar={
+                          <Avatar sx={{ bgcolor: getAvatarColor(option.name) }}>
+                            {generateInitials(option.name)}
+                          </Avatar>
+                        }
+                        label={option.name}
+                        size="small"
+                        {...getTagProps({ index })}
+                      />
+                    ))
+                  }
+                />
+              ) : (
+                <Typography color="text.secondary">No users available for this project.</Typography>
+              )}
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+            <StyledButton onClick={() => setDialogOpen(false)} variant="outlined" sx={{ bgcolor: 'white' }}>
+              Cancel
+            </StyledButton>
+            <StyledButton
+              onClick={handleCreateOrUpdateTask}
+              variant="contained"
+              disabled={!formValues.title}
+            >
+              {editingTask ? 'Update Task' : 'Create Task'}
+            </StyledButton>
+          </DialogActions>
+        </Dialog>
+      </Container>
+    </Box>
+  );
+}
+
+export default Kanban;

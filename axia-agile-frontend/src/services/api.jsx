@@ -9,7 +9,7 @@ const userApi = axios.create({
 });
 
 const profileApi = axios.create({
-  baseURL: 'https://localhost:7240/api',
+  baseURL: 'http://localhost:5289/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -24,4 +24,15 @@ const projectApi = axios.create({
   withCredentials: true,
 });
 
-export { userApi, profileApi, projectApi };
+const taskApi = axios.create({
+  baseURL: 'http://localhost:5064/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+});
+
+
+
+
+export { userApi, profileApi, projectApi, taskApi };

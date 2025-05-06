@@ -10,7 +10,7 @@ import BacklogPage from "../pages/BacklogPage";
 import Dashboard from "../pages/ProjectsDashboard";
 import AdminManagement from "../pages/AdminManagement";
 import UserManagement from "../pages/UserManagement";
-import ProjectDashboard from "../pages/ProjectOverview";
+import ProjectOverview from "../pages/ProjectOverview";
 import AdminLayout from "../layouts/AdminLayout";
 import UserStatisticsDashboard from "../pages/UserStatisticsDashboard";
 import SuperAdminStatistics from "../pages/SuperAdminStatistics";
@@ -21,13 +21,18 @@ import Login from "../pages/Login";
 import NotFound from "../pages/NotFound";
 import ActiveSprintPage from "../pages/ActiveSprintPage";
 import { ProtectedRoute, RoleProtectedRoute } from "./ProtectedRoute";
+import RoleManagement from "../pages/RoleManagement";
+import ClaimManagement from "../pages/ClaimManagement";
+
 
 const AppRoutes = () => {
   return (
+  
     <Routes>
       {/* Public routes - accessible to everyone */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
+
       
       {/* Protected profile route - any authenticated user */}
       <Route element={<ProtectedRoute />}>
@@ -49,6 +54,9 @@ const AppRoutes = () => {
         <Route path="/" element={<AdminLayout />}>
           <Route path="/AdminManagement" element={<AdminManagement />} />
           <Route path="/SuperAdminStatistics" element={<SuperAdminStatistics />} />
+          <Route path="/RoleManagement" element={<RoleManagement />} />
+          <Route path="/ClaimManagement" element={<ClaimManagement />} />
+          
         </Route>
       </Route>
 
@@ -57,19 +65,24 @@ const AppRoutes = () => {
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects" element={<Projects />} />
+        
+      
+          
         </Route>
       </Route>
 
-      {/* Project routes - for project members and managers */}
-      <Route element={<ProtectedRoute />}>
-        <Route path="/project/:projectId" element={<ProjectLayout />}>
-          <Route index element={<ProjectDashboard />} />
-          <Route path="kanban" element={<Kanban />} />
-          <Route path="backlog" element={<BacklogPage />} />
-          <Route path="ActiveSprintPage" element={<ActiveSprintPage />} />
-          <Route path="calendar" element={<Calendar />} />
-          <Route path="GroupDiscussion" element={<GroupDiscussion />} />
-        </Route>
+ 
+  
+        <Route element={<ProtectedRoute />}>
+        <Route path="/projects" element={<Projects />} />
+          <Route path="/project/:projectId" element={<ProjectLayout />}>
+            <Route index element={<ProjectOverview />} />
+            <Route path="kanban" element={<Kanban />} />
+            <Route path="backlog" element={<BacklogPage />} />
+            <Route path="ActiveSprintPage" element={<ActiveSprintPage />} />
+            <Route path="calendar" element={<Calendar />} />
+            <Route path="GroupDiscussion" element={<GroupDiscussion />} />
+          </Route>
       </Route>
       
       {/* Error routes */}

@@ -16,6 +16,9 @@ import { validateUser } from '../utils/validators';
 import { useAuth } from '../contexts/AuthContext';
 import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, Person as PersonIcon } from '@mui/icons-material';
 
+// Default role IDs that are system-defined
+const DEFAULT_ROLE_IDS = [1, 2, 3, 4];
+
 export const useUsers = (storageKey) => {
   const dispatch = useDispatch();
   const { users, roles, claims, loading, snackbar, userExists } = useSelector((state) => state.users);
@@ -39,21 +42,26 @@ export const useUsers = (storageKey) => {
   const [emailChecked, setEmailChecked] = useState(false);
 
   const availableRoles = roles
-    .filter((role) => {
-      if (currentUser?.roleId === 1) return role.id === 2;
-      if (currentUser?.roleId === 2) return [3, 4].includes(role.id);
-      return false;
-    })
-    .map((role) => ({
-      id: role.id,
-      label: role.label,
-      icon:
-        role.iconName === 'Security' ? <SecurityIcon /> :
-        role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
-    }));
+  .filter((role) => {
+    if (currentUser?.roleId === 1) {
+      // Super admin: can assign role ID 2 and any non-default roles
+      return role.id === 2 || !DEFAULT_ROLE_IDS.includes(role.id);
+    }
+    if (currentUser?.roleId === 2) {
+      // Admin: can assign role IDs 3, 4, and any non-default roles
+      return [3, 4].includes(role.id) || !DEFAULT_ROLE_IDS.includes(role.id);
+    }
+    return false;
+  })
+  .map((role) => ({
+    id: role.id,
+    label: role.label,
+    icon:
+      role.iconName === 'Security' ? <SecurityIcon /> :
+      role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
+  }));
 
   useEffect(() => {
-    // Fetch data only if authenticated
     if (currentUser) {
       dispatch(fetchUsers());
       dispatch(fetchRoles());
@@ -62,6 +70,7 @@ export const useUsers = (storageKey) => {
   }, [dispatch, currentUser]);
 
   useEffect(() => {
+    // Placeholder for any modal-related side effects
   }, [openModal]);
 
   const handleCloseSnackbar = () => {
@@ -109,7 +118,7 @@ export const useUsers = (storageKey) => {
 
     const userData = {
       email: newUser.email,
-      password: editMode ? newUser.password || undefined : newUser.password, // Only send password if provided in edit mode
+      password: editMode ? newUser.password || undefined : newUser.password,
       firstName: newUser.firstName,
       lastName: newUser.lastName,
       phoneNumber: newUser.phoneNumber,
@@ -127,7 +136,6 @@ export const useUsers = (storageKey) => {
       dispatch(clearUserExists(newUser.email));
       return result;
     } catch (error) {
-      // Error is already handled in usersSlice
       throw error;
     }
   };
@@ -161,19 +169,19 @@ export const useUsers = (storageKey) => {
     console.log('Édition de l\'utilisateur:', user);
     setNewUser({
       ...user,
-      password: '', // Don't prefill password
+      password: '',
     });
     setEditMode(true);
     setCurrentUserId(user.id);
     setOpenModal(true);
-    setEmailChecked(true); // Assume current email is valid
+    setEmailChecked(true);
   };
 
   const handleDeleteUser = async (id) => {
     try {
       await dispatch(deleteUser(id)).unwrap();
     } catch (error) {
-      // Error is already handled in usersSlice
+      // Error handled in usersSlice
     }
   };
 
@@ -184,7 +192,7 @@ export const useUsers = (storageKey) => {
     try {
       await dispatch(toggleUserActive({ id, isActive: !user.isActive })).unwrap();
     } catch (error) {
-      // Error is already handled in usersSlice
+      // Error handled in usersSlice
     }
   };
 

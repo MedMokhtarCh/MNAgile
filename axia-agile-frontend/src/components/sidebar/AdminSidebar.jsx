@@ -9,7 +9,7 @@ import {
   IconButton,
   Tooltip,
 } from "@mui/material";
-import { FaChartBar, FaUsers, FaSignOutAlt } from "react-icons/fa";
+import { FaChartBar, FaUsers, FaSignOutAlt, FaShieldAlt, FaKey } from "react-icons/fa";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../../store/slices/authSlice";
 import logo from "../../assets/logo.png";
@@ -96,6 +96,34 @@ const AdminSidebar = ({ collapsed }) => {
                 </Tooltip>
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
+            </ListItem>
+
+            <ListItem
+              button
+              component={Link}
+              to="/RoleManagement"
+              className={`menu-item ${isActive("/RoleManagement")}`}
+            >
+              <ListItemIcon className="menu-icon">
+                <Tooltip title="Rôles" placement="right">
+                  <FaShieldAlt />
+                </Tooltip>
+              </ListItemIcon>
+              {!collapsed && <ListItemText primary="Rôles" />}
+            </ListItem>
+
+            <ListItem
+              button
+              component={Link}
+              to="/ClaimManagement"
+              className={`menu-item ${isActive("/ClaimManagement")}`}
+            >
+              <ListItemIcon className="menu-icon">
+                <Tooltip title="Droits d'accès" placement="right">
+                  <FaKey />
+                </Tooltip>
+              </ListItemIcon>
+              {!collapsed && <ListItemText primary="Droits d'accès" />}
             </ListItem>
           </>
         )}

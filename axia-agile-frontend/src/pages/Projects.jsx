@@ -60,27 +60,9 @@ const FilterContainer = styled(Box)(({ theme }) => ({
   marginBottom: 32,
 }));
 
-const SectionTitle = styled(Typography)(({ theme }) => ({
-  fontWeight: 700,
-  marginBottom: 12,
-  color: theme.palette.text.primary,
-  position: 'relative',
-  '&:after': {
-    content: '""',
-    position: 'absolute',
-    bottom: -6,
-    left: 0,
-    width: 50,
-    height: 4,
-    backgroundColor: theme.palette.primary.main,
-    borderRadius: 2,
-  },
-}));
-
 function Projects() {
   const theme = useTheme();
   const { currentUser } = useAuth();
-
   const {
     registeredUsers,
     projectForm,
@@ -108,8 +90,8 @@ function Projects() {
     setDevelopers,
     testers,
     setTesters,
-    observers, 
-    setObservers, 
+    observers,
+    setObservers,
     selectedProject,
     menuAnchorEl,
     steps,
@@ -130,8 +112,6 @@ function Projects() {
   const { generateInitials, getAvatarColor } = useAvatar();
   const [errorAlertOpen, setErrorAlertOpen] = useState(false);
   const [successAlertOpen, setSuccessAlertOpen] = useState(false);
-
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const projectsPerPage = 9;
 
@@ -160,7 +140,6 @@ function Projects() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
- 
   const getUserDisplayName = (email) => {
     const user = registeredUsers.find((u) => u.email === email);
     if (!user) return 'Utilisateur inconnu';
@@ -176,10 +155,7 @@ function Projects() {
     return words.length > 4 ? `${words.slice(0, 4).join(' ')}...` : words.join(' ');
   };
 
-  // Get filtered projects
   const filteredProjects = getFilteredProjects();
-
-  // Calculate pagination
   const totalPages = Math.max(1, Math.ceil(filteredProjects.length / projectsPerPage));
   const indexOfLastProject = currentPage * projectsPerPage;
   const indexOfFirstProject = indexOfLastProject - projectsPerPage;
@@ -261,7 +237,7 @@ function Projects() {
       </FilterContainer>
 
       <Box sx={{ mt: 4 }}>
-        <SectionTitle variant="h5">
+        <PageTitle variant="h5">
           Liste des Projets
           {filteredProjects.length > 0 && (
             <Typography
@@ -275,7 +251,7 @@ function Projects() {
               {filteredProjects.length})
             </Typography>
           )}
-        </SectionTitle>
+        </PageTitle>
 
         {status === 'loading' ? (
           <Box
@@ -411,8 +387,8 @@ function Projects() {
         registeredUsers={registeredUsers}
         projectManagers={projectManagers}
         setProjectManagers={setProjectManagers}
-        observers={observers} 
-        setObservers={setObservers} 
+        observers={observers}
+        setObservers={setObservers}
         productOwners={productOwners}
         setProductOwners={setProductOwners}
         scrumMasters={scrumMasters}
@@ -423,7 +399,7 @@ function Projects() {
         setTesters={setTesters}
         getAvatarColor={getAvatarColor}
         generateInitials={generateInitials}
-        formError={formError} 
+        formError={formError}
       />
 
       <AlertUser

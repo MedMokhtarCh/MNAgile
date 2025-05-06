@@ -168,5 +168,6 @@ namespace UserService.Services
         {
             return await _context.Users.AnyAsync(u => u.Email == email);
         }
+
     }
 }

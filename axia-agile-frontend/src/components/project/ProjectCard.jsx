@@ -88,7 +88,7 @@ const ProjectCard = ({
     ...(project.scrumMasters || []),
     ...(project.users || []),
     ...(project.testers || []),
-    ...(project.observers || []), // Added observers
+    ...(project.observers || []),
   ].filter((email, index, self) => self.indexOf(email) === index);
 
   const formattedDate = new Date(project.createdAt).toLocaleDateString('fr-FR', {

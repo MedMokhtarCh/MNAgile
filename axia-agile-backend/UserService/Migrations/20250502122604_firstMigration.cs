@@ -17,10 +17,9 @@ namespace UserService.Migrations
                 name: "Claims",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    Description = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -31,9 +30,8 @@ namespace UserService.Migrations
                 name: "Roles",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                    Id = table.Column<int>(type: "int", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -46,11 +44,11 @@ namespace UserService.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
-                    Email = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
                     PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    FirstName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    LastName = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    FirstName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    LastName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    PhoneNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
                     JobTitle = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     Entreprise = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
@@ -66,7 +64,7 @@ namespace UserService.Migrations
                         column: x => x.RoleId,
                         principalTable: "Roles",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -105,7 +103,11 @@ namespace UserService.Migrations
                     { 5, "Permission de voir les projets", "CanViewProjects" },
                     { 6, "Permission d'ajouter des projets", "CanAddProjects" },
                     { 7, "Permission de modifier des projets", "CanEditProjects" },
-                    { 8, "Permission de supprimer des projets", "CanDeleteProjects" }
+                    { 8, "Permission de supprimer des projets", "CanDeleteProjects" },
+                    { 9, "Permission de voir les tâches", "CanViewTasks" },
+                    { 10, "Permission de créer des tâches", "CanCreateTasks" },
+                    { 11, "Permission de mettre à jour les tâches", "CanUpdateTasks" },
+                    { 12, "Permission de supprimer des tâches", "CanDeleteTasks" }
                 });
 
             migrationBuilder.InsertData(

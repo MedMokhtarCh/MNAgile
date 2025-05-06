@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { userApi } from '../../services/api';
-import { logout } from './authSlice'; // Import logout action
+import { logout } from './authSlice';
 
 const normalizeUser = (user) => {
   if (!user) return null;
@@ -22,7 +22,41 @@ const normalizeUser = (user) => {
   };
 };
 
-// Fetch all roles
+const normalizeRole = (role) => {
+  if (!role) return null;
+  
+  return {
+    id: role.id ?? role.Id,
+    name: role.name ?? role.Name,
+    iconName: role.iconName ?? 
+              (role.id === 1 ? 'Security' : 
+               role.id === 2 ? 'Security' : 
+               role.id === 3 ? 'SupervisorAccount' : 'Person'),
+  };
+};
+
+const normalizeClaim = (claim) => {
+  if (!claim) return null;
+  
+  return {
+    id: claim.id ?? claim.Id,
+    name: claim.name ?? claim.Name,
+    description: claim.description ?? claim.Description ?? '',
+  };
+};
+
+// Utility for retrying API calls
+const withRetry = async (fn, retries = 3, delay = 1000) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+};
+
 export const fetchRoles = createAsyncThunk(
   'users/fetchRoles',
   async (_, { rejectWithValue, dispatch }) => {
@@ -31,7 +65,9 @@ export const fetchRoles = createAsyncThunk(
       return response.data.map((role) => ({
         id: role.id,
         label: role.name,
-        iconName: role.id === 1 ? 'Security' : role.id === 2 ? 'Security' : role.id === 3 ? 'SupervisorAccount' : 'Person',
+        iconName: role.id === 1 ? 'Security' : 
+                  role.id === 2 ? 'Security' : 
+                  role.id === 3 ? 'SupervisorAccount' : 'Person',
         disabled: false,
       }));
     } catch (error) {
@@ -44,18 +80,72 @@ export const fetchRoles = createAsyncThunk(
   }
 );
 
-// Fetch all claims
+export const createRole = createAsyncThunk(
+  'users/createRole',
+  async (roleData, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.post('/Roles', {
+        Name: roleData.name
+      });
+      console.log('Created role response:', response.data);
+      return normalizeRole(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de création du rôle');
+    }
+  }
+);
+
+export const updateRole = createAsyncThunk(
+  'users/updateRole',
+  async ({ id, name }, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.put(`/Roles/${id}`, {
+        Name: name
+      });
+      return normalizeRole(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de mise à jour du rôle');
+    }
+  }
+);
+
+export const deleteRole = createAsyncThunk(
+  'users/deleteRole',
+  async (id, { rejectWithValue, dispatch }) => {
+    try {
+      await userApi.delete(`/Roles/${id}`);
+      return id;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de suppression du rôle');
+    }
+  }
+);
+
 export const fetchClaims = createAsyncThunk(
   'users/fetchClaims',
   async (_, { rejectWithValue, dispatch }) => {
     try {
-      const response = await userApi.get('/Claims');
+      const response = await withRetry(() => userApi.get('/Claims'), 3, 1000);
+      console.log('Fetch claims response:', response.data); // Debug log
       return response.data.map((claim) => ({
         id: claim.id ?? claim.Id,
         label: claim.name ?? claim.Name,
         description: claim.description ?? claim.Description ?? '',
       }));
     } catch (error) {
+      console.error('Fetch claims error:', error.response?.data, error.message); // Detailed error log
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
@@ -65,7 +155,76 @@ export const fetchClaims = createAsyncThunk(
   }
 );
 
-// Fetch all users
+export const fetchClaimById = createAsyncThunk(
+  'users/fetchClaimById',
+  async (id, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.get(`/Claims/${id}`);
+      return normalizeClaim(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de récupération du claim');
+    }
+  }
+);
+
+export const createClaim = createAsyncThunk(
+  'users/createClaim',
+  async (claimData, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.post('/Claims', {
+        Name: claimData.name,
+        Description: claimData.description
+      });
+      return normalizeClaim(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de création du claim');
+    }
+  }
+);
+
+export const updateClaim = createAsyncThunk(
+  'users/updateClaim',
+  async ({ id, name, description }, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.put(`/Claims/${id}`, {
+        Name: name,
+        Description: description
+      });
+      return normalizeClaim(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de mise à jour du claim');
+    }
+  }
+);
+
+export const deleteClaim = createAsyncThunk(
+  'users/deleteClaim',
+  async (id, { rejectWithValue, dispatch }) => {
+    try {
+      await userApi.delete(`/Claims/${id}`);
+      return id;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de suppression du claim');
+    }
+  }
+);
+
 export const fetchUsers = createAsyncThunk(
   'users/fetchUsers',
   async (_, { rejectWithValue, dispatch }) => {
@@ -82,7 +241,6 @@ export const fetchUsers = createAsyncThunk(
   }
 );
 
-// Check if a user exists by email
 export const checkUserExists = createAsyncThunk(
   'users/checkUserExists',
   async (email, { rejectWithValue, dispatch }) => {
@@ -99,7 +257,6 @@ export const checkUserExists = createAsyncThunk(
   }
 );
 
-// Create a new user
 export const createUser = createAsyncThunk(
   'users/createUser',
   async (userData, { rejectWithValue, getState, dispatch }) => {
@@ -137,7 +294,6 @@ export const createUser = createAsyncThunk(
   }
 );
 
-// Update an existing user
 export const updateUser = createAsyncThunk(
   'users/updateUser',
   async ({ id, userData }, { rejectWithValue, getState, dispatch }) => {
@@ -185,9 +341,9 @@ export const updateUser = createAsyncThunk(
       }
 
       if (userData.entreprise !== undefined) {
-        payload.Entreprise = targetRoleId === 2 ? (userData.entreprise || '') : '';
+        payload.Entreprise = [1, 2].includes(targetRoleId) ? (userData.entreprise || '') : '';
       } else {
-        payload.Entreprise = targetRoleId === 2 ? (existingUser.entreprise || '') : existingUser.entreprise;
+        payload.Entreprise = [1, 2].includes(targetRoleId) ? (existingUser.entreprise || '') : existingUser.entreprise;
       }
 
       if (userData.password) {
@@ -210,7 +366,6 @@ export const updateUser = createAsyncThunk(
   }
 );
 
-// Delete a user
 export const deleteUser = createAsyncThunk(
   'users/deleteUser',
   async (id, { rejectWithValue, dispatch }) => {
@@ -227,7 +382,6 @@ export const deleteUser = createAsyncThunk(
   }
 );
 
-// Toggle user active status
 export const toggleUserActive = createAsyncThunk(
   'users/toggleUserActive',
   async ({ id, isActive }, { rejectWithValue, dispatch }) => {
@@ -253,6 +407,8 @@ const usersSlice = createSlice({
     users: [],
     roles: [],
     claims: [],
+    selectedRole: null,
+    selectedClaim: null,
     loading: false,
     error: null,
     snackbar: { open: false, message: '', severity: 'success' },
@@ -269,37 +425,22 @@ const usersSlice = createSlice({
         state.userExists = {};
       }
     },
+    clearSelectedRole: (state) => {
+      state.selectedRole = null;
+    },
+    clearSelectedClaim: (state) => {
+      state.selectedClaim = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchRoles.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(fetchRoles.fulfilled, (state, action) => {
-        state.loading = false;
-        state.roles = action.payload;
-      })
-      .addCase(fetchRoles.rejected, (state, action) => {
-        state.loading = false;
-        state.snackbar = { open: true, message: action.payload, severity: 'error' };
-      })
-      .addCase(fetchClaims.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(fetchClaims.fulfilled, (state, action) => {
-        state.loading = false;
-        state.claims = action.payload;
-      })
-      .addCase(fetchClaims.rejected, (state, action) => {
-        state.loading = false;
-        state.snackbar = { open: true, message: action.payload, severity: 'error' };
-      })
       .addCase(fetchUsers.pending, (state) => {
         state.loading = true;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
         state.loading = false;
         state.users = action.payload;
+        console.log('Users fetched:', action.payload);
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false;
@@ -329,6 +470,7 @@ const usersSlice = createSlice({
           state.users[index] = action.payload;
         }
         state.snackbar = { open: true, message: 'Utilisateur modifié avec succès', severity: 'success' };
+        console.log('User updated:', action.payload);
       })
       .addCase(updateUser.rejected, (state, action) => {
         state.snackbar = { open: true, message: action.payload, severity: 'error' };
@@ -353,9 +495,148 @@ const usersSlice = createSlice({
       })
       .addCase(toggleUserActive.rejected, (state, action) => {
         state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(fetchRoles.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchRoles.fulfilled, (state, action) => {
+        state.loading = false;
+        state.roles = action.payload;
+        console.log('Roles fetched:', action.payload);
+      })
+      .addCase(fetchRoles.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(createRole.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(createRole.fulfilled, (state, action) => {
+        state.loading = false;
+        const roleFormatted = {
+          id: action.payload.id,
+          label: action.payload.name,
+          iconName: action.payload.iconName,
+          disabled: false
+        };
+        console.log('Adding role to state:', roleFormatted);
+        state.roles.push(roleFormatted);
+        state.snackbar = { open: true, message: 'Rôle créé avec succès', severity: 'success' };
+      })
+      .addCase(createRole.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(updateRole.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(updateRole.fulfilled, (state, action) => {
+        state.loading = false;
+        const index = state.roles.findIndex(role => role.id === action.payload.id);
+        if (index !== -1) {
+          state.roles[index] = {
+            ...state.roles[index],
+            label: action.payload.name,
+          };
+        }
+        state.snackbar = { open: true, message: 'Rôle mis à jour avec succès', severity: 'success' };
+        console.log('Role updated:', action.payload);
+      })
+      .addCase(updateRole.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(deleteRole.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deleteRole.fulfilled, (state, action) => {
+        state.loading = false;
+        state.roles = state.roles.filter(role => role.id !== action.payload);
+        state.snackbar = { open: true, message: 'Rôle supprimé avec succès', severity: 'success' };
+      })
+      .addCase(deleteRole.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(fetchClaims.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchClaims.fulfilled, (state, action) => {
+        state.loading = false;
+        state.claims = action.payload;
+        console.log('Claims fetched:', action.payload);
+      })
+      .addCase(fetchClaims.rejected, (state, action) => {
+        state.loading = false;
+        // Only show snackbar for non-transient errors
+        if (action.payload !== 'Failed to fetch claims') {
+          state.snackbar = { open: true, message: action.payload, severity: 'error' };
+        }
+      })
+      .addCase(fetchClaimById.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(fetchClaimById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.selectedClaim = action.payload;
+        console.log('Claim fetched by ID:', action.payload);
+      })
+      .addCase(fetchClaimById.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(createClaim.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(createClaim.fulfilled, (state, action) => {
+        state.loading = false;
+        const claimFormatted = {
+          id: action.payload.id,
+          label: action.payload.name,
+          description: action.payload.description
+        };
+        state.claims.push(claimFormatted);
+        state.snackbar = { open: true, message: 'Claim créé avec succès', severity: 'success' };
+        console.log('Claim created:', claimFormatted);
+      })
+      .addCase(createClaim.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(updateClaim.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(updateClaim.fulfilled, (state, action) => {
+        state.loading = false;
+        const index = state.claims.findIndex(claim => claim.id === action.payload.id);
+        if (index !== -1) {
+          state.claims[index] = {
+            ...state.claims[index],
+            label: action.payload.name,
+            description: action.payload.description
+          };
+        }
+        state.snackbar = { open: true, message: 'Claim mis à jour avec succès', severity: 'success' };
+        console.log('Claim updated:', action.payload);
+      })
+      .addCase(updateClaim.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
+      })
+      .addCase(deleteClaim.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(deleteClaim.fulfilled, (state, action) => {
+        state.loading = false;
+        state.claims = state.claims.filter(claim => claim.id !== action.payload);
+        state.snackbar = { open: true, message: 'Claim supprimé avec succès', severity: 'success' };
+      })
+      .addCase(deleteClaim.rejected, (state, action) => {
+        state.loading = false;
+        state.snackbar = { open: true, message: action.payload, severity: 'error' };
       });
   },
 });
 
-export const { setSnackbar, clearUserExists } = usersSlice.actions;
+export const { setSnackbar, clearUserExists, clearSelectedRole, clearSelectedClaim } = usersSlice.actions;
 export default usersSlice.reducer;

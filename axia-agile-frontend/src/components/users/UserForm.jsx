@@ -251,37 +251,37 @@ const UserForm = ({
                   />
                 </Grid>
               )}
-              {showFields.includes('role') && (
-                <Grid item xs={12}>
-                  <FormControl fullWidth error={!!errors.roleId}>
-                    <InputLabel>Rôle</InputLabel>
-                    <Select
-                      value={user.roleId || (roles.length > 0 ? roles[0].id : '')}
-                      label="Rôle"
-                      onChange={(e) => handleChange('roleId', e.target.value)}
-                      disabled={disabledFields.includes('role')}
-                    >
-                      {roles.length > 0 ? (
-                        roles.map((role) => (
-                          <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              {getIconComponent(role.iconName)}
-                              <Box sx={{ ml: 1 }}>{role.label}</Box>
-                            </Box>
-                          </MenuItem>
-                        ))
-                      ) : (
-                        <MenuItem value="" disabled>
-                          Aucun rôle disponible
-                        </MenuItem>
-                      )}
-                    </Select>
-                    {errors.roleId && (
-                      <span className="MuiFormHelperText-root Mui-error">{errors.roleId}</span>
-                    )}
-                  </FormControl>
-                </Grid>
-              )}
+             {showFields.includes('role') && (
+  <Grid item xs={12}>
+    <FormControl fullWidth error={!!errors.roleId}>
+      <InputLabel>Rôle</InputLabel>
+      <Select
+        value={user.roleId || (roles.length > 0 ? roles[0].id : '')}
+        label="Rôle"
+        onChange={(e) => handleChange('roleId', e.target.value)}
+        disabled={disabledFields.includes('role')}
+      >
+        {roles.length > 0 ? (
+          roles.map((role) => (
+            <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                {getIconComponent(role.iconName)}
+                <Box sx={{ ml: 1 }}>{role.label}</Box>
+              </Box>
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem value="" disabled>
+            Aucun rôle disponible
+          </MenuItem>
+        )}
+      </Select>
+      {errors.roleId && (
+        <span className="MuiFormHelperText-root Mui-error">{errors.roleId}</span>
+      )}
+    </FormControl>
+  </Grid>
+)}
             </Grid>
           </Grid>
           <Grid item xs={12} md={6}>

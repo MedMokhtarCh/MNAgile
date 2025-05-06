@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NotificationService", "Noti
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProfileService", "ProfileService\ProfileService.csproj", "{20C809FD-C97E-4F0F-8FD1-BA033324D848}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TaskService", "TaskService\TaskService.csproj", "{741E8C62-B7AC-47F8-AA46-DFA2072023E0}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,10 @@ Global
 		{20C809FD-C97E-4F0F-8FD1-BA033324D848}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{20C809FD-C97E-4F0F-8FD1-BA033324D848}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{20C809FD-C97E-4F0F-8FD1-BA033324D848}.Release|Any CPU.Build.0 = Release|Any CPU
+		{741E8C62-B7AC-47F8-AA46-DFA2072023E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{741E8C62-B7AC-47F8-AA46-DFA2072023E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{741E8C62-B7AC-47F8-AA46-DFA2072023E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{741E8C62-B7AC-47F8-AA46-DFA2072023E0}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -50,5 +56,6 @@ Global
 		{EC127FCC-1054-46F6-AEE8-622ACEE779DE} = {5787E07A-8E75-4BA9-8AAD-4904CDCE5CA8}
 		{EA899446-FEC0-4BB1-8689-8130F7F91AE0} = {5787E07A-8E75-4BA9-8AAD-4904CDCE5CA8}
 		{20C809FD-C97E-4F0F-8FD1-BA033324D848} = {5787E07A-8E75-4BA9-8AAD-4904CDCE5CA8}
+		{741E8C62-B7AC-47F8-AA46-DFA2072023E0} = {5787E07A-8E75-4BA9-8AAD-4904CDCE5CA8}
 	EndGlobalSection
 EndGlobal

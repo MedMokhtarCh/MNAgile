@@ -85,7 +85,7 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   );
 
   // Construct profile photo URL with cache-busting only when necessary
-  const PROFILE_SERVICE_BASE_URL = "https://localhost:7240";
+  const PROFILE_SERVICE_BASE_URL = "http://localhost:5289";
   const profilePhotoUrl = useMemo(() => {
     if (!userData.profilePhotoUrl) return null;
     const baseUrl = userData.profilePhotoUrl.startsWith("http")

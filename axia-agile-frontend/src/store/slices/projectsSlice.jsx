@@ -3,10 +3,10 @@ import { projectApi } from '../../services/api';
 
 // Normalize project data from backend to frontend format
 const normalizeProject = (project) => ({
-  id: String(project.id || project.Id || ''), // Ensure ID is a string
+  id: String(project.id || project.Id || ''), // Consistently convert to string
   title: project.title || project.Title || '',
   description: project.description || project.Description || '',
-  method: project.methodology || project.Methodology || '', // Map backend methodology to frontend method
+  method: project.methodology || project.Methodology || '',
   createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
   startDate: project.startDate || project.StartDate || new Date().toISOString(),
   endDate: project.endDate || project.EndDate || new Date().toISOString(),
@@ -14,10 +14,20 @@ const normalizeProject = (project) => ({
   projectManagers: project.projectManagers || project.ProjectManagers || [],
   productOwners: project.productOwners || project.ProductOwners || [],
   scrumMasters: project.scrumMasters || project.ScrumMasters || [],
-  users: project.developers || project.Developers || [], // Map developers to users
+  users: project.developers || project.Developers || [],
   testers: project.testers || project.Testers || [],
-  observers: project.observers || project.Observers || [], // Add observers
+  observers: project.observers || project.Observers || [],
 });
+
+// Validate user emails against usersSlice (assumes usersSlice is accessible)
+const validateUsers = (users, allUsers, fieldName) => {
+  if (!users || !Array.isArray(users)) return [];
+  const invalidUsers = users.filter((email) => !allUsers.some((u) => u.email === email));
+  if (invalidUsers.length > 0) {
+    throw new Error(`Utilisateurs non valides dans ${fieldName}: ${invalidUsers.join(', ')}`);
+  }
+  return users;
+};
 
 // Fetch all projects
 export const fetchProjects = createAsyncThunk(
@@ -45,35 +55,48 @@ export const fetchProjects = createAsyncThunk(
 // Create a new project
 export const createProject = createAsyncThunk(
   'projects/createProject',
-  async (project, { rejectWithValue }) => {
+  async (project, { rejectWithValue, getState }) => {
     try {
-      // Map frontend project to backend CreateProjectDto
+      const { users: allUsers } = getState().users; // Access usersSlice
+      // Validate user fields
       const payload = {
         title: project.title,
         description: project.description,
         startDate: project.startDate,
         endDate: project.endDate,
-        methodology: project.methodology, // Corrected to use project.methodology
+        methodology: project.methodology,
         createdBy: project.createdBy,
-        projectManagers: project.projectManager ? [project.projectManager] : [], // Use projectManager
-        productOwners: project.productOwner ? [project.productOwner] : [], // Use productOwner
-        scrumMasters: project.scrumMaster ? [project.scrumMaster] : [], // Use scrumMaster
-        developers: project.developers || [], // Map developers directly
-        testers: project.testers || [],
-        observers: project.observers || [], // Include observers
+        projectManagers: validateUsers(
+          project.projectManager ? [project.projectManager] : [],
+          allUsers,
+          'projectManagers'
+        ),
+        productOwners: validateUsers(
+          project.productOwner ? [project.productOwner] : [],
+          allUsers,
+          'productOwners'
+        ),
+        scrumMasters: validateUsers(
+          project.scrumMaster ? [project.scrumMaster] : [],
+          allUsers,
+          'scrumMasters'
+        ),
+        developers: validateUsers(project.developers || [], allUsers, 'developers'),
+        testers: validateUsers(project.testers || [], allUsers, 'testers'),
+        observers: validateUsers(project.observers || [], allUsers, 'observers'),
       };
-      console.log('Create Project Payload:', payload); // Debug log
+      console.log('Create Project Payload:', payload);
       const response = await projectApi.post('/Projects', payload);
       return normalizeProject(response.data);
     } catch (error) {
       const errorMessage =
+        error.message ||
         error.response?.data?.message ||
         error.response?.data?.detail ||
         (error.response?.data?.errors
           ? JSON.stringify(error.response.data.errors)
-          : error.message) ||
-        'Échec de la création du projet';
-      console.error('Create Project Error:', errorMessage); // Debug log
+          : 'Échec de la création du projet');
+      console.error('Create Project Error:', errorMessage);
       return rejectWithValue({
         message: errorMessage.includes("n'existe pas")
           ? `Utilisateur non trouvé : ${errorMessage.split(' ').pop()}`
@@ -87,33 +110,46 @@ export const createProject = createAsyncThunk(
 // Update an existing project (partial updates)
 export const updateProject = createAsyncThunk(
   'projects/updateProject',
-  async ({ id, project }, { rejectWithValue }) => {
+  async ({ id, project }, { rejectWithValue, getState }) => {
     try {
-      // Only include fields that are provided (partial update)
-      const payload = { id: parseInt(id) }; // Ensure ID is a number
+      const { users: allUsers } = getState().users; // Access usersSlice
+      // Convert ID to integer for API call (backend expects integer)
+      const projectId = parseInt(id);
+      
+      // Ensure we have a valid integer ID
+      if (isNaN(projectId)) {
+        throw new Error('ID de projet invalide');
+      }
+      
+      const payload = { id: projectId };
       if (project.title) payload.title = project.title;
       if (project.description) payload.description = project.description;
       if (project.startDate) payload.startDate = project.startDate;
       if (project.endDate) payload.endDate = project.endDate;
-      if (project.methodology) payload.methodology = project.methodology; // Corrected to use project.methodology
-      if (project.projectManager) payload.projectManagers = [project.projectManager]; // Use projectManager
-      if (project.productOwner) payload.productOwners = [project.productOwner]; // Use productOwner
-      if (project.scrumMaster) payload.scrumMasters = [project.scrumMaster]; // Use scrumMaster
-      if (project.developers) payload.developers = project.developers; // Map developers directly
-      if (project.testers) payload.testers = project.testers;
-      if (project.observers) payload.observers = project.observers;
-      console.log('Update Project Payload:', payload); // Debug log
-      const response = await projectApi.put(`/Projects/${id}`, payload);
+      if (project.methodology) payload.methodology = project.methodology;
+      if (project.projectManager)
+        payload.projectManagers = validateUsers([project.projectManager], allUsers, 'projectManagers');
+      if (project.productOwner)
+        payload.productOwners = validateUsers([project.productOwner], allUsers, 'productOwners');
+      if (project.scrumMaster)
+        payload.scrumMasters = validateUsers([project.scrumMaster], allUsers, 'scrumMasters');
+      if (project.developers)
+        payload.developers = validateUsers(project.developers, allUsers, 'developers');
+      if (project.testers) payload.testers = validateUsers(project.testers, allUsers, 'testers');
+      if (project.observers) payload.observers = validateUsers(project.observers, allUsers, 'observers');
+      
+      console.log('Update Project Payload:', payload);
+      const response = await projectApi.put(`/Projects/${projectId}`, payload);
       return normalizeProject(response.data);
     } catch (error) {
       const errorMessage =
+        error.message ||
         error.response?.data?.message ||
         error.response?.data?.detail ||
         (error.response?.data?.errors
           ? JSON.stringify(error.response.data.errors)
-          : error.message) ||
-        'Échec de la mise à jour du projet';
-      console.error('Update Project Error:', errorMessage); // Debug log
+          : 'Échec de la mise à jour du projet');
+      console.error('Update Project Error:', errorMessage);
       return rejectWithValue({
         message: errorMessage.includes("n'existe pas")
           ? `Utilisateur non trouvé : ${errorMessage.split(' ').pop()}`
@@ -129,7 +165,16 @@ export const deleteProject = createAsyncThunk(
   'projects/deleteProject',
   async (id, { rejectWithValue }) => {
     try {
-      await projectApi.delete(`/Projects/${id}`);
+      // Convert ID to integer for API call
+      const projectId = parseInt(id);
+      
+      // Ensure we have a valid integer ID
+      if (isNaN(projectId)) {
+        throw new Error('ID de projet invalide');
+      }
+      
+      await projectApi.delete(`/Projects/${projectId}`);
+      // Return the original ID format that was passed in for consistency in reducers
       return id;
     } catch (error) {
       const errorMessage =
@@ -221,6 +266,7 @@ const projectsSlice = createSlice({
         };
       })
       .addCase(deleteProject.fulfilled, (state, action) => {
+        // action.payload contains the original ID (string or number)
         state.projects = state.projects.filter((p) => p.id !== String(action.payload));
         state.error = null;
         state.snackbar = {

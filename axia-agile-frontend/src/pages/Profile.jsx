@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -23,6 +23,7 @@ import {
   CardContent,
   Alert,
   Snackbar,
+  Modal,
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -36,6 +37,8 @@ import {
   Visibility,
   VisibilityOff,
   Cancel as CancelIcon,
+  CropRotate as CropRotateIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -47,8 +50,9 @@ import {
   uploadProfilePhoto,
   setSnackbar,
 } from '../store/slices/profileSlice';
+import Cropper from 'react-easy-crop'; 
 
-const PROFILE_SERVICE_BASE_URL = 'https://localhost:7240';
+const PROFILE_SERVICE_BASE_URL = 'http://localhost:5289';
 
 const Profile = () => {
   const theme = useTheme();
@@ -75,8 +79,18 @@ const Profile = () => {
     phoneNumber: '',
     jobTitle: '',
   });
+  
+  // État pour l'éditeur d'image
   const [profileImageFile, setProfileImageFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [rotation, setRotation] = useState(0);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -95,8 +109,13 @@ const Profile = () => {
         phoneNumber: profile.phoneNumber || '',
         jobTitle: profile.jobTitle || profile.entreprise || '',
       });
-      console.log('Profile updated:', profile);
-      console.log('Profile photo URL:', profile.profilePhotoUrl);
+      
+      if (profile.profilePhotoUrl) {
+        const completePhotoUrl = profile.profilePhotoUrl.startsWith('http')
+          ? `${profile.profilePhotoUrl}?t=${Date.now()}`
+          : `${PROFILE_SERVICE_BASE_URL}${profile.profilePhotoUrl}?t=${Date.now()}`;
+        setImagePreviewUrl(completePhotoUrl);
+      }
     }
   }, [profile]);
 
@@ -128,6 +147,13 @@ const Profile = () => {
         jobTitle: profile.jobTitle || profile.entreprise || '',
       });
       setProfileImageFile(null);
+      setImagePreviewUrl(
+        profile.profilePhotoUrl
+          ? profile.profilePhotoUrl.startsWith('http')
+            ? `${profile.profilePhotoUrl}?t=${Date.now()}`
+            : `${PROFILE_SERVICE_BASE_URL}${profile.profilePhotoUrl}?t=${Date.now()}`
+          : null
+      );
     }
   };
 
@@ -149,7 +175,6 @@ const Profile = () => {
       if (profileImageFile) {
         setUploadingPhoto(true);
         await dispatch(uploadProfilePhoto(profileImageFile)).unwrap();
-        // Refresh profile to ensure latest data, including profilePhotoUrl
         await dispatch(fetchProfile()).unwrap();
         setUploadingPhoto(false);
       }
@@ -209,9 +234,113 @@ const Profile = () => {
     }
   };
 
+  const handleImageClick = () => {
+    if (editMode) {
+      fileInputRef.current.click();
+    }
+  };
+
   const handleImageChange = (e) => {
     if (e.target.files && e.target.files[0]) {
-      setProfileImageFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = () => {
+        setImagePreviewUrl(reader.result);
+        setImageEditorOpen(true);
+      };
+      
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const onCropComplete = (croppedArea, croppedAreaPixelsData) => {
+    setCroppedAreaPixels(croppedAreaPixelsData);
+  };
+
+  const createCroppedImage = async () => {
+    if (!croppedAreaPixels) return null;
+    
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const img = new Image();
+    img.src = imagePreviewUrl;
+    
+    await new Promise(resolve => {
+      img.onload = resolve;
+    });
+    
+    // Dimensions du canvas
+    canvas.width = croppedAreaPixels.width;
+    canvas.height = croppedAreaPixels.height;
+    
+    // Appliquer rotation et recadrage
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotation * Math.PI) / 180);
+    ctx.translate(-canvas.width / 2, -canvas.height / 2);
+    
+    ctx.drawImage(
+      img,
+      croppedAreaPixels.x,
+      croppedAreaPixels.y,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height,
+      0,
+      0,
+      croppedAreaPixels.width,
+      croppedAreaPixels.height
+    );
+    
+    // Convertir en base64
+    return canvas.toDataURL('image/jpeg');
+  };
+
+  const handleConfirmCrop = async () => {
+    try {
+      const croppedImageUrl = await createCroppedImage();
+      setImagePreviewUrl(croppedImageUrl);
+      
+      // Convertir l'image base64 en fichier pour l'envoi
+      const response = await fetch(croppedImageUrl);
+      const blob = await response.blob();
+      const croppedFile = new File([blob], "profile-photo.jpg", { type: "image/jpeg" });
+      
+      setProfileImageFile(croppedFile);
+      setImageEditorOpen(false);
+    } catch (error) {
+      console.error('Error cropping image:', error);
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Erreur lors du recadrage de l\'image',
+          severity: 'error',
+        })
+      );
+    }
+  };
+
+  const handleCancelCrop = () => {
+    if (!profile.profilePhotoUrl) {
+      setImagePreviewUrl(null);
+    } else {
+      setImagePreviewUrl(
+        profile.profilePhotoUrl.startsWith('http')
+          ? `${profile.profilePhotoUrl}?t=${Date.now()}`
+          : `${PROFILE_SERVICE_BASE_URL}${profile.profilePhotoUrl}?t=${Date.now()}`
+      );
+    }
+    setImageEditorOpen(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImagePreviewUrl(null);
+    setProfileImageFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -246,15 +375,6 @@ const Profile = () => {
 
   const fullName = profile.firstName && profile.lastName ? `${profile.firstName} ${profile.lastName}` : profile.email || 'Utilisateur';
 
-  // Construit l'URL complète de la photo de profil avec cache-busting
-  const profilePhotoUrl = profile.profilePhotoUrl
-    ? profile.profilePhotoUrl.startsWith('http')
-      ? `${profile.profilePhotoUrl}?t=${Date.now()}`
-      : `${PROFILE_SERVICE_BASE_URL}${profile.profilePhotoUrl}?t=${Date.now()}`
-    : null;
-
-  console.log('Rendering Avatar with URL:', profilePhotoUrl);
-
   const InfoField = ({ label, value, icon }) => (
     <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
       {icon && (
@@ -277,38 +397,38 @@ const Profile = () => {
         <CardContent sx={{ display: 'flex', alignItems: 'center', position: 'relative', p: 3 }}>
           <Box sx={{ position: 'relative' }}>
             <Avatar
-              src={profilePhotoUrl}
+              src={imagePreviewUrl}
               sx={{
                 width: 100,
                 height: 100,
                 fontSize: 40,
                 bgcolor: getAvatarColor(fullName),
                 position: 'relative',
+                cursor: editMode ? 'pointer' : 'default',
               }}
               imgProps={{
                 onError: (e) => {
-                  console.error('Error loading profile photo:', profilePhotoUrl);
+                  console.error('Error loading profile photo:', imagePreviewUrl);
                   dispatch(
                     setSnackbar({
                       open: true,
-                      message: 'Impossible de charger la photo de profil. Vérifiez que le fichier est accessible.',
+                      message: 'Impossible de charger la photo de profil.',
                       severity: 'error',
                     })
                   );
                   e.target.src = ''; // Force fallback to initials
                 },
-                onLoad: () => {
-                  console.log('Profile photo loaded successfully:', profilePhotoUrl);
-                },
               }}
+              onClick={handleImageClick}
             >
               {uploadingPhoto ? <CircularProgress size={24} /> : generateInitials(fullName)}
             </Avatar>
 
             {editMode && (
-              <label htmlFor="upload-photo">
+              <>
                 <input
                   style={{ display: 'none' }}
+                  ref={fileInputRef}
                   id="upload-photo"
                   name="upload-photo"
                   type="file"
@@ -327,10 +447,11 @@ const Profile = () => {
                     '&:hover': { bgcolor: 'background.default' },
                     boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
                   }}
+                  onClick={() => fileInputRef.current.click()}
                 >
                   <PhotoCameraIcon />
                 </IconButton>
-              </label>
+              </>
             )}
           </Box>
 
@@ -372,6 +493,7 @@ const Profile = () => {
       </Box>
 
       {activeTab === 0 && (
+        // Le reste du code reste identique...
         <Box>
           {!editMode ? (
             <Card>
@@ -510,6 +632,7 @@ const Profile = () => {
         </Card>
       )}
 
+      {/* Dialogue pour le mot de passe (inchangé) */}
       <Dialog open={passwordDialogOpen} onClose={handleClosePasswordDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Changer le mot de passe</DialogTitle>
         <DialogContent>
@@ -577,6 +700,116 @@ const Profile = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Modal pour l'éditeur d'image */}
+      <Modal
+        open={imageEditorOpen}
+        onClose={handleCancelCrop}
+        aria-labelledby="image-editor-modal"
+        aria-describedby="edit-profile-image"
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: { xs: '90%', sm: '80%', md: '60%' },
+            maxWidth: 600,
+            bgcolor: 'background.paper',
+            boxShadow: 24,
+            p: 4,
+            borderRadius: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" component="h2">
+              Modifier votre photo de profil
+            </Typography>
+            <IconButton onClick={handleCancelCrop} size="small">
+              <CloseIcon />
+            </IconButton>
+          </Box>
+
+          <Box sx={{ position: 'relative', height: 300, mb: 3, bgcolor: 'grey.100', borderRadius: 1, overflow: 'hidden' }}>
+            <Cropper
+              image={imagePreviewUrl}
+              crop={crop}
+              zoom={zoom}
+              aspect={1}
+              rotation={rotation}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onRotationChange={setRotation}
+              onCropComplete={onCropComplete}
+            />
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Zoom
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                1x
+              </Typography>
+              <Box sx={{ flexGrow: 1, mx: 2 }}>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={zoom}
+                  onChange={(e) => setZoom(parseFloat(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                3x
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Rotation
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                0°
+              </Typography>
+              <Box sx={{ flexGrow: 1, mx: 2 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={360}
+                  step={1}
+                  value={rotation}
+                  onChange={(e) => setRotation(parseInt(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                360°
+              </Typography>
+            </Box>
+          </Box>
+
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+            <Button onClick={handleCancelCrop} color="inherit">
+              Annuler
+            </Button>
+            <Box>
+              <Button onClick={handleRemoveImage} color="error" sx={{ mr: 1 }}>
+                Supprimer
+              </Button>
+              <Button onClick={handleConfirmCrop} variant="contained" color="primary" startIcon={<CropRotateIcon />}>
+                Appliquer
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      </Modal>
 
       <Snackbar
         open={snackbar.open}

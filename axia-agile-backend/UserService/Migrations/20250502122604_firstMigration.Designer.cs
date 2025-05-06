@@ -12,7 +12,7 @@ using UserService.Data;
 namespace UserService.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250425205536_firstMigration")]
+    [Migration("20250502122604_firstMigration")]
     partial class firstMigration
     {
         /// <inheritdoc />
@@ -28,18 +28,17 @@ namespace UserService.Migrations
             modelBuilder.Entity("UserService.Models.Claim", b =>
                 {
                     b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
@@ -93,20 +92,42 @@ namespace UserService.Migrations
                             Id = 8,
                             Description = "Permission de supprimer des projets",
                             Name = "CanDeleteProjects"
+                        },
+                        new
+                        {
+                            Id = 9,
+                            Description = "Permission de voir les tâches",
+                            Name = "CanViewTasks"
+                        },
+                        new
+                        {
+                            Id = 10,
+                            Description = "Permission de créer des tâches",
+                            Name = "CanCreateTasks"
+                        },
+                        new
+                        {
+                            Id = 11,
+                            Description = "Permission de mettre à jour les tâches",
+                            Name = "CanUpdateTasks"
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Description = "Permission de supprimer des tâches",
+                            Name = "CanDeleteTasks"
                         });
                 });
 
             modelBuilder.Entity("UserService.Models.Role", b =>
                 {
                     b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasKey("Id");
 
@@ -148,14 +169,16 @@ namespace UserService.Migrations
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
 
                     b.Property<string>("Entreprise")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -168,7 +191,8 @@ namespace UserService.Migrations
 
                     b.Property<string>("LastName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("PasswordHash")
                         .IsRequired()
@@ -176,7 +200,8 @@ namespace UserService.Migrations
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<int>("RoleId")
                         .HasColumnType("int");
@@ -208,7 +233,7 @@ namespace UserService.Migrations
                     b.HasOne("UserService.Models.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Role");

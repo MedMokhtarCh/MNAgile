@@ -20,7 +20,7 @@ import {
 } from 'chart.js';
 import { fetchProjects } from '../store/slices/projectsSlice';
 import PageTitle from '../components/common/PageTitle';
-import { useAuth } from '../contexts/AuthContext'; // Import useAuth for currentUser
+import { useAuth } from '../contexts/AuthContext';
 
 ChartJS.register(
   CategoryScale,
@@ -35,53 +35,38 @@ ChartJS.register(
 const { Title: AntTitle, Text } = Typography;
 
 const ProjectsDashboard = () => {
-  const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(null);
   const [projectOptions, setProjectOptions] = useState([]);
 
   const dispatch = useDispatch();
   const { projects, status, error } = useSelector((state) => state.projects);
-  const { currentUser } = useAuth(); // Use AuthContext instead of localStorage
+  const { currentUser } = useAuth();
 
   useEffect(() => {
-    console.log('Fetching projects...');
-    dispatch(fetchProjects()).then((result) => {
-      console.log('Fetch projects result:', result);
-    }).catch((err) => {
-      console.error('Fetch projects error:', err);
-    });
+    dispatch(fetchProjects());
   }, [dispatch]);
 
   useEffect(() => {
-    console.log('Current user:', currentUser);
-    console.log('Projects:', projects);
-
     if (currentUser && projects.length > 0) {
       let filteredProjects = [];
 
-      // Normalize role for comparison
       const isChefProjet = ['chef_projet', 'ChefProjet', 'Admin', 3].includes(currentUser.role || currentUser.roleId);
 
       if (isChefProjet) {
-        filteredProjects = projects.filter((project) => {
-          const match = project.createdBy === currentUser.email ||
-                        project.projectManagers?.includes(currentUser.email) ||
-                        project.observers?.includes(currentUser.email); // Include observers
-          console.log(`Project ${project.title} (chef_projet):`, { createdBy: project.createdBy, projectManagers: project.projectManagers, observers: project.observers, match });
-          return match;
-        });
+        filteredProjects = projects.filter((project) =>
+          project.createdBy === currentUser.email ||
+          project.projectManagers?.includes(currentUser.email) ||
+          project.observers?.includes(currentUser.email)
+        );
       } else {
-        filteredProjects = projects.filter((project) => {
-          const match = project.users?.includes(currentUser.email) ||
-                        project.scrumMasters?.includes(currentUser.email) ||
-                        project.productOwners?.includes(currentUser.email) ||
-                        project.testers?.includes(currentUser.email) ||
-                        project.observers?.includes(currentUser.email); // Include observers
-          console.log(`Project ${project.title} (other roles):`, { users: project.users, scrumMasters: project.scrumMasters, productOwners: project.productOwners, testers: project.testers, observers: project.observers, match });
-          return match;
-        });
+        filteredProjects = projects.filter((project) =>
+          project.users?.includes(currentUser.email) ||
+          project.scrumMasters?.includes(currentUser.email) ||
+          project.productOwners?.includes(currentUser.email) ||
+          project.testers?.includes(currentUser.email) ||
+          project.observers?.includes(currentUser.email)
+        );
       }
-
-      console.log('Filtered projects:', filteredProjects);
 
       const options = filteredProjects.map((project) => ({
         value: project.id,
@@ -90,17 +75,17 @@ const ProjectsDashboard = () => {
 
       setProjectOptions(options);
 
-      if (filteredProjects.length > 0 && !selectedProject) {
-        setSelectedProject(filteredProjects[0]);
+      if (filteredProjects.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(filteredProjects[0].id);
       }
     }
-  }, [currentUser, projects, selectedProject]);
+  }, [currentUser, projects, selectedProjectId]);
 
   const handleProjectChange = (projectId) => {
-    const project = projects.find((p) => p.id === projectId);
-    console.log('Selected project:', project);
-    setSelectedProject(project);
+    setSelectedProjectId(projectId);
   };
+
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   const getTeamMembers = () => {
     if (!selectedProject) return 0;
@@ -111,7 +96,7 @@ const ProjectsDashboard = () => {
       ...(selectedProject.scrumMasters || []),
       ...(selectedProject.users || []),
       ...(selectedProject.testers || []),
-      ...(selectedProject.observers || []), // Include observers
+      ...(selectedProject.observers || []),
     ];
 
     return [...new Set(allMembers)].length;
@@ -255,7 +240,7 @@ const ProjectsDashboard = () => {
             <Select
               showSearch
               style={{ width: '100%' }}
-              value={selectedProject?.id}
+              value={selectedProjectId}
               onChange={handleProjectChange}
               options={projectOptions}
               placeholder="Sélectionner un projet"
