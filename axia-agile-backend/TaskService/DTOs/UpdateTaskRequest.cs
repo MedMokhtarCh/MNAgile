@@ -13,9 +13,12 @@ namespace TaskService.DTOs
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
         public List<string> AssignedUserEmails { get; set; }
+        public int? ProjectId { get; set; }
 
         public void Validate()
         {
+            if (ProjectId.HasValue && ProjectId <= 0)
+                throw new ArgumentException("Un ID de projet valide est requis.");
             if (AssignedUserEmails != null && AssignedUserEmails.Any(email => string.IsNullOrEmpty(email) || !IsValidEmail(email)))
                 throw new ArgumentException("Tous les emails fournis doivent être valides.");
         }

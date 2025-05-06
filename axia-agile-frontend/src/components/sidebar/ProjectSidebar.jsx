@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
   List,
@@ -11,7 +11,6 @@ import {
   Box,
   Divider,
   Avatar,
-  CircularProgress,
   Collapse,
 } from '@mui/material';
 import {
@@ -28,61 +27,12 @@ import {
   FaArrowLeft,
 } from 'react-icons/fa';
 import FolderIcon from '@mui/icons-material/Folder';
-import { projectApi } from '../../services/api';
 import './Sidebar.css';
 
-const normalizeProject = (project) => ({
-  id: String(project.id || project.Id || ''),
-  title: project.title || project.Title || '',
-  description: project.description || project.Description || '',
-  methodology: project.methodology || project.Methodology || '',
-  createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
-  startDate: project.startDate || project.StartDate || new Date().toISOString(),
-  endDate: project.endDate || project.EndDate || new Date().toISOString(),
-  createdBy: project.createdBy || project.CreatedBy || '',
-  projectManagers: project.projectManagers || project.ProjectManagers || [],
-  productOwners: project.productOwners || project.ProductOwners || [],
-  scrumMasters: project.scrumMasters || project.ScrumMasters || [],
-  users: project.developers || project.Developers || [],
-  testers: project.testers || project.Testers || [],
-  observers: project.observers || project.Observers || [],
-});
-
-const ProjectSidebar = ({ collapsed, projectTitle }) => {
+const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
   const [openScrum, setOpenScrum] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const { projectId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Only fetch if projectTitle is not provided (fallback)
-    if (!projectTitle && projectId) {
-      const fetchProject = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          const response = await projectApi.get(`/Projects/${projectId}`);
-          const normalizedProject = normalizeProject(response.data);
-          setProjectTitle(normalizedProject.title || 'Projet');
-        } catch (err) {
-          if (err.response?.status === 401) {
-            navigate('/login', { replace: true });
-          } else {
-            setError(
-              err.response?.data?.message ||
-                err.response?.data?.detail ||
-                'Échec de la récupération du projet.'
-            );
-          }
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchProject();
-    }
-  }, [projectId, navigate, projectTitle]);
 
   const handleScrumToggle = () => {
     setOpenScrum((prev) => !prev);
@@ -145,7 +95,7 @@ const ProjectSidebar = ({ collapsed, projectTitle }) => {
                 boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
               }}
             >
-              {loading ? <CircularProgress size={24} /> : <FolderIcon />}
+              <FolderIcon />
             </Avatar>
           </Tooltip>
         ) : (
@@ -166,7 +116,7 @@ const ProjectSidebar = ({ collapsed, projectTitle }) => {
                   boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                 }}
               >
-                {loading ? <CircularProgress size={24} /> : <FolderIcon />}
+                <FolderIcon />
               </Avatar>
               <Typography
                 variant="subtitle1"
@@ -288,8 +238,7 @@ const ProjectSidebar = ({ collapsed, projectTitle }) => {
               )}`}
             >
               <ListItemIcon className="menu-icon">
-                <Tooltip title="Sprint" placement_0x000D_0x000A_0x000D_0x000A
-                placement="right">
+                <Tooltip title="Sprint" placement="right">
                   <FaPlay />
                 </Tooltip>
               </ListItemIcon>

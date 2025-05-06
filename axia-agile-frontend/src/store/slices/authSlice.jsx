@@ -22,7 +22,7 @@ export const fetchCurrentUser = createAsyncThunk(
       return response.data;
     } catch (error) {
       if (error.response?.status === 401) {
-        return rejectWithValue('');
+        return rejectWithValue('utilisateur déconnecter');
       }
       return rejectWithValue(error.response?.data?.message || '');
     }

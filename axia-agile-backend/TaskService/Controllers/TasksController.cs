@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ namespace TaskService.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class TasksController : ControllerBase
     {
         private readonly Services.TaskService _taskService;
@@ -23,8 +25,10 @@ namespace TaskService.Controllers
         }
 
         [HttpPost]
+        [Authorize(Policy = "CanCreateTasks")]
         [ProducesResponseType(typeof(TaskDTO), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<TaskDTO>> CreateTask([FromForm] CreateTaskRequest request, [FromForm] List<IFormFile> attachments = null)
         {
@@ -34,13 +38,18 @@ namespace TaskService.Controllers
                 return BadRequest("Task data is required.");
             }
 
-            // Hardcode userId for testing
-            var userId = 10; // Matches user with email: tester@gmail.com
+            // Get userId from JWT claims
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var userId))
+            {
+                _logger.LogWarning("CreateTask: Invalid or missing user ID in JWT claims");
+                return Unauthorized("Invalid user authentication.");
+            }
 
             try
             {
                 var task = await _taskService.CreateTaskAsync(request, attachments ?? new List<IFormFile>(), userId);
-                _logger.LogInformation($"Task {task.Title} created by user {userId}");
+                _logger.LogInformation($"Task {task.Title} created by user {userId} in project {task.ProjectId}");
                 return CreatedAtAction(nameof(GetTaskById), new { id = task.Id }, task);
             }
             catch (InvalidOperationException ex)
@@ -56,8 +65,10 @@ namespace TaskService.Controllers
         }
 
         [HttpGet("{id}")]
+        [Authorize(Policy = "CanViewTasks")]
         [ProducesResponseType(typeof(TaskDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<TaskDTO>> GetTaskById(int id)
         {
@@ -79,14 +90,16 @@ namespace TaskService.Controllers
         }
 
         [HttpGet]
+        [Authorize(Policy = "CanViewTasks")]
         [ProducesResponseType(typeof(List<TaskDTO>), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<List<TaskDTO>>> GetAllTasks()
+        public async Task<ActionResult<List<TaskDTO>>> GetAllTasks([FromQuery] int? projectId = null)
         {
             try
             {
-                var tasks = await _taskService.GetAllTasksAsync();
-                _logger.LogInformation($"Retrieved {tasks.Count}");
+                var tasks = await _taskService.GetAllTasksAsync(projectId);
+                _logger.LogInformation($"Retrieved {tasks.Count} tasks" + (projectId.HasValue ? $" for project {projectId}" : ""));
                 return Ok(tasks);
             }
             catch (Exception ex)
@@ -97,24 +110,31 @@ namespace TaskService.Controllers
         }
 
         [HttpPut("{id}")]
+        [Authorize(Policy = "CanUpdateTasks")]
         [ProducesResponseType(typeof(TaskDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<TaskDTO>> UpdateTask(int id, [FromForm] UpdateTaskRequest request, [FromForm] List<IFormFile> attachments = null)
         {
+            // Get userId from JWT claims
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var userId))
+            {
+                _logger.LogWarning("UpdateTask: Invalid or missing user ID in JWT claims");
+                return Unauthorized("Invalid user authentication.");
+            }
+
             try
             {
-                // Hardcode userId for testing
-                var userId = 10; // Matches user with email: tester@gmail.com
-
                 var task = await _taskService.UpdateTaskAsync(id, request, attachments ?? new List<IFormFile>(), userId);
                 if (task == null)
                 {
                     _logger.LogWarning($"UpdateTask: Task {id} not found");
                     return NotFound("Task not found.");
                 }
-                _logger.LogInformation($"Task {id} updated by user {userId}");
+                _logger.LogInformation($"Task {id} updated by user {userId} in project {task.ProjectId}");
                 return Ok(task);
             }
             catch (InvalidOperationException ex)
@@ -130,8 +150,10 @@ namespace TaskService.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Policy = "CanDeleteTasks")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult> DeleteTask(int id)
         {

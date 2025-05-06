@@ -369,6 +369,11 @@ function Kanban() {
   // Redux state for tasks
   const { tasks, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
 
+  // Log tasks for debugging
+  useEffect(() => {
+    console.log('Kanban tasks:', tasks);
+  }, [tasks]);
+
   // Local state
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
@@ -407,6 +412,11 @@ function Kanban() {
     Done: tasks.filter((task) => task.status === 'Done'),
   };
 
+  // Log columns for debugging
+  useEffect(() => {
+    console.log('Kanban columns:', columns);
+  }, [columns]);
+
   // Filter tasks by user and priority
   const filteredColumns = Object.keys(columns).reduce((acc, columnId) => {
     acc[columnId] = columns[columnId].filter((task) => {
@@ -426,7 +436,7 @@ function Kanban() {
       const normalizedProject = normalizeProject(projectResponse.data);
       setProject(normalizedProject);
 
-      await dispatch(fetchAllTasks()).unwrap();
+      await dispatch(fetchAllTasks({ projectId })).unwrap();
 
       const projectUserEmails = [
         ...(normalizedProject.projectManagers || []),
@@ -647,7 +657,7 @@ function Kanban() {
     setFormValues((prev) => ({
       ...prev,
       attachments: prev.attachments.filter((_, index) => `file-${index}` !== attachmentId),
-    }));
+    }))
   };
 
   // Safe date parsing

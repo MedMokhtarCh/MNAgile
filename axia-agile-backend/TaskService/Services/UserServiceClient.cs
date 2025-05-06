@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿// TaskService/Services/UserServiceClient.cs
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System;
@@ -40,20 +41,23 @@ namespace TaskService.Services
         {
             var client = _httpClientFactory.CreateClient();
 
-            // Bypassed JWT token check for testing
-            /*
-            var token = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"]
-                .ToString().Replace("Bearer ", "");
+            // Forward JWT token from Authorization header or cookie
+            var token = _httpContextAccessor.HttpContext?.Request.Cookies["AuthToken"];
+            if (string.IsNullOrEmpty(token))
+            {
+                token = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"]
+                    .ToString().Replace("Bearer ", "");
+            }
 
             if (string.IsNullOrEmpty(token))
             {
-                _logger.LogWarning("No JWT token found in request headers.");
-                throw new InvalidOperationException("JWT token missing from request headers.");
+                _logger.LogWarning("No JWT token found in cookie or Authorization header.");
+                throw new InvalidOperationException("JWT token missing from request headers or cookie.");
             }
 
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-            */
+            _logger.LogDebug("Added JWT token to UserService request");
 
             client.BaseAddress = new Uri(_userServiceUrl);
             client.Timeout = TimeSpan.FromSeconds(30);
@@ -89,23 +93,31 @@ namespace TaskService.Services
                     var response = await client.GetAsync($"/api/users/exists?email={Uri.EscapeDataString(normalizedEmail)}");
                     var content = await response.Content.ReadAsStringAsync();
 
+                    _logger.LogDebug($"Response for {normalizedEmail}: Status={response.StatusCode}, Content={content}");
+
                     if (response.IsSuccessStatusCode)
                     {
-                        _logger.LogDebug($"Response for {normalizedEmail}: {content}");
-
-                        var responseObj = JsonSerializer.Deserialize<UserExistenceResponse>(
-                            content,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                        );
-
-                        if (responseObj?.Exists == true && responseObj.UserId.HasValue)
+                        try
                         {
-                            userIds[email] = responseObj.UserId.Value;
-                            _logger.LogInformation($"User with email {normalizedEmail} found with ID {responseObj.UserId.Value}");
+                            var responseObj = JsonSerializer.Deserialize<UserExistenceResponse>(
+                                content,
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                            );
+
+                            if (responseObj?.Exists == true && responseObj.UserId.HasValue)
+                            {
+                                userIds[email] = responseObj.UserId.Value;
+                                _logger.LogInformation($"User with email {normalizedEmail} found with ID {responseObj.UserId.Value}");
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"User with email {normalizedEmail} does not exist or is inactive");
+                            }
                         }
-                        else
+                        catch (JsonException ex)
                         {
-                            _logger.LogWarning($"User with email {normalizedEmail} does not exist or is inactive");
+                            _logger.LogError(ex, $"Failed to parse response for email {normalizedEmail}: {content}");
+                            throw new InvalidOperationException($"Invalid response format from UserService for email {normalizedEmail}", ex);
                         }
                     }
                     else
@@ -160,26 +172,35 @@ namespace TaskService.Services
                     var response = await client.GetAsync($"/api/users/{userId}");
                     var content = await response.Content.ReadAsStringAsync();
 
+                    _logger.LogDebug($"Response for user ID {userId}: Status={response.StatusCode}, Content={content}");
+
                     if (response.IsSuccessStatusCode)
                     {
-                        var user = JsonSerializer.Deserialize<UserDTO>(
-                            content,
-                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-                        );
+                        try
+                        {
+                            var user = JsonSerializer.Deserialize<UserDTO>(
+                                content,
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                            );
 
-                        if (user != null && !string.IsNullOrEmpty(user.Email))
-                        {
-                            emails.Add(user.Email);
-                            _logger.LogInformation($"Retrieved email {user.Email} for user ID {userId}");
+                            if (user != null && !string.IsNullOrEmpty(user.Email))
+                            {
+                                emails.Add(user.Email);
+                                _logger.LogInformation($"Retrieved email {user.Email} for user ID {userId}");
+                            }
+                            else
+                            {
+                                _logger.LogWarning($"Invalid user data for ID {userId}");
+                            }
                         }
-                        else
+                        catch (JsonException ex)
                         {
-                            _logger.LogWarning($"Invalid user data for ID {userId}");
+                            _logger.LogError(ex, $"Failed to parse response for user ID {userId}: {content}");
                         }
                     }
                     else
                     {
-                        _logger.LogWarning($"Failed to retrieve user with ID {userId}. Status: {response.StatusCode}");
+                        _logger.LogWarning($"Failed to retrieve user with ID {userId}. Status: {response.StatusCode}, Content: {content}");
                     }
                 }
 
@@ -211,6 +232,9 @@ namespace TaskService.Services
                 _logger.LogDebug($"Validating user with ID: {userId}");
 
                 var response = await client.GetAsync($"/api/users/{userId}");
+                var content = await response.Content.ReadAsStringAsync();
+
+                _logger.LogDebug($"Response for user ID {userId}: Status={response.StatusCode}, Content={content}");
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -219,8 +243,7 @@ namespace TaskService.Services
                 }
                 else
                 {
-                    var content = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning($"Failed to validate user {userId}. Status: {response.StatusCode}, Response: {content}");
+                    _logger.LogWarning($"Failed to validate user {userId}. Status: {response.StatusCode}, Content: {content}");
                     return false;
                 }
             }

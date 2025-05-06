@@ -18,5 +18,7 @@ namespace TaskService.Models
         public DateTime? EndDate { get; set; }
         public string AssignedUserIds { get; set; } // Comma-separated, e.g., "1,2,3"
         public string? Attachments { get; set; } // JSON array, e.g., [{"FileName":"file1.pdf","FilePath":"/Uploads/file1.pdf"}]
+        [Required]
+        public int ProjectId { get; set; } // Foreign key to Project
     }
 }

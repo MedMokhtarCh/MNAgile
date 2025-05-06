@@ -30,6 +30,7 @@ import ProjectCard from '../components/project/ProjectCard';
 import ProjectFormStepper from '../components/project/ProjectFormStepper';
 import PageTitle from '../components/common/PageTitle';
 import Pagination from '../components/common/Pagination';
+import { useNavigate } from 'react-router-dom';
 
 // Styled Components
 const CreateButton = styled(Button)(({ theme }) => ({
@@ -63,6 +64,7 @@ const FilterContainer = styled(Box)(({ theme }) => ({
 function Projects() {
   const theme = useTheme();
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
   const {
     registeredUsers,
     projectForm,
@@ -97,7 +99,6 @@ function Projects() {
     steps,
     status,
     getFilteredProjects,
-    navigateToProject,
     handleModalOpen,
     handleModalClose,
     handleDeleteDialogOpen,
@@ -138,6 +139,15 @@ function Projects() {
   const handlePageChange = (page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const navigateToProject = (projectId, section = '') => {
+    if (!projectId) {
+      console.error('Project ID is undefined');
+      return;
+    }
+    const path = section ? `/project/${projectId}/${section}` : `/project/${projectId}`;
+    navigate(path);
   };
 
   const getUserDisplayName = (email) => {

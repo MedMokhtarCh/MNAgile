@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +17,7 @@ namespace TaskService.Services
     public class TaskService
     {
         private readonly UserServiceClient _userServiceClient;
+        private readonly ProjectServiceClient _projectServiceClient;
         private readonly ILogger<TaskService> _logger;
         private readonly AppDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -22,12 +25,14 @@ namespace TaskService.Services
 
         public TaskService(
             UserServiceClient userServiceClient,
+            ProjectServiceClient projectServiceClient,
             ILogger<TaskService> logger,
             AppDbContext context,
             IHttpContextAccessor httpContextAccessor,
             FileStorageService fileStorageService)
         {
             _userServiceClient = userServiceClient;
+            _projectServiceClient = projectServiceClient;
             _logger = logger;
             _context = context;
             _httpContextAccessor = httpContextAccessor;
@@ -57,15 +62,13 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Erreur de validation : {ex.Message}");
                 }
 
-                // Bypassed user validation for testing
-                /*
-                var userValid = await _userServiceClient.ValidateUserAsync(userId);
-                if (!userValid)
+                // Validate project existence
+                var projectExists = await _projectServiceClient.ProjectExistsAsync(request.ProjectId);
+                if (!projectExists)
                 {
-                    _logger.LogWarning($"User {userId} is not valid or unauthorized.");
-                    throw new InvalidOperationException("Utilisateur non valide ou non autorisé.");
+                    _logger.LogWarning($"Project {request.ProjectId} does not exist.");
+                    throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId} n'existe pas. Vérifiez que le ProjectService est accessible et que le projet existe.");
                 }
-                */
 
                 var assignedUserIds = new List<int>();
                 if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
@@ -140,7 +143,8 @@ namespace TaskService.Services
                     StartDate = request.StartDate,
                     EndDate = request.EndDate,
                     AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null,
-                    Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null
+                    Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null,
+                    ProjectId = request.ProjectId
                 };
 
                 try
@@ -167,10 +171,11 @@ namespace TaskService.Services
                     EndDate = task.EndDate,
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
-                    AssignedUserEmails = request.AssignedUserEmails
+                    AssignedUserEmails = request.AssignedUserEmails,
+                    ProjectId = task.ProjectId
                 };
 
-                _logger.LogInformation($"Task {task.Title} created for user {userId}.");
+                _logger.LogInformation($"Task {task.Title} created for user {userId} in project {task.ProjectId}.");
                 return taskDto;
             }
             catch (InvalidOperationException ex)
@@ -228,7 +233,8 @@ namespace TaskService.Services
                     EndDate = task.EndDate,
                     Attachments = attachments,
                     AssignedUserIds = assignedUserIds,
-                    AssignedUserEmails = assignedUserEmails
+                    AssignedUserEmails = assignedUserEmails,
+                    ProjectId = task.ProjectId
                 };
             }
             catch (Exception ex)
@@ -238,36 +244,28 @@ namespace TaskService.Services
             }
         }
 
-        public async Task<List<TaskDTO>> GetAllTasksAsync()
+        public async Task<List<TaskDTO>> GetAllTasksAsync(int? projectId = null)
         {
             try
             {
-                // Bypassed user validation for testing
-                /*
-                var userId = GetUserIdFromContext();
-                if (userId.HasValue)
-                {
-                    try
-                    {
-                        var userValid = await _userServiceClient.ValidateUserAsync(userId.Value);
-                        if (!userValid)
-                        {
-                            _logger.LogWarning($"User {userId.Value} is not valid or unauthorized.");
-                            return new List<TaskDTO>();
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, $"Failed to validate user {userId.Value}");
-                        return new List<TaskDTO>();
-                    }
-                }
-                */
-
                 List<Task> tasks;
                 try
                 {
-                    tasks = await _context.Tasks.ToListAsync();
+                    if (projectId.HasValue)
+                    {
+                        if (!await _projectServiceClient.ProjectExistsAsync(projectId.Value))
+                        {
+                            _logger.LogWarning($"Project {projectId.Value} does not exist.");
+                            return new List<TaskDTO>();
+                        }
+                        tasks = await _context.Tasks.Where(t => t.ProjectId == projectId.Value).ToListAsync();
+                        _logger.LogError($"Retrieved {tasks.Count} tasks for project {projectId.Value} from database.");
+                    }
+                    else
+                    {
+                        tasks = await _context.Tasks.ToListAsync();
+                        _logger.LogDebug($"Retrieved {tasks.Count} tasks from database.");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -314,10 +312,12 @@ namespace TaskService.Services
                         EndDate = task.EndDate,
                         Attachments = attachments,
                         AssignedUserIds = assignedUserIds,
-                        AssignedUserEmails = assignedUserEmails
+                        AssignedUserEmails = assignedUserEmails,
+                        ProjectId = task.ProjectId
                     });
                 }
 
+                _logger.LogInformation($"Returning {taskDtos.Count} tasks.");
                 return taskDtos;
             }
             catch (Exception ex)
@@ -334,14 +334,11 @@ namespace TaskService.Services
                 var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
                 if (task == null) return null;
 
-                // Bypassed user validation for testing
-                /*
-                var userValid = await _userServiceClient.ValidateUserAsync(userId);
-                if (!userValid)
+                if (request.ProjectId.HasValue && !await _projectServiceClient.ProjectExistsAsync(request.ProjectId.Value))
                 {
-                    throw new InvalidOperationException("Utilisateur non valide ou non autorisé.");
+                    _logger.LogWarning($"Project {request.ProjectId.Value} does not exist.");
+                    throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId.Value} n'existe pas.");
                 }
-                */
 
                 var assignedUserIds = new List<int>();
                 if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
@@ -383,6 +380,7 @@ namespace TaskService.Services
                 task.Status = request.Status ?? task.Status;
                 task.StartDate = request.StartDate ?? task.StartDate;
                 task.EndDate = request.EndDate ?? task.EndDate;
+                task.ProjectId = request.ProjectId ?? task.ProjectId;
                 task.UpdatedAt = DateTime.UtcNow;
                 task.AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null;
                 task.Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null;
@@ -404,7 +402,8 @@ namespace TaskService.Services
                     EndDate = task.EndDate,
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
-                    AssignedUserEmails = request.AssignedUserEmails
+                    AssignedUserEmails = request.AssignedUserEmails,
+                    ProjectId = task.ProjectId
                 };
             }
             catch (Exception ex)

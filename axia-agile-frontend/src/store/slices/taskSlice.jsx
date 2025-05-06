@@ -1,16 +1,72 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { taskApi } from '../../services/api';
+import { logoutUser } from './authSlice';
+
+// Helper functions
+const isValidDate = (date) => {
+  if (!date) return false;
+  return !isNaN(new Date(date).getTime());
+};
+
+const validateAttachments = (attachments) => {
+  const maxFileSize = 10 * 1024 * 1024; // 10MB
+  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+
+  attachments.forEach(file => {
+    if (file.size > maxFileSize) {
+      throw new Error(`File ${file.name} exceeds 10MB limit`);
+    }
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error(`File ${file.name} has unsupported type`);
+    }
+  });
+};
+
+const parseError = (error) => {
+  if (error.response?.data?.message) return error.response.data.message;
+  if (error.response?.data?.errors) {
+    return Object.values(error.response.data.errors).flat().join(', ');
+  }
+  if (error.response?.data) return JSON.stringify(error.response.data);
+  return error.message || 'Unknown error';
+};
+
+const normalizeTask = (task) => ({
+  id: task.id || task.Id,
+  title: task.title || task.Title,
+  description: task.description || task.Description,
+  status: task.status || task.Status || 'ToDo',
+  priority: task.priority || task.Priority || 'Medium',
+  startDate: task.startDate || task.StartDate,
+  endDate: task.endDate || task.EndDate,
+  assignedUserEmails: task.assignedUserEmails || task.AssignedUserEmails || [],
+  projectId: task.projectId || task.ProjectId,
+  attachments: task.attachments || task.Attachments || [],
+});
 
 // Async thunks
 export const fetchAllTasks = createAsyncThunk(
   'tasks/fetchAll',
-  async (_, { rejectWithValue }) => {
+  async ({ projectId }, { dispatch, rejectWithValue }) => {
     try {
-      const response = await taskApi.get('/tasks');
-      return response.data;
+      if (!projectId || projectId <= 0) {
+        throw new Error('Valid projectId is required');
+      }
+
+      const config = {
+        params: { projectId },
+      };
+      const response = await taskApi.get('/tasks', config);
+
+      console.log('fetchAllTasks response:', response.data); // Debug log
+      return Array.isArray(response.data) ? response.data.map(normalizeTask) : [];
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to fetch tasks';
+      const errorMessage = parseError(error);
       console.error('Fetch all tasks error:', errorMessage);
+      if (error.response?.status === 401) {
+        dispatch(logoutUser());
+        return rejectWithValue('Unauthorized: Invalid or expired token');
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -18,13 +74,17 @@ export const fetchAllTasks = createAsyncThunk(
 
 export const fetchTaskById = createAsyncThunk(
   'tasks/fetchById',
-  async (taskId, { rejectWithValue }) => {
+  async (taskId, { dispatch, rejectWithValue }) => {
     try {
       const response = await taskApi.get(`/tasks/${taskId}`);
-      return response.data;
+      return normalizeTask(response.data);
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to fetch task';
+      const errorMessage = parseError(error);
       console.error('Fetch task by ID error:', errorMessage);
+      if (error.response?.status === 401) {
+        dispatch(logoutUser());
+        return rejectWithValue('Unauthorized: Invalid or expired token');
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -32,33 +92,34 @@ export const fetchTaskById = createAsyncThunk(
 
 export const createTask = createAsyncThunk(
   'tasks/create',
-  async ({ taskData, attachments = [] }, { rejectWithValue }) => {
+  async ({ taskData, attachments = [] }, { dispatch, rejectWithValue }) => {
     try {
       const formData = new FormData();
 
-      // Add task data fields
+      // Add task data fields (using PascalCase to match backend DTO)
       const fields = {
-        title: taskData.title,
-        description: taskData.description || '',
-        priority: taskData.priority || 'Medium',
-        status: taskData.status || 'ToDo',
-        startDate: taskData.startDate ? new Date(taskData.startDate).toISOString() : null,
-        endDate: taskData.endDate ? new Date(taskData.endDate).toISOString() : null,
-        assignedUserEmails: taskData.assignedUserEmails || [],
-        projectId: taskData.projectId || null,
+        Title: taskData.title,
+        Description: taskData.description || '',
+        Priority: taskData.priority || 'Medium',
+        Status: taskData.status || 'ToDo',
+        StartDate: isValidDate(taskData.startDate) ? new Date(taskData.startDate).toISOString() : null,
+        EndDate: isValidDate(taskData.endDate) ? new Date(taskData.endDate).toISOString() : null,
+        AssignedUserEmails: taskData.assignedUserEmails || [],
+        ProjectId: taskData.projectId && taskData.projectId > 0 ? taskData.projectId : null,
       };
 
       for (const [key, value] of Object.entries(fields)) {
-        if (key === 'assignedUserEmails' && Array.isArray(value)) {
+        if (key === 'AssignedUserEmails' && Array.isArray(value)) {
           value.forEach(email => {
-            if (email) formData.append('assignedUserEmails', email);
+            if (email) formData.append('AssignedUserEmails', email);
           });
         } else if (value !== null && value !== undefined) {
-          formData.append(key, value);
+          formData.append(key, value.toString());
         }
       }
 
-      // Add attachments
+      // Validate and add attachments
+      validateAttachments(attachments);
       attachments.forEach(file => {
         formData.append('attachments', file);
       });
@@ -69,10 +130,14 @@ export const createTask = createAsyncThunk(
         },
       });
 
-      return response.data;
+      return normalizeTask(response.data);
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to create task';
+      const errorMessage = parseError(error);
       console.error('Create task error:', errorMessage);
+      if (error.response?.status === 401) {
+        dispatch(logoutUser());
+        return rejectWithValue('Unauthorized: Invalid or expired token');
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -80,33 +145,34 @@ export const createTask = createAsyncThunk(
 
 export const updateTask = createAsyncThunk(
   'tasks/update',
-  async ({ taskId, taskData, attachments = [] }, { rejectWithValue }) => {
+  async ({ taskId, taskData, attachments = [] }, { dispatch, rejectWithValue }) => {
     try {
       const formData = new FormData();
 
-      // Add task data fields
+      // Add task data fields (using PascalCase to match backend DTO)
       const fields = {
-        title: taskData.title,
-        description: taskData.description || '',
-        priority: taskData.priority || 'Medium',
-        status: taskData.status || 'ToDo',
-        startDate: taskData.startDate ? new Date(taskData.startDate).toISOString() : null,
-        endDate: taskData.endDate ? new Date(taskData.endDate).toISOString() : null,
-        assignedUserEmails: taskData.assignedUserEmails || [],
-        projectId: taskData.projectId || null,
+        Title: taskData.title,
+        Description: taskData.description || '',
+        Priority: taskData.priority || 'Medium',
+        Status: taskData.status || 'ToDo',
+        StartDate: isValidDate(taskData.startDate) ? new Date(taskData.startDate).toISOString() : null,
+        EndDate: isValidDate(taskData.endDate) ? new Date(taskData.endDate).toISOString() : null,
+        AssignedUserEmails: taskData.assignedUserEmails || [],
+        ProjectId: taskData.projectId && taskData.projectId > 0 ? taskData.projectId : null,
       };
 
       for (const [key, value] of Object.entries(fields)) {
-        if (key === 'assignedUserEmails' && Array.isArray(value)) {
+        if (key === 'AssignedUserEmails' && Array.isArray(value)) {
           value.forEach(email => {
-            if (email) formData.append('assignedUserEmails', email);
+            if (email) formData.append('AssignedUserEmails', email);
           });
         } else if (value !== null && value !== undefined) {
-          formData.append(key, value);
+          formData.append(key, value.toString());
         }
       }
 
-      // Add attachments
+      // Validate and add attachments
+      validateAttachments(attachments);
       attachments.forEach(file => {
         formData.append('attachments', file);
       });
@@ -117,10 +183,14 @@ export const updateTask = createAsyncThunk(
         },
       });
 
-      return response.data;
+      return normalizeTask(response.data);
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to update task';
+      const errorMessage = parseError(error);
       console.error('Update task error:', errorMessage);
+      if (error.response?.status === 401) {
+        dispatch(logoutUser());
+        return rejectWithValue('Unauthorized: Invalid or expired token');
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -128,13 +198,17 @@ export const updateTask = createAsyncThunk(
 
 export const deleteTask = createAsyncThunk(
   'tasks/delete',
-  async (taskId, { rejectWithValue }) => {
+  async (taskId, { dispatch, rejectWithValue }) => {
     try {
       await taskApi.delete(`/tasks/${taskId}`);
       return taskId;
     } catch (error) {
-      const errorMessage = error.response?.data?.message || error.response?.data || 'Failed to delete task';
+      const errorMessage = parseError(error);
       console.error('Delete task error:', errorMessage);
+      if (error.response?.status === 401) {
+        dispatch(logoutUser());
+        return rejectWithValue('Unauthorized: Invalid or expired token');
+      }
       return rejectWithValue(errorMessage);
     }
   }
@@ -179,7 +253,6 @@ const tasksSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload;
       })
-      
       // Fetch task by ID
       .addCase(fetchTaskById.pending, (state) => {
         state.status = 'loading';
@@ -194,7 +267,6 @@ const tasksSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload;
       })
-      
       // Create task
       .addCase(createTask.pending, (state) => {
         state.status = 'loading';
@@ -210,7 +282,6 @@ const tasksSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload;
       })
-      
       // Update task
       .addCase(updateTask.pending, (state) => {
         state.status = 'loading';
@@ -229,7 +300,6 @@ const tasksSlice = createSlice({
         state.status = 'failed';
         state.error = action.payload;
       })
-      
       // Delete task
       .addCase(deleteTask.pending, (state) => {
         state.status = 'loading';

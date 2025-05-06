@@ -23,6 +23,10 @@ namespace TaskService.Data
             modelBuilder.Entity<Task>()
                 .Property(t => t.Attachments)
                 .HasColumnType("nvarchar(max)");
+
+            modelBuilder.Entity<Task>()
+                .Property(t => t.ProjectId)
+                .IsRequired();
         }
     }
 }
