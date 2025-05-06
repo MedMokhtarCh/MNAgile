@@ -38,6 +38,7 @@ builder.Services.AddScoped<TaskService.Services.TaskService>();
 builder.Services.AddScoped<UserServiceClient>();
 builder.Services.AddScoped<ProjectServiceClient>();
 builder.Services.AddScoped<FileStorageService>();
+builder.Services.AddScoped<KanbanColumnService>();
 
 // --------------------- JWT Auth + Cookie ---------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");

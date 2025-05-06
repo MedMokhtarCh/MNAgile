@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
@@ -18,6 +17,7 @@ namespace TaskService.Services
     {
         private readonly UserServiceClient _userServiceClient;
         private readonly ProjectServiceClient _projectServiceClient;
+        private readonly KanbanColumnService _kanbanColumnService;
         private readonly ILogger<TaskService> _logger;
         private readonly AppDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -26,6 +26,7 @@ namespace TaskService.Services
         public TaskService(
             UserServiceClient userServiceClient,
             ProjectServiceClient projectServiceClient,
+            KanbanColumnService kanbanColumnService,
             ILogger<TaskService> logger,
             AppDbContext context,
             IHttpContextAccessor httpContextAccessor,
@@ -33,6 +34,7 @@ namespace TaskService.Services
         {
             _userServiceClient = userServiceClient;
             _projectServiceClient = projectServiceClient;
+            _kanbanColumnService = kanbanColumnService;
             _logger = logger;
             _context = context;
             _httpContextAccessor = httpContextAccessor;
@@ -67,7 +69,15 @@ namespace TaskService.Services
                 if (!projectExists)
                 {
                     _logger.LogWarning($"Project {request.ProjectId} does not exist.");
-                    throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId} n'existe pas. Vérifiez que le ProjectService est accessible et que le projet existe.");
+                    throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId} n'existe pas.");
+                }
+
+                // Validate status against Kanban columns
+                var columns = await _kanbanColumnService.GetColumnsByProjectAsync(request.ProjectId);
+                if (!columns.Any(c => c.Name == request.Status))
+                {
+                    _logger.LogWarning($"Invalid status {request.Status} for project {request.ProjectId}.");
+                    throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
                 }
 
                 var assignedUserIds = new List<int>();
@@ -259,7 +269,7 @@ namespace TaskService.Services
                             return new List<TaskDTO>();
                         }
                         tasks = await _context.Tasks.Where(t => t.ProjectId == projectId.Value).ToListAsync();
-                        _logger.LogError($"Retrieved {tasks.Count} tasks for project {projectId.Value} from database.");
+                        _logger.LogDebug($"Retrieved {tasks.Count} tasks for project {projectId.Value} from database.");
                     }
                     else
                     {
@@ -338,6 +348,17 @@ namespace TaskService.Services
                 {
                     _logger.LogWarning($"Project {request.ProjectId.Value} does not exist.");
                     throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId.Value} n'existe pas.");
+                }
+
+                // Validate status against Kanban columns
+                if (!string.IsNullOrEmpty(request.Status))
+                {
+                    var columns = await _kanbanColumnService.GetColumnsByProjectAsync(task.ProjectId);
+                    if (!columns.Any(c => c.Name == request.Status))
+                    {
+                        _logger.LogWarning($"Invalid status {request.Status} for project {task.ProjectId}.");
+                        throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
+                    }
                 }
 
                 var assignedUserIds = new List<int>();
