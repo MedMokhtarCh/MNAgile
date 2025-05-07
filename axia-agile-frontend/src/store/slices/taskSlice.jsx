@@ -1,325 +1,482 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { taskApi } from '../../services/api';
-import { logoutUser } from './authSlice';
 
-// Helper functions
-const isValidDate = (date) => {
-  if (!date) return false;
-  return !isNaN(new Date(date).getTime());
-};
-
-const validateAttachments = (attachments) => {
-  const maxFileSize = 10 * 1024 * 1024; // 10MB
-  const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
-
-  attachments.forEach(file => {
-    if (file.size > maxFileSize) {
-      throw new Error(`File ${file.name} exceeds 10MB limit`);
-    }
-    if (!allowedTypes.includes(file.type)) {
-      throw new Error(`File ${file.name} has unsupported type`);
-    }
-  });
-};
-
-const parseError = (error) => {
-  if (error.response?.data?.message) return error.response.data.message;
-  if (error.response?.data?.errors) {
-    return Object.values(error.response.data.errors).flat().join(', ');
-  }
-  if (error.response?.data) return JSON.stringify(error.response.data);
-  return error.message || 'Unknown error';
-};
-
-const normalizeTask = (task) => ({
-  id: task.id || task.Id,
-  title: task.title || task.Title,
-  description: task.description || task.Description,
-  status: task.status || task.Status || 'ToDo',
-  priority: task.priority || task.Priority || 'Medium',
-  startDate: task.startDate || task.StartDate,
-  endDate: task.endDate || task.EndDate,
-  assignedUserEmails: task.assignedUserEmails || task.AssignedUserEmails || [],
-  projectId: task.projectId || task.ProjectId,
-  attachments: task.attachments || task.Attachments || [],
-});
-
-// Async thunks
+// Fetch all tasks
 export const fetchAllTasks = createAsyncThunk(
-  'tasks/fetchAll',
-  async ({ projectId }, { dispatch, rejectWithValue }) => {
+  'tasks/fetchAllTasks',
+  async ({ projectId, backlogId }, { rejectWithValue }) => {
     try {
-      if (!projectId || projectId <= 0) {
-        throw new Error('Valid projectId is required');
-      }
-
-      const config = {
-        params: { projectId },
-      };
-      const response = await taskApi.get('/tasks', config);
-
-      console.log('fetchAllTasks response:', response.data); // Debug log
-      return Array.isArray(response.data) ? response.data.map(normalizeTask) : [];
-    } catch (error) {
-      const errorMessage = parseError(error);
-      console.error('Fetch all tasks error:', errorMessage);
-      if (error.response?.status === 401) {
-        dispatch(logoutUser());
-        return rejectWithValue('Unauthorized: Invalid or expired token');
-      }
-      return rejectWithValue(errorMessage);
+      let url = '/Tasks';
+      const params = [];
+      if (projectId) params.push(`projectId=${projectId}`);
+      if (backlogId) params.push(`backlogId=${backlogId}`);
+      if (params.length) url += `?${params.join('&')}`;
+      const response = await taskApi.get(url);
+      return response.data;
+    } catch (err) {
+      console.error('[fetchAllTasks] Error:', {
+        message: err.message,
+        response: err.response ? {
+          status: err.response.status,
+          data: err.response.data,
+        } : null,
+      });
+      return rejectWithValue(err.response?.data || err.message);
     }
   }
 );
 
-export const fetchTaskById = createAsyncThunk(
-  'tasks/fetchById',
-  async (taskId, { dispatch, rejectWithValue }) => {
+// Fetch Kanban columns
+export const fetchKanbanColumns = createAsyncThunk(
+  'tasks/fetchKanbanColumns',
+  async ({ projectId }, { rejectWithValue }) => {
     try {
-      const response = await taskApi.get(`/tasks/${taskId}`);
-      return normalizeTask(response.data);
-    } catch (error) {
-      const errorMessage = parseError(error);
-      console.error('Fetch task by ID error:', errorMessage);
-      if (error.response?.status === 401) {
-        dispatch(logoutUser());
-        return rejectWithValue('Unauthorized: Invalid or expired token');
-      }
-      return rejectWithValue(errorMessage);
+      const response = await taskApi.get(`/KanbanColumns/project/${projectId}`);
+      return response.data;
+    } catch (err) {
+      console.error('[fetchKanbanColumns] Error:', {
+        message: err.message,
+        response: err.response ? {
+          status: err.response.status,
+          data: err.response.data,
+        } : null,
+      });
+      return rejectWithValue(err.response?.data || err.message);
     }
   }
 );
 
+// Create Kanban column
+export const createKanbanColumn = createAsyncThunk(
+  'tasks/createKanbanColumn',
+  async ({ columnData }, { rejectWithValue }) => {
+    try {
+      console.log('[createKanbanColumn] Sending payload:', columnData);
+      const response = await taskApi.post('/KanbanColumns', columnData);
+      return response.data;
+    } catch (err) {
+      console.error('[createKanbanColumn] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Update Kanban column
+export const updateKanbanColumn = createAsyncThunk(
+  'tasks/updateKanbanColumn',
+  async ({ columnId, columnData }, { rejectWithValue }) => {
+    try {
+      const response = await taskApi.put(`/KanbanColumns/${columnId}`, columnData);
+      return response.data;
+    } catch (err) {
+      console.error('[updateKanbanColumn] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Delete Kanban column
+export const deleteKanbanColumn = createAsyncThunk(
+  'tasks/deleteKanbanColumn',
+  async ({ columnId }, { rejectWithValue }) => {
+    try {
+      await taskApi.delete(`/KanbanColumns/${columnId}`);
+      return columnId;
+    } catch (err) {
+      console.error('[deleteKanbanColumn] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Fetch backlogs
+export const fetchBacklogs = createAsyncThunk(
+  'tasks/fetchBacklogs',
+  async ({ projectId }, { rejectWithValue }) => {
+    try {
+      const response = await taskApi.get(`/Backlogs/project/${projectId}`);
+      return response.data;
+    } catch (err) {
+      console.error('[fetchBacklogs] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Create backlog
+export const createBacklog = createAsyncThunk(
+  'tasks/createBacklog',
+  async ({ backlogData }, { rejectWithValue }) => {
+    try {
+      console.log('[createBacklog] Sending payload:', backlogData);
+      const response = await taskApi.post('/Backlogs', backlogData);
+      return response.data;
+    } catch (err) {
+      console.error('[createBacklog] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Update backlog
+export const updateBacklog = createAsyncThunk(
+  'tasks/updateBacklog',
+  async ({ backlogId, backlogData }, { rejectWithValue }) => {
+    try {
+      console.log('[updateBacklog] Sending payload:', backlogData);
+      const response = await taskApi.put(`/Backlogs/${backlogId}`, backlogData);
+      return response.data;
+    } catch (err) {
+      console.error('[updateBacklog] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Delete backlog
+export const deleteBacklog = createAsyncThunk(
+  'tasks/deleteBacklog',
+  async ({ backlogId }, { rejectWithValue }) => {
+    try {
+      await taskApi.delete(`/Backlogs/${backlogId}`);
+      return backlogId;
+    } catch (err) {
+      console.error('[deleteBacklog] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Link task to backlog
+export const linkTaskToBacklog = createAsyncThunk(
+  'tasks/linkTaskToBacklog',
+  async ({ backlogId, taskId }, { rejectWithValue }) => {
+    try {
+      await taskApi.post(`/Backlogs/${backlogId}/tasks/${taskId}`);
+      return { backlogId, taskId };
+    } catch (err) {
+      console.error('[linkTaskToBacklog] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Unlink task from backlog
+export const unlinkTaskFromBacklog = createAsyncThunk(
+  'tasks/unlinkTaskFromBacklog',
+  async ({ backlogId, taskId }, { rejectWithValue }) => {
+    try {
+      await taskApi.delete(`/Backlogs/${backlogId}/tasks/${taskId}`);
+      return { backlogId, taskId };
+    } catch (err) {
+      console.error('[unlinkTaskFromBacklog] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Create task
 export const createTask = createAsyncThunk(
-  'tasks/create',
-  async ({ taskData, attachments = [] }, { dispatch, rejectWithValue }) => {
+  'tasks/createTask',
+  async ({ taskData, attachments }, { rejectWithValue }) => {
     try {
       const formData = new FormData();
-
-      // Add task data fields (using PascalCase to match backend DTO)
-      const fields = {
-        Title: taskData.title,
-        Description: taskData.description || '',
-        Priority: taskData.priority || 'Medium',
-        Status: taskData.status || 'ToDo',
-        StartDate: isValidDate(taskData.startDate) ? new Date(taskData.startDate).toISOString() : null,
-        EndDate: isValidDate(taskData.endDate) ? new Date(taskData.endDate).toISOString() : null,
-        AssignedUserEmails: taskData.assignedUserEmails || [],
-        ProjectId: taskData.projectId && taskData.projectId > 0 ? taskData.projectId : null,
-      };
-
-      for (const [key, value] of Object.entries(fields)) {
-        if (key === 'AssignedUserEmails' && Array.isArray(value)) {
-          value.forEach(email => {
-            if (email) formData.append('AssignedUserEmails', email);
+      // Ensure createdIn is included in metadata
+      const metadata = { createdIn: taskData.createdIn || 'kanban' }; // Default to 'kanban' if not specified
+      const taskPayload = { ...taskData, metadata };
+      Object.keys(taskPayload).forEach((key) => {
+        if (Array.isArray(taskPayload[key])) {
+          taskPayload[key].forEach((item, index) => {
+            formData.append(`${key}[${index}]`, item ?? '');
           });
-        } else if (value !== null && value !== undefined) {
-          formData.append(key, value.toString());
+        } else if (taskPayload[key] !== null && taskPayload[key] !== undefined) {
+          formData.append(key, typeof taskPayload[key] === 'object' ? JSON.stringify(taskPayload[key]) : taskPayload[key]);
         }
-      }
-
-      // Validate and add attachments
-      validateAttachments(attachments);
-      attachments.forEach(file => {
-        formData.append('attachments', file);
       });
 
-      const response = await taskApi.post('/tasks', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      return normalizeTask(response.data);
-    } catch (error) {
-      const errorMessage = parseError(error);
-      console.error('Create task error:', errorMessage);
-      if (error.response?.status === 401) {
-        dispatch(logoutUser());
-        return rejectWithValue('Unauthorized: Invalid or expired token');
+      if (attachments?.length) {
+        attachments.forEach((file) => {
+          formData.append('attachments', file);
+        });
       }
-      return rejectWithValue(errorMessage);
+
+      const response = await taskApi.post('/Tasks', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (err) {
+      console.error('[createTask] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
     }
   }
 );
 
+// Update task
 export const updateTask = createAsyncThunk(
-  'tasks/update',
-  async ({ taskId, taskData, attachments = [] }, { dispatch, rejectWithValue }) => {
+  'tasks/updateTask',
+  async ({ taskId, taskData, attachments }, { rejectWithValue }) => {
     try {
       const formData = new FormData();
-
-      // Add task data fields (using PascalCase to match backend DTO)
-      const fields = {
-        Title: taskData.title,
-        Description: taskData.description || '',
-        Priority: taskData.priority || 'Medium',
-        Status: taskData.status || 'ToDo',
-        StartDate: isValidDate(taskData.startDate) ? new Date(taskData.startDate).toISOString() : null,
-        EndDate: isValidDate(taskData.endDate) ? new Date(taskData.endDate).toISOString() : null,
-        AssignedUserEmails: taskData.assignedUserEmails || [],
-        ProjectId: taskData.projectId && taskData.projectId > 0 ? taskData.projectId : null,
-      };
-
-      for (const [key, value] of Object.entries(fields)) {
-        if (key === 'AssignedUserEmails' && Array.isArray(value)) {
-          value.forEach(email => {
-            if (email) formData.append('AssignedUserEmails', email);
+      // Preserve or set createdIn in metadata
+      const metadata = { createdIn: taskData.createdIn || taskData.metadata?.createdIn || 'kanban' };
+      const taskPayload = { ...taskData, metadata };
+      Object.keys(taskPayload).forEach((key) => {
+        if (Array.isArray(taskPayload[key])) {
+          taskPayload[key].forEach((item, index) => {
+            formData.append(`${key}[${index}]`, item ?? '');
           });
-        } else if (value !== null && value !== undefined) {
-          formData.append(key, value.toString());
+        } else if (taskPayload[key] !== null && taskPayload[key] !== undefined) {
+          formData.append(key, typeof taskPayload[key] === 'object' ? JSON.stringify(taskPayload[key]) : taskPayload[key]);
         }
-      }
-
-      // Validate and add attachments
-      validateAttachments(attachments);
-      attachments.forEach(file => {
-        formData.append('attachments', file);
       });
 
-      const response = await taskApi.put(`/tasks/${taskId}`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      return normalizeTask(response.data);
-    } catch (error) {
-      const errorMessage = parseError(error);
-      console.error('Update task error:', errorMessage);
-      if (error.response?.status === 401) {
-        dispatch(logoutUser());
-        return rejectWithValue('Unauthorized: Invalid or expired token');
+      if (attachments?.length) {
+        attachments.forEach((file) => {
+          formData.append('attachments', file);
+        });
       }
-      return rejectWithValue(errorMessage);
+
+      const response = await taskApi.put(`/Tasks/${taskId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (err) {
+      console.error('[updateTask] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
     }
   }
 );
 
+// Delete task
 export const deleteTask = createAsyncThunk(
-  'tasks/delete',
-  async (taskId, { dispatch, rejectWithValue }) => {
+  'tasks/deleteTask',
+  async (taskId, { rejectWithValue }) => {
     try {
-      await taskApi.delete(`/tasks/${taskId}`);
+      await taskApi.delete(`/Tasks/${taskId}`);
       return taskId;
-    } catch (error) {
-      const errorMessage = parseError(error);
-      console.error('Delete task error:', errorMessage);
-      if (error.response?.status === 401) {
-        dispatch(logoutUser());
-        return rejectWithValue('Unauthorized: Invalid or expired token');
-      }
-      return rejectWithValue(errorMessage);
+    } catch (err) {
+      console.error('[deleteTask] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
     }
   }
 );
 
-// Initial state
-const initialState = {
-  tasks: [],
-  currentTask: null,
-  status: 'idle',
-  error: null,
-};
-
-// Slice
-const tasksSlice = createSlice({
+const taskSlice = createSlice({
   name: 'tasks',
-  initialState,
+  initialState: {
+    tasks: [],
+    columns: [],
+    backlogs: [],
+    status: 'idle',
+    error: null,
+  },
   reducers: {
-    clearCurrentTask: (state) => {
-      state.currentTask = null;
+    setTasks: (state, action) => {
+      state.tasks = action.payload;
+    },
+    addTask: (state, action) => {
+      state.tasks.push(action.payload);
     },
     clearTasksError: (state) => {
       state.error = null;
     },
-    setTasks: (state, action) => {
-      state.tasks = action.payload;
+    updateBacklogTaskIds: (state, action) => {
+      const { backlogId, taskId } = action.payload;
+      const backlog = state.backlogs.find((b) => b.id === backlogId);
+      if (backlog && !backlog.taskIds.includes(taskId)) {
+        backlog.taskIds.push(taskId);
+      }
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch all tasks
+      // Fetch All Tasks
       .addCase(fetchAllTasks.pending, (state) => {
         state.status = 'loading';
-        state.error = null;
       })
       .addCase(fetchAllTasks.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.tasks = action.payload;
-        state.error = null;
       })
       .addCase(fetchAllTasks.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to fetch tasks';
       })
-      // Fetch task by ID
-      .addCase(fetchTaskById.pending, (state) => {
+      // Fetch Kanban Columns
+      .addCase(fetchKanbanColumns.pending, (state) => {
         state.status = 'loading';
-        state.error = null;
       })
-      .addCase(fetchTaskById.fulfilled, (state, action) => {
+      .addCase(fetchKanbanColumns.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.currentTask = action.payload;
-        state.error = null;
+        state.columns = action.payload;
       })
-      .addCase(fetchTaskById.rejected, (state, action) => {
+      .addCase(fetchKanbanColumns.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to fetch columns';
       })
-      // Create task
+      // Create Kanban Column
+      .addCase(createKanbanColumn.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(createKanbanColumn.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.columns.push(action.payload);
+      })
+      .addCase(createKanbanColumn.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to create column';
+      })
+      // Update Kanban Column
+      .addCase(updateKanbanColumn.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(updateKanbanColumn.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const index = state.columns.findIndex((col) => col.id === action.payload.id);
+        if (index !== -1) {
+          state.columns[index] = action.payload;
+        }
+      })
+      .addCase(updateKanbanColumn.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to update column';
+      })
+      // Delete Kanban Column
+      .addCase(deleteKanbanColumn.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(deleteKanbanColumn.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.columns = state.columns.filter((col) => col.id !== action.payload);
+      })
+      .addCase(deleteKanbanColumn.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to delete column';
+      })
+      // Fetch Backlogs
+      .addCase(fetchBacklogs.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(fetchBacklogs.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.backlogs = action.payload;
+      })
+      .addCase(fetchBacklogs.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to fetch backlogs';
+      })
+      // Create Backlog
+      .addCase(createBacklog.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(createBacklog.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.backlogs.push(action.payload);
+      })
+      .addCase(createBacklog.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to create backlog';
+      })
+      // Update Backlog
+      .addCase(updateBacklog.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(updateBacklog.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const index = state.backlogs.findIndex((backlog) => backlog.id === action.payload.id);
+        if (index !== -1) {
+          state.backlogs[index] = action.payload;
+        }
+      })
+      .addCase(updateBacklog.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to update backlog';
+      })
+      // Delete Backlog
+      .addCase(deleteBacklog.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(deleteBacklog.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.backlogs = state.backlogs.filter((backlog) => backlog.id !== action.payload);
+      })
+      .addCase(deleteBacklog.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to delete backlog';
+      })
+      // Link Task to Backlog
+      .addCase(linkTaskToBacklog.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(linkTaskToBacklog.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const { backlogId, taskId } = action.payload;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (task && !task.backlogIds.includes(backlogId)) {
+          task.backlogIds.push(backlogId);
+        }
+      })
+      .addCase(linkTaskToBacklog.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to link task to backlog';
+      })
+      // Unlink Task from Backlog
+      .addCase(unlinkTaskFromBacklog.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(unlinkTaskFromBacklog.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const { backlogId, taskId } = action.payload;
+        const task = state.tasks.find((t) => t.id === taskId);
+        if (task) {
+          task.backlogIds = task.backlogIds.filter((id) => id !== backlogId);
+        }
+      })
+      .addCase(unlinkTaskFromBacklog.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload || 'Failed to unlink task from backlog';
+      })
+      // Create Task
       .addCase(createTask.pending, (state) => {
         state.status = 'loading';
-        state.error = null;
       })
       .addCase(createTask.fulfilled, (state, action) => {
         state.status = 'succeeded';
         state.tasks.push(action.payload);
-        state.currentTask = action.payload;
-        state.error = null;
       })
       .addCase(createTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to create task';
       })
-      // Update task
+      // Update Task
       .addCase(updateTask.pending, (state) => {
         state.status = 'loading';
-        state.error = null;
       })
       .addCase(updateTask.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        const index = state.tasks.findIndex(task => task.id === action.payload.id);
+        const index = state.tasks.findIndex((task) => task.id === action.payload.id);
         if (index !== -1) {
           state.tasks[index] = action.payload;
         }
-        state.currentTask = action.payload;
-        state.error = null;
       })
       .addCase(updateTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to update task';
       })
-      // Delete task
+      // Delete Task
       .addCase(deleteTask.pending, (state) => {
         state.status = 'loading';
-        state.error = null;
       })
       .addCase(deleteTask.fulfilled, (state, action) => {
         state.status = 'succeeded';
-        state.tasks = state.tasks.filter(task => task.id !== action.payload);
-        if (state.currentTask && state.currentTask.id === action.payload) {
-          state.currentTask = null;
-        }
-        state.error = null;
+        state.tasks = state.tasks.filter((task) => task.id !== action.payload);
       })
       .addCase(deleteTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload;
+        state.error = action.payload || 'Failed to delete task';
       });
   },
 });
 
-// Extract actions and reducer
-export const { clearCurrentTask, clearTasksError, setTasks } = tasksSlice.actions;
-export default tasksSlice.reducer;
+export const { setTasks, addTask, clearTasksError, updateBacklogTaskIds } = taskSlice.actions;
+export default taskSlice.reducer;

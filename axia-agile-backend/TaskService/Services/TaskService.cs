@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
@@ -18,6 +19,7 @@ namespace TaskService.Services
         private readonly UserServiceClient _userServiceClient;
         private readonly ProjectServiceClient _projectServiceClient;
         private readonly KanbanColumnService _kanbanColumnService;
+        private readonly BacklogService _backlogService; 
         private readonly ILogger<TaskService> _logger;
         private readonly AppDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -27,6 +29,7 @@ namespace TaskService.Services
             UserServiceClient userServiceClient,
             ProjectServiceClient projectServiceClient,
             KanbanColumnService kanbanColumnService,
+            BacklogService backlogService,
             ILogger<TaskService> logger,
             AppDbContext context,
             IHttpContextAccessor httpContextAccessor,
@@ -35,6 +38,7 @@ namespace TaskService.Services
             _userServiceClient = userServiceClient;
             _projectServiceClient = projectServiceClient;
             _kanbanColumnService = kanbanColumnService;
+            _backlogService = backlogService;
             _logger = logger;
             _context = context;
             _httpContextAccessor = httpContextAccessor;
@@ -64,7 +68,6 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Erreur de validation : {ex.Message}");
                 }
 
-                // Validate project existence
                 var projectExists = await _projectServiceClient.ProjectExistsAsync(request.ProjectId);
                 if (!projectExists)
                 {
@@ -72,7 +75,6 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId} n'existe pas.");
                 }
 
-                // Validate status against Kanban columns
                 var columns = await _kanbanColumnService.GetColumnsByProjectAsync(request.ProjectId);
                 if (!columns.Any(c => c.Name == request.Status))
                 {
@@ -80,36 +82,41 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
                 }
 
+                // Validate backlog IDs
+                if (request.BacklogIds != null && request.BacklogIds.Any())
+                {
+                    var backlogs = await _context.Backlogs
+                        .Where(b => b.ProjectId == request.ProjectId && request.BacklogIds.Contains(b.Id))
+                        .ToListAsync();
+                    if (backlogs.Count != request.BacklogIds.Count)
+                    {
+                        _logger.LogWarning($"One or more backlog IDs are invalid for project {request.ProjectId}.");
+                        throw new InvalidOperationException("Un ou plusieurs IDs de backlog sont invalides pour ce projet.");
+                    }
+                }
+
                 var assignedUserIds = new List<int>();
                 if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
                 {
                     _logger.LogDebug($"Validating {request.AssignedUserEmails.Count} emails...");
-                    try
+                    var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails);
+                    var invalidEmails = new List<string>();
+
+                    foreach (var email in request.AssignedUserEmails)
                     {
-                        var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails);
-                        var invalidEmails = new List<string>();
-
-                        foreach (var email in request.AssignedUserEmails)
+                        if (userIdsByEmail.ContainsKey(email))
                         {
-                            if (userIdsByEmail.ContainsKey(email))
-                            {
-                                assignedUserIds.Add(userIdsByEmail[email]);
-                            }
-                            else
-                            {
-                                invalidEmails.Add(email);
-                            }
+                            assignedUserIds.Add(userIdsByEmail[email]);
                         }
-
-                        if (invalidEmails.Any())
+                        else
                         {
-                            throw new InvalidOperationException($"Les utilisateurs avec les emails suivants n'ont pas été trouvés : {string.Join(", ", invalidEmails)}.");
+                            invalidEmails.Add(email);
                         }
                     }
-                    catch (Exception ex)
+
+                    if (invalidEmails.Any())
                     {
-                        _logger.LogError(ex, "Failed to validate assigned user emails");
-                        throw new InvalidOperationException("Erreur lors de la validation des emails des utilisateurs assignés.", ex);
+                        throw new InvalidOperationException($"Les utilisateurs avec les emails suivants n'ont pas été trouvés : {string.Join(", ", invalidEmails)}.");
                     }
                 }
 
@@ -123,22 +130,14 @@ namespace TaskService.Services
                             _logger.LogWarning("Empty or null attachment provided.");
                             continue;
                         }
-                        try
+                        var filePath = await _fileStorageService.SaveFileAsync(attachment);
+                        attachmentDtos.Add(new AttachmentDTO
                         {
-                            var filePath = await _fileStorageService.SaveFileAsync(attachment);
-                            attachmentDtos.Add(new AttachmentDTO
-                            {
-                                FileName = attachment.FileName,
-                                FilePath = filePath,
-                                UploadedAt = DateTime.UtcNow,
-                                UploadedByUserId = userId
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, $"Failed to save attachment {attachment.FileName}");
-                            throw new InvalidOperationException($"Erreur lors de l'enregistrement de la pièce jointe {attachment.FileName}.", ex);
-                        }
+                            FileName = attachment.FileName,
+                            FilePath = filePath,
+                            UploadedAt = DateTime.UtcNow,
+                            UploadedByUserId = userId
+                        });
                     }
                 }
 
@@ -157,15 +156,16 @@ namespace TaskService.Services
                     ProjectId = request.ProjectId
                 };
 
-                try
+                _context.Tasks.Add(task);
+                await _context.SaveChangesAsync();
+
+                // Link to backlogs
+                if (request.BacklogIds != null && request.BacklogIds.Any())
                 {
-                    _context.Tasks.Add(task);
-                    await _context.SaveChangesAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to save task to database");
-                    throw new InvalidOperationException("Erreur lors de l'enregistrement de la tâche dans la base de données.", ex);
+                    foreach (var backlogId in request.BacklogIds)
+                    {
+                        await _backlogService.LinkTaskToBacklogAsync(backlogId, task.Id);
+                    }
                 }
 
                 var taskDto = new TaskDTO
@@ -182,7 +182,8 @@ namespace TaskService.Services
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = request.AssignedUserEmails,
-                    ProjectId = task.ProjectId
+                    ProjectId = task.ProjectId,
+                    BacklogIds = request.BacklogIds
                 };
 
                 _logger.LogInformation($"Task {task.Title} created for user {userId} in project {task.ProjectId}.");
@@ -204,7 +205,9 @@ namespace TaskService.Services
         {
             try
             {
-                var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
+                var task = await _context.Tasks
+                    .Include(t => t.TaskBacklogs)
+                    .FirstOrDefaultAsync(t => t.Id == id);
                 if (task == null) return null;
 
                 var assignedUserIds = string.IsNullOrEmpty(task.AssignedUserIds)
@@ -229,6 +232,8 @@ namespace TaskService.Services
                     ? new List<AttachmentDTO>()
                     : JsonSerializer.Deserialize<List<AttachmentDTO>>(task.Attachments);
 
+                var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
+
                 return new TaskDTO
                 {
                     Id = task.Id,
@@ -244,7 +249,8 @@ namespace TaskService.Services
                     Attachments = attachments,
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = assignedUserEmails,
-                    ProjectId = task.ProjectId
+                    ProjectId = task.ProjectId,
+                    BacklogIds = backlogIds
                 };
             }
             catch (Exception ex)
@@ -254,34 +260,29 @@ namespace TaskService.Services
             }
         }
 
-        public async Task<List<TaskDTO>> GetAllTasksAsync(int? projectId = null)
+        public async Task<List<TaskDTO>> GetAllTasksAsync(int? projectId = null, int? backlogId = null)
         {
             try
             {
-                List<Task> tasks;
-                try
+                IQueryable<Task> query = _context.Tasks.Include(t => t.TaskBacklogs);
+
+                if (projectId.HasValue)
                 {
-                    if (projectId.HasValue)
+                    if (!await _projectServiceClient.ProjectExistsAsync(projectId.Value))
                     {
-                        if (!await _projectServiceClient.ProjectExistsAsync(projectId.Value))
-                        {
-                            _logger.LogWarning($"Project {projectId.Value} does not exist.");
-                            return new List<TaskDTO>();
-                        }
-                        tasks = await _context.Tasks.Where(t => t.ProjectId == projectId.Value).ToListAsync();
-                        _logger.LogDebug($"Retrieved {tasks.Count} tasks for project {projectId.Value} from database.");
+                        _logger.LogWarning($"Project {projectId.Value} does not exist.");
+                        return new List<TaskDTO>();
                     }
-                    else
-                    {
-                        tasks = await _context.Tasks.ToListAsync();
-                        _logger.LogDebug($"Retrieved {tasks.Count} tasks from database.");
-                    }
+                    query = query.Where(t => t.ProjectId == projectId.Value);
                 }
-                catch (Exception ex)
+
+                if (backlogId.HasValue)
                 {
-                    _logger.LogError(ex, "Failed to retrieve tasks from database");
-                    return new List<TaskDTO>();
+                    query = query.Where(t => t.TaskBacklogs.Any(tb => tb.BacklogId == backlogId.Value));
                 }
+
+                var tasks = await query.ToListAsync();
+                _logger.LogDebug($"Retrieved {tasks.Count} tasks from database.");
 
                 var taskDtos = new List<TaskDTO>();
                 foreach (var task in tasks)
@@ -308,6 +309,8 @@ namespace TaskService.Services
                         ? new List<AttachmentDTO>()
                         : JsonSerializer.Deserialize<List<AttachmentDTO>>(task.Attachments);
 
+                    var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
+
                     taskDtos.Add(new TaskDTO
                     {
                         Id = task.Id,
@@ -323,7 +326,8 @@ namespace TaskService.Services
                         Attachments = attachments,
                         AssignedUserIds = assignedUserIds,
                         AssignedUserEmails = assignedUserEmails,
-                        ProjectId = task.ProjectId
+                        ProjectId = task.ProjectId,
+                        BacklogIds = backlogIds
                     });
                 }
 
@@ -341,7 +345,9 @@ namespace TaskService.Services
         {
             try
             {
-                var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
+                var task = await _context.Tasks
+                    .Include(t => t.TaskBacklogs)
+                    .FirstOrDefaultAsync(t => t.Id == id);
                 if (task == null) return null;
 
                 if (request.ProjectId.HasValue && !await _projectServiceClient.ProjectExistsAsync(request.ProjectId.Value))
@@ -350,7 +356,6 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Le projet avec l'ID {request.ProjectId.Value} n'existe pas.");
                 }
 
-                // Validate status against Kanban columns
                 if (!string.IsNullOrEmpty(request.Status))
                 {
                     var columns = await _kanbanColumnService.GetColumnsByProjectAsync(task.ProjectId);
@@ -358,6 +363,19 @@ namespace TaskService.Services
                     {
                         _logger.LogWarning($"Invalid status {request.Status} for project {task.ProjectId}.");
                         throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
+                    }
+                }
+
+                // Validate backlog IDs
+                if (request.BacklogIds != null)
+                {
+                    var backlogs = await _context.Backlogs
+                        .Where(b => b.ProjectId == task.ProjectId && request.BacklogIds.Contains(b.Id))
+                        .ToListAsync();
+                    if (backlogs.Count != request.BacklogIds.Count)
+                    {
+                        _logger.LogWarning($"One or more backlog IDs are invalid for project {task.ProjectId}.");
+                        throw new InvalidOperationException("Un ou plusieurs IDs de backlog sont invalides pour ce projet.");
                     }
                 }
 
@@ -406,8 +424,28 @@ namespace TaskService.Services
                 task.AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null;
                 task.Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null;
 
+                // Update backlog links
+                if (request.BacklogIds != null)
+                {
+                    var existingBacklogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
+                    var backlogsToAdd = request.BacklogIds.Except(existingBacklogIds).ToList();
+                    var backlogsToRemove = existingBacklogIds.Except(request.BacklogIds).ToList();
+
+                    foreach (var backlogId in backlogsToAdd)
+                    {
+                        await _backlogService.LinkTaskToBacklogAsync(backlogId, task.Id);
+                    }
+
+                    foreach (var backlogId in backlogsToRemove)
+                    {
+                        await _backlogService.UnlinkTaskFromBacklogAsync(backlogId, task.Id);
+                    }
+                }
+
                 _context.Tasks.Update(task);
                 await _context.SaveChangesAsync();
+
+                var updatedBacklogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
 
                 return new TaskDTO
                 {
@@ -424,7 +462,8 @@ namespace TaskService.Services
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = request.AssignedUserEmails,
-                    ProjectId = task.ProjectId
+                    ProjectId = task.ProjectId,
+                    BacklogIds = updatedBacklogIds
                 };
             }
             catch (Exception ex)
@@ -438,9 +477,12 @@ namespace TaskService.Services
         {
             try
             {
-                var task = await _context.Tasks.FirstOrDefaultAsync(t => t.Id == id);
+                var task = await _context.Tasks
+                    .Include(t => t.TaskBacklogs)
+                    .FirstOrDefaultAsync(t => t.Id == id);
                 if (task == null) return false;
 
+                _context.TaskBacklogs.RemoveRange(task.TaskBacklogs);
                 _context.Tasks.Remove(task);
                 await _context.SaveChangesAsync();
                 return true;

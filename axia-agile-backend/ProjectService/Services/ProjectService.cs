@@ -2,6 +2,14 @@
 using ProjectService.Data;
 using ProjectService.DTOs;
 using ProjectService.Models;
+using System;
+using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace ProjectService.Services
 {
@@ -9,11 +17,23 @@ namespace ProjectService.Services
     {
         private readonly AppDbContext _context;
         private readonly UserServiceClient _userServiceClient;
+        private readonly HttpClient _httpClient;
+        private readonly string _taskServiceUrl;
+        private readonly ILogger<ProjectService> _logger;
 
-        public ProjectService(AppDbContext context, UserServiceClient userServiceClient)
+        public ProjectService(
+            AppDbContext context,
+            UserServiceClient userServiceClient,
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration,
+            ILogger<ProjectService> logger)
         {
-            _context = context;
-            _userServiceClient = userServiceClient;
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _userServiceClient = userServiceClient ?? throw new ArgumentNullException(nameof(userServiceClient));
+            _httpClient = httpClientFactory.CreateClient();
+            _taskServiceUrl = configuration["TaskService:BaseUrl"] ?? throw new InvalidOperationException("TaskService BaseUrl is not configured.");
+            _httpClient.BaseAddress = new Uri(_taskServiceUrl);
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<List<ProjectDto>> GetAllProjectsAsync()
@@ -28,7 +48,7 @@ namespace ProjectService.Services
             return project != null ? MapToDto(project) : null;
         }
 
-        public async Task<ProjectDto> CreateProjectAsync(CreateProjectDto createDto)
+        public async Task<ProjectDto> CreateProjectAsync(CreateProjectDto createDto, string jwtToken)
         {
             if (!await _userServiceClient.UserExistsAsync(createDto.CreatedBy))
                 throw new Exception("L'utilisateur qui crée le projet n'existe pas.");
@@ -76,6 +96,35 @@ namespace ProjectService.Services
 
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
+
+            // Create default "À faire" Kanban column in TaskService
+            var createColumnRequest = new CreateKanbanColumnRequest
+            {
+                Name = "À faire",
+                ProjectId = project.Id,
+                DisplayOrder = 1
+            };
+
+            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(createColumnRequest),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            _logger.LogInformation($"Sending request to TaskService: POST {_taskServiceUrl}/api/KanbanColumns with token: {jwtToken.Substring(0, 10)}...");
+
+            var response = await _httpClient.PostAsync("api/KanbanColumns", jsonContent);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                _logger.LogError($"Failed to create Kanban column: {errorContent}");
+                throw new Exception($"Échec de la création de la colonne 'À faire' : {errorContent}");
+            }
+
+            _logger.LogInformation("Successfully created 'À faire' Kanban column for project ID: {ProjectId}", project.Id);
+
             return MapToDto(project);
         }
 
@@ -85,7 +134,6 @@ namespace ProjectService.Services
             if (project == null)
                 throw new Exception("Projet non trouvé.");
 
-            // Update only provided fields
             if (updateDto.Title != null)
                 project.Title = updateDto.Title;
 
@@ -183,6 +231,13 @@ namespace ProjectService.Services
                 Testers = project.Testers,
                 Observers = project.Observers
             };
+        }
+
+        private class CreateKanbanColumnRequest
+        {
+            public string Name { get; set; }
+            public int ProjectId { get; set; }
+            public int DisplayOrder { get; set; }
         }
     }
 }

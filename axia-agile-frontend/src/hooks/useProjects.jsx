@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'; 
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { useUsers } from './useUsers';
 import { useNotification } from './useNotifications';
-
 import { useAuth } from '../contexts/AuthContext';
 import { validateProject } from '../utils/validators';
 import {
@@ -46,7 +45,7 @@ export const useProject = () => {
   const [scrumMasters, setScrumMasters] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [testers, setTesters] = useState([]);
-  const [observers, setObservers] = useState([]); 
+  const [observers, setObservers] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
 
@@ -115,7 +114,6 @@ export const useProject = () => {
 
   const navigateToProject = useCallback(
     (projectId) => {
-      // Ensure projectId is always a string for navigation
       navigate(`/project/${String(projectId)}`);
     },
     [navigate]
@@ -135,7 +133,7 @@ export const useProject = () => {
 
       if (editMode && project) {
         setProjectForm({
-          id: String(project.id || ''), // Ensure ID is stored as string in form
+          id: String(project.id || ''),
           title: project.title || '',
           description: project.description || '',
           method: project.method || '',
@@ -151,7 +149,7 @@ export const useProject = () => {
         setScrumMasters(getUsersByEmails(project.scrumMasters));
         setDevelopers(getUsersByEmails(project.users));
         setTesters(getUsersByEmails(project.testers));
-        setObservers(getUsersByEmails(project.observers)); 
+        setObservers(getUsersByEmails(project.observers));
       } else {
         setProjectForm({
           id: '',
@@ -166,7 +164,7 @@ export const useProject = () => {
         setScrumMasters([]);
         setDevelopers([]);
         setTesters([]);
-        setObservers([]); 
+        setObservers([]);
       }
 
       setModalOpen(true);
@@ -193,7 +191,7 @@ export const useProject = () => {
     setScrumMasters([]);
     setDevelopers([]);
     setTesters([]);
-    setObservers([]); 
+    setObservers([]);
     dispatch(clearError());
   }, [dispatch]);
 
@@ -268,7 +266,7 @@ export const useProject = () => {
   const notifyProjectUsers = useCallback(
     (projectData, isEditing) => {
       const projectTitle = projectData.title;
-      const projectId = projectData.id; // This should already be normalized to string from the API response
+      const projectId = projectData.id;
 
       const notifyUsersByRole = (users, roleName) => {
         users.forEach((userEmail) => {
@@ -300,7 +298,7 @@ export const useProject = () => {
       notifyUsersByRole(projectData.scrumMasters || [], 'scrum master');
       notifyUsersByRole(projectData.developers || [], 'développeur');
       notifyUsersByRole(projectData.testers || [], 'testeur');
-      notifyUsersByRole(projectData.observers || [], 'observateur'); 
+      notifyUsersByRole(projectData.observers || [], 'observateur');
     },
     [createNotification, currentUser]
   );
@@ -321,42 +319,37 @@ export const useProject = () => {
       return;
     }
 
+    // Prepare payload matching backend CreateProjectDto/UpdateProjectDto
     const projectData = {
-      id: isEditing ? projectForm.id : undefined, // Keep ID as string in form data
       title: projectForm.title,
       description: projectForm.description,
       methodology: projectForm.method,
-      createdAt: isEditing
-        ? projects.find((p) => p.id === projectForm.id)?.createdAt ||
-          new Date().toISOString()
-        : new Date().toISOString(),
       startDate: projectForm.startDate,
       endDate: projectForm.endDate,
       createdBy: currentUser?.email || '',
-      projectManager: projectManagers[0]?.email || '',
-      productOwner: productOwners[0]?.email || '',
-      scrumMaster: scrumMasters[0]?.email || '',
+      projectManagers: projectManagers.map((pm) => pm.email),
+      productOwners: productOwners.map((po) => po.email),
+      scrumMasters: scrumMasters.map((sm) => sm.email),
       developers: developers.map((dev) => dev.email),
       testers: testers.map((tester) => tester.email),
-      observers: observers.map((observer) => observer.email), 
+      observers: observers.map((observer) => observer.email),
     };
 
     console.log('Saving Project Data:', projectData);
 
     try {
       let savedProject;
-      
+
       if (isEditing) {
-        // For updates, pass id separately from the project data
+        // For updates, include the ID and send partial data
+        projectData.id = parseInt(projectForm.id); // Backend expects integer ID
         savedProject = await dispatch(
           updateProject({ id: projectForm.id, project: projectData })
         ).unwrap();
       } else {
-        // For new projects, we get the ID from the response
         savedProject = await dispatch(createProject(projectData)).unwrap();
       }
 
-      // Now use the returned project from the API response which has normalized ID
       createNotification({
         recipient: currentUser.email,
         type: 'project',
@@ -366,7 +359,6 @@ export const useProject = () => {
         metadata: { projectId: savedProject.id },
       });
 
-      // Use the normalized project data for notifications
       notifyProjectUsers(savedProject, isEditing);
 
       setFormSuccess(
@@ -382,8 +374,7 @@ export const useProject = () => {
       const errorMessage =
         typeof err === 'string'
           ? err
-          : err.title ||
-            err.message ||
+          : err.message ||
             err.detail ||
             (err.errors ? JSON.stringify(err.errors) : 'Échec de la sauvegarde du projet');
       setFormError(errorMessage);
@@ -401,7 +392,6 @@ export const useProject = () => {
     testers,
     observers,
     isEditing,
-    projects,
     currentUser,
     createNotification,
     handleModalClose,
@@ -454,8 +444,8 @@ export const useProject = () => {
     setDevelopers,
     testers,
     setTesters,
-    observers, 
-    setObservers, 
+    observers,
+    setObservers,
     selectedProject,
     menuAnchorEl,
     steps,

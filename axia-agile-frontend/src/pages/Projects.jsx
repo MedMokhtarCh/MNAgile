@@ -146,7 +146,7 @@ function Projects() {
       console.error('Project ID is undefined');
       return;
     }
-    const path = section ? `/project/${projectId}/${section}` : `/project/${projectId}`;
+    const path = section ? `/project/${String(projectId)}/${section}` : `/project/${String(projectId)}`;
     navigate(path);
   };
 
@@ -409,7 +409,7 @@ function Projects() {
         setTesters={setTesters}
         getAvatarColor={getAvatarColor}
         generateInitials={generateInitials}
-        formError={formError}
+        formError={formError} // Ensure formError is passed
       />
 
       <AlertUser

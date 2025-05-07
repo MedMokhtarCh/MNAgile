@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddHttpClient();
+
 
 // Add CORS policy
 builder.Services.AddCors(options =>

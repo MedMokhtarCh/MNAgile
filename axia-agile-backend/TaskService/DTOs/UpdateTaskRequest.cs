@@ -14,6 +14,7 @@ namespace TaskService.DTOs
         public DateTime? EndDate { get; set; }
         public List<string> AssignedUserEmails { get; set; }
         public int? ProjectId { get; set; }
+        public List<int> BacklogIds { get; set; } // New field
 
         public void Validate()
         {

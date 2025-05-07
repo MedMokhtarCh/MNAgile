@@ -1,4 +1,6 @@
-﻿using System;
+﻿// TaskService/Models/Task.cs
+using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace TaskService.Models
@@ -16,9 +18,10 @@ namespace TaskService.Models
         public DateTime? UpdatedAt { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public string AssignedUserIds { get; set; } // Comma-separated, e.g., "1,2,3"
-        public string? Attachments { get; set; } // JSON array, e.g., [{"FileName":"file1.pdf","FilePath":"/Uploads/file1.pdf"}]
+        public string AssignedUserIds { get; set; }
+        public string? Attachments { get; set; }
         [Required]
-        public int ProjectId { get; set; } // Foreign key to Project
+        public int ProjectId { get; set; }
+        public List<TaskBacklog> TaskBacklogs { get; set; } = new List<TaskBacklog>(); // New relationship
     }
 }

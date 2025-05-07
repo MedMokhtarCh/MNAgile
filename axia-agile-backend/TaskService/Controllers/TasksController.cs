@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -38,7 +39,6 @@ namespace TaskService.Controllers
                 return BadRequest("Task data is required.");
             }
 
-            // Get userId from JWT claims
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(userIdClaim, out var userId))
             {
@@ -94,12 +94,12 @@ namespace TaskService.Controllers
         [ProducesResponseType(typeof(List<TaskDTO>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
-        public async Task<ActionResult<List<TaskDTO>>> GetAllTasks([FromQuery] int? projectId = null)
+        public async Task<ActionResult<List<TaskDTO>>> GetAllTasks([FromQuery] int? projectId = null, [FromQuery] int? backlogId = null)
         {
             try
             {
-                var tasks = await _taskService.GetAllTasksAsync(projectId);
-                _logger.LogInformation($"Retrieved {tasks.Count} tasks" + (projectId.HasValue ? $" for project {projectId}" : ""));
+                var tasks = await _taskService.GetAllTasksAsync(projectId, backlogId);
+                _logger.LogInformation($"Retrieved {tasks.Count} tasks" + (projectId.HasValue ? $" for project {projectId}" : "") + (backlogId.HasValue ? $" for backlog {backlogId}" : ""));
                 return Ok(tasks);
             }
             catch (Exception ex)
@@ -118,7 +118,6 @@ namespace TaskService.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<ActionResult<TaskDTO>> UpdateTask(int id, [FromForm] UpdateTaskRequest request, [FromForm] List<IFormFile> attachments = null)
         {
-            // Get userId from JWT claims
             var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
             if (!int.TryParse(userIdClaim, out var userId))
             {

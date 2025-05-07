@@ -20,6 +20,7 @@ namespace TaskService.DTOs
         public List<int> AssignedUserIds { get; set; } = new List<int>();
         public List<string?> AssignedUserEmails { get; set; } = new List<string>();
         public int ProjectId { get; set; }
+        public List<int> BacklogIds { get; set; } = new List<int>(); 
     }
 
     public class AttachmentDTO

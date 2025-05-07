@@ -3,7 +3,7 @@ import { projectApi } from '../../services/api';
 
 // Normalize project data from backend to frontend format
 const normalizeProject = (project) => ({
-  id: String(project.id || project.Id || ''), // Consistently convert to string
+  id: String(project.id || project.Id || ''),
   title: project.title || project.Title || '',
   description: project.description || project.Description || '',
   method: project.methodology || project.Methodology || '',
@@ -17,9 +17,18 @@ const normalizeProject = (project) => ({
   users: project.developers || project.Developers || [],
   testers: project.testers || project.Testers || [],
   observers: project.observers || project.Observers || [],
+  kanbanColumns: project.kanbanColumns || [], // Add kanbanColumns to normalized project
 });
 
-// Validate user emails against usersSlice (assumes usersSlice is accessible)
+// Normalize Kanban column data
+const normalizeKanbanColumn = (column) => ({
+  id: String(column.id || column.Id || ''),
+  name: column.name || column.Name || '',
+  projectId: String(column.projectId || column.ProjectId || ''),
+  displayOrder: column.displayOrder || column.DisplayOrder || 0,
+});
+
+// Validate user emails against usersSlice
 const validateUsers = (users, allUsers, fieldName) => {
   if (!users || !Array.isArray(users)) return [];
   const invalidUsers = users.filter((email) => !allUsers.some((u) => u.email === email));
@@ -52,13 +61,38 @@ export const fetchProjects = createAsyncThunk(
   }
 );
 
+// Fetch Kanban columns for a project
+export const fetchKanbanColumns = createAsyncThunk(
+  'projects/fetchKanbanColumns',
+  async (projectId, { rejectWithValue }) => {
+    try {
+      const response = await projectApi.get(`/KanbanColumns?projectId=${projectId}`);
+      return {
+        projectId: String(projectId),
+        columns: response.data.map(normalizeKanbanColumn),
+      };
+    } catch (error) {
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.detail ||
+        (error.response?.data?.errors
+          ? JSON.stringify(error.response.data.errors)
+          : error.message) ||
+        'Échec de la récupération des colonnes Kanban';
+      return rejectWithValue({
+        message: errorMessage,
+        severity: 'error',
+      });
+    }
+  }
+);
+
 // Create a new project
 export const createProject = createAsyncThunk(
   'projects/createProject',
-  async (project, { rejectWithValue, getState }) => {
+  async (project, { rejectWithValue, getState, dispatch }) => {
     try {
-      const { users: allUsers } = getState().users; // Access usersSlice
-      // Validate user fields
+      const { users: allUsers } = getState().users;
       const payload = {
         title: project.title,
         description: project.description,
@@ -87,7 +121,12 @@ export const createProject = createAsyncThunk(
       };
       console.log('Create Project Payload:', payload);
       const response = await projectApi.post('/Projects', payload);
-      return normalizeProject(response.data);
+      const normalizedProject = normalizeProject(response.data);
+      
+      // Fetch Kanban columns for the new project
+      await dispatch(fetchKanbanColumns(normalizedProject.id));
+      
+      return normalizedProject;
     } catch (error) {
       const errorMessage =
         error.message ||
@@ -112,15 +151,11 @@ export const updateProject = createAsyncThunk(
   'projects/updateProject',
   async ({ id, project }, { rejectWithValue, getState }) => {
     try {
-      const { users: allUsers } = getState().users; // Access usersSlice
-      // Convert ID to integer for API call (backend expects integer)
+      const { users: allUsers } = getState().users;
       const projectId = parseInt(id);
-      
-      // Ensure we have a valid integer ID
       if (isNaN(projectId)) {
         throw new Error('ID de projet invalide');
       }
-      
       const payload = { id: projectId };
       if (project.title) payload.title = project.title;
       if (project.description) payload.description = project.description;
@@ -137,7 +172,6 @@ export const updateProject = createAsyncThunk(
         payload.developers = validateUsers(project.developers, allUsers, 'developers');
       if (project.testers) payload.testers = validateUsers(project.testers, allUsers, 'testers');
       if (project.observers) payload.observers = validateUsers(project.observers, allUsers, 'observers');
-      
       console.log('Update Project Payload:', payload);
       const response = await projectApi.put(`/Projects/${projectId}`, payload);
       return normalizeProject(response.data);
@@ -165,16 +199,11 @@ export const deleteProject = createAsyncThunk(
   'projects/deleteProject',
   async (id, { rejectWithValue }) => {
     try {
-      // Convert ID to integer for API call
       const projectId = parseInt(id);
-      
-      // Ensure we have a valid integer ID
       if (isNaN(projectId)) {
         throw new Error('ID de projet invalide');
       }
-      
       await projectApi.delete(`/Projects/${projectId}`);
-      // Return the original ID format that was passed in for consistency in reducers
       return id;
     } catch (error) {
       const errorMessage =
@@ -228,6 +257,21 @@ const projectsSlice = createSlice({
           severity: action.payload.severity,
         };
       })
+      .addCase(fetchKanbanColumns.fulfilled, (state, action) => {
+        const { projectId, columns } = action.payload;
+        const project = state.projects.find((p) => p.id === projectId);
+        if (project) {
+          project.kanbanColumns = columns;
+        }
+      })
+      .addCase(fetchKanbanColumns.rejected, (state, action) => {
+        state.error = action.payload.message;
+        state.snackbar = {
+          open: true,
+          message: action.payload.message,
+          severity: action.payload.severity,
+        };
+      })
       .addCase(createProject.fulfilled, (state, action) => {
         state.projects.push(action.payload);
         state.error = null;
@@ -266,7 +310,6 @@ const projectsSlice = createSlice({
         };
       })
       .addCase(deleteProject.fulfilled, (state, action) => {
-        // action.payload contains the original ID (string or number)
         state.projects = state.projects.filter((p) => p.id !== String(action.payload));
         state.error = null;
         state.snackbar = {

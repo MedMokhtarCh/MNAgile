@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import {
   Box,
   Button,
@@ -22,14 +22,14 @@ import {
   DialogActions,
   AvatarGroup,
   Tooltip,
-  AppBar,
-  Toolbar,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
   Switch,
   FormControlLabel,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
@@ -39,8 +39,29 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import { useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchBacklogs,
+  createBacklog,
+  updateBacklog,
+  deleteBacklog,
+  linkTaskToBacklog,
+  unlinkTaskFromBacklog,
+  fetchAllTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  clearTasksError,
+  fetchKanbanColumns,
+  updateBacklogTaskIds,
+} from '../store/slices/taskSlice';
+import { projectApi } from '../services/api';
+import { useAvatar } from '../hooks/useAvatar';
+import { useNotification } from '../hooks/useNotifications';
+import { useAuth } from '../contexts/AuthContext';
 
-// Styles améliorés
+// Styled components
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
   borderRadius: 8,
@@ -63,13 +84,6 @@ const TaskItem = styled(Box)(({ theme, isDragging }) => ({
   },
 }));
 
-const StyledButton = styled(Button)(({ theme }) => ({
-  textTransform: 'none',
-  borderRadius: 8,
-  padding: theme.spacing(1, 2),
-  fontWeight: 500,
-}));
-
 const BacklogContainer = styled(Box)(({ theme }) => ({
   marginBottom: theme.spacing(3),
   border: '1px solid #e0e0e0',
@@ -90,106 +104,63 @@ const BacklogContent = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
 }));
 
-// Données simulées pour les membres d'équipe
-const teamMembers = [
-  { id: 1, name: 'Nermine', avatar: '/api/placeholder/40/40', initials: 'AM' },
-  { id: 2, name: 'Mahdoui mahdoui', avatar: '/api/placeholder/40/40', initials: 'TD' },
-  { id: 3, name: 'test test', avatar: '/api/placeholder/40/40', initials: 'SC' },
-  { id: 4, name: 'dev nermine', avatar: '/api/placeholder/40/40', initials: 'ML' },
-];
+// Normalize project data
+const normalizeProject = (project) => ({
+  id: String(project.id || project.Id || ''),
+  title: project.title || project.Title || '',
+  description: project.description || project.Description || '',
+  methodology: project.methodology || project.Methodology || '',
+  createdAt: project.createdAt || project.CreatedAt || new Date().toISOString(),
+  startDate: project.startDate || project.StartDate || new Date().toISOString(),
+  endDate: project.endDate || project.EndDate || new Date().toISOString(),
+  createdBy: project.createdBy || project.CreatedBy || '',
+  projectManagers: project.projectManagers || project.ProjectManagers || [],
+  productOwners: project.productOwners || project.ProductOwners || [],
+  scrumMasters: project.scrumMasters || project.ScrumMasters || [],
+  users: project.developers || project.Developers || [],
+  testers: project.testers || project.Testers || [],
+  observers: project.observers || project.Observers || [],
+});
 
+// Error Boundary Component
+class ErrorBoundary extends Component {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Box sx={{ p: 3 }}>
+          <Alert severity="error">
+            Une erreur est survenue : {this.state.error?.message || 'Erreur inconnue'}.
+            Veuillez réessayer ou contacter le support.
+          </Alert>
+        </Box>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Main BacklogPage Component
 function BacklogPage() {
-  // États principaux avec localStorage
-  const [backlogs, setBacklogs] = useState(() => {
-    const savedBacklogs = localStorage.getItem('backlogs');
-    return savedBacklogs ? JSON.parse(savedBacklogs) : [
-      {
-        id: 1,
-        name: "Fonctionnalités d'authentification",
-        description: "Ensemble des fonctionnalités liées à l'authentification des utilisateurs",
-        items: [
-          { 
-            id: 101, 
-            title: 'Page de connexion', 
-            description: 'Créer la page de connexion des utilisateurs',
-            assignees: [1, 3]
-          },
-          { 
-            id: 102, 
-            title: 'Page d\'inscription', 
-            description: 'Créer la page d\'inscription pour nouveaux utilisateurs',
-            assignees: [3]
-          },
-          { 
-            id: 103, 
-            title: 'Récupération de mot de passe', 
-            description: 'Fonctionnalité de récupération de mot de passe oublié',
-            assignees: [2]
-          }
-        ]
-      },
-      {
-        id: 2,
-        name: "Tableau de bord utilisateur",
-        description: "Fonctionnalités du tableau de bord principal de l'utilisateur",
-        items: [
-          { 
-            id: 201, 
-            title: 'Widget statistiques', 
-            description: 'Créer le widget affichant les statistiques principales',
-            assignees: [4]
-          },
-          { 
-            id: 202, 
-            title: 'Liste des activités récentes', 
-            description: 'Affichage des dernières activités de l\'utilisateur',
-            assignees: [1]
-          }
-        ]
-      }
-    ];
-  });
+  const { projectId } = useParams();
+  const dispatch = useDispatch();
+  const { generateInitials, getAvatarColor } = useAvatar();
+  const { createNotification } = useNotification();
+  const { currentUser } = useAuth();
 
-  const [sprints, setSprints] = useState(() => {
-    const savedSprints = localStorage.getItem('sprints');
-    return savedSprints ? JSON.parse(savedSprints) : [
-      {
-        id: 1,
-        name: "Sprint 1 - Authentication",
-        startDate: "2025-03-01",
-        endDate: "2025-03-14",
-        isActive: false,
-        items: [
-          { 
-            id: 101, 
-            title: 'Page de connexion', 
-            description: 'Créer la page de connexion des utilisateurs',
-            status: 'in_progress',
-            assignees: [1, 3]
-          }
-        ]
-      },
-      {
-        id: 2,
-        name: "Sprint 2 - Dashboard",
-        startDate: "2025-03-15",
-        endDate: "2025-03-28",
-        isActive: false,
-        items: []
-      }
-    ];
-  });
+  // Redux state
+  const { backlogs, tasks, columns, status, error: reduxError } = useSelector((state) => state.tasks);
 
-  // Enregistrer dans localStorage à chaque modification
-  useEffect(() => {
-    localStorage.setItem('backlogs', JSON.stringify(backlogs));
-  }, [backlogs]);
-
-  useEffect(() => {
-    localStorage.setItem('sprints', JSON.stringify(sprints));
-  }, [sprints]);
-
-  // États UI
+  // Local state
+  const [project, setProject] = useState(null);
+  const [projectUsers, setProjectUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('backlog');
   const [backlogDialogOpen, setBacklogDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -199,6 +170,131 @@ function BacklogPage() {
   const [currentItem, setCurrentItem] = useState(null);
   const [selectedItemForSprint, setSelectedItemForSprint] = useState(null);
   const [selectedBacklogForSprint, setSelectedBacklogForSprint] = useState(null);
+  const [formValues, setFormValues] = useState({
+    name: '',
+    description: '',
+    title: '',
+    assignedUsers: [],
+    priority: 'MEDIUM',
+    status: 'À faire',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sprint state (using localStorage)
+  const [sprints, setSprints] = useState(() => {
+    const savedSprints = localStorage.getItem('sprints');
+    return savedSprints
+      ? JSON.parse(savedSprints)
+      : [
+          {
+            id: 1,
+            name: 'Sprint 1 - Authentication',
+            startDate: '2025-03-01',
+            endDate: '2025-03-14',
+            isActive: false,
+            items: [],
+          },
+          {
+            id: 2,
+            name: 'Sprint 2 - Dashboard',
+            startDate: '2025-03-15',
+            endDate: '2025-03-28',
+            isActive: false,
+            items: [],
+          },
+        ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('sprints', JSON.stringify(sprints));
+  }, [sprints]);
+
+  // Fetch project, backlogs, tasks, columns, and users
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        if (!projectId || isNaN(parseInt(projectId))) {
+          throw new Error('ID du projet invalide');
+        }
+
+        console.log('[BacklogPage] Fetching data for projectId:', projectId);
+        const projectResponse = await projectApi.get(`/Projects/${projectId}`);
+        const normalizedProject = normalizeProject(projectResponse.data);
+        setProject(normalizedProject);
+
+        await Promise.all([
+          dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap(),
+          dispatch(fetchAllTasks({ projectId: parseInt(projectId) })).unwrap(),
+          dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) })).unwrap(),
+        ]);
+
+        const projectUserEmails = [
+          ...(normalizedProject.projectManagers || []),
+          ...(normalizedProject.productOwners || []),
+          ...(normalizedProject.scrumMasters || []),
+          ...(normalizedProject.users || []),
+          ...(normalizedProject.testers || []),
+          ...(normalizedProject.observers || []),
+        ].filter((email, index, self) => email && self.indexOf(email) === index);
+
+        const projectUsersData = projectUserEmails.map((email) => ({
+          email,
+          firstName: '',
+          lastName: '',
+          name: email,
+        }));
+
+        setProjectUsers(projectUsersData);
+      } catch (err) {
+        console.error('[BacklogPage] Error:', {
+          message: err.message,
+          response: err.response ? {
+            status: err.response.status,
+            data: err.response.data,
+          } : null,
+        });
+        setError(err.response?.data?.message || err.message || 'Erreur lors du chargement des données');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [projectId, dispatch]);
+
+  // Notify users of task creation
+  const createTaskNotification = (userEmail, taskTitle, taskId) => {
+    createNotification({
+      recipient: userEmail,
+      type: 'task',
+      message: `Vous avez été assigné à la tâche "${taskTitle}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+      sender: {
+        name: currentUser.name || currentUser.email,
+        avatar: null,
+      },
+      metadata: {
+        taskId,
+      },
+    });
+  };
+
+  // Notify users of task updates
+  const updateTaskNotification = (userEmail, taskTitle, taskId) => {
+    createNotification({
+      recipient: userEmail,
+      type: 'task',
+      message: `La tâche "${taskTitle}" a été mise à jour dans le projet "${project?.title || 'Projet inconnu'}".`,
+      sender: {
+        name: currentUser.name || currentUser.email,
+        avatar: null,
+      },
+      metadata: {
+        taskId,
+      },
+    });
+  };
 
   // Handlers UI
   const handleTabChange = (event, newValue) => {
@@ -207,31 +303,55 @@ function BacklogPage() {
 
   const handleOpenBacklogDialog = (backlog = null) => {
     setCurrentBacklog(backlog);
+    setFormValues({
+      name: backlog?.name || '',
+      description: backlog?.description || '',
+      title: '',
+      assignedUsers: [],
+      priority: 'MEDIUM',
+      status: 'À faire',
+    });
     setBacklogDialogOpen(true);
   };
 
   const handleCloseBacklogDialog = () => {
     setBacklogDialogOpen(false);
     setCurrentBacklog(null);
+    setFormValues({ name: '', description: '', title: '', assignedUsers: [], priority: 'MEDIUM', status: 'À faire' });
+    setError('');
   };
 
   const handleOpenItemDialog = (backlogId, item = null) => {
-    setCurrentBacklog(backlogs.find(b => b.id === backlogId));
+    const backlog = backlogs.find((b) => b.id === backlogId);
+    setCurrentBacklog(backlog);
     setCurrentItem(item);
+    setFormValues({
+      name: '',
+      description: item?.description || '',
+      title: item?.title || '',
+      assignedUsers: item ? projectUsers.filter((u) => item.assignedUserEmails?.includes(u.email)) : [],
+      priority: item?.priority || 'MEDIUM',
+      status: item?.status || 'À faire',
+    });
     setItemDialogOpen(true);
   };
 
   const handleCloseItemDialog = () => {
     setItemDialogOpen(false);
     setCurrentItem(null);
+    setFormValues({ name: '', description: '', title: '', assignedUsers: [], priority: 'MEDIUM', status: 'À faire' });
+    setError('');
   };
 
   const handleOpenSprintDialog = () => {
+    setFormValues({ name: '', description: '', title: '', assignedUsers: [], priority: 'MEDIUM', status: 'À faire' });
     setSprintDialogOpen(true);
   };
 
   const handleCloseSprintDialog = () => {
     setSprintDialogOpen(false);
+    setFormValues({ name: '', description: '', title: '', assignedUsers: [], priority: 'MEDIUM', status: 'À faire' });
+    setError('');
   };
 
   const handleOpenAddToSprintDialog = (backlogId, itemId) => {
@@ -246,176 +366,309 @@ function BacklogPage() {
     setSelectedItemForSprint(null);
   };
 
-  // Fonction pour modifier l'état actif d'un sprint
   const handleToggleSprintActive = (sprintId) => {
-    setSprints(sprints.map(sprint => 
-      sprint.id === sprintId 
-        ? { ...sprint, isActive: !sprint.isActive } 
-        : sprint
+    setSprints(sprints.map((sprint) =>
+      sprint.id === sprintId ? { ...sprint, isActive: !sprint.isActive } : sprint
     ));
   };
 
-  // Fonction pour ajouter un nouveau backlog
-  const handleAddBacklog = (name, description) => {
-    const newBacklog = {
-      id: Math.max(0, ...backlogs.map(b => b.id)) + 1,
-      name,
-      description,
-      items: []
-    };
-    
-    setBacklogs([...backlogs, newBacklog]);
-    handleCloseBacklogDialog();
+  // Handlers for backend operations
+  const handleAddBacklog = async () => {
+    if (!formValues.name.trim()) {
+      setError('Le nom du backlog est requis.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const backlogData = {
+        name: formValues.name,
+        description: formValues.description,
+        projectId: parseInt(projectId),
+      };
+      await dispatch(createBacklog({ backlogData })).unwrap();
+      handleCloseBacklogDialog();
+    } catch (err) {
+      console.error('[handleAddBacklog] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la création du backlog';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Fonction pour mettre à jour un backlog existant
-  const handleUpdateBacklog = (id, name, description) => {
-    setBacklogs(backlogs.map(backlog => 
-      backlog.id === id ? { ...backlog, name, description } : backlog
-    ));
-    handleCloseBacklogDialog();
+  const handleUpdateBacklog = async () => {
+    if (!formValues.name.trim()) {
+      setError('Le nom du backlog est requis.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const backlogData = {
+        name: formValues.name,
+        description: formValues.description,
+      };
+      await dispatch(updateBacklog({ backlogId: currentBacklog.id, backlogData })).unwrap();
+      handleCloseBacklogDialog();
+    } catch (err) {
+      console.error('[handleUpdateBacklog] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la mise à jour du backlog';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Fonction pour ajouter un nouvel item au backlog
-  const handleAddItem = (backlogId, title, description, assignees) => {
-    const newItem = {
-      id: Date.now(), // ID unique basé sur le timestamp
-      title,
-      description,
-      assignees
-    };
-    
-    setBacklogs(backlogs.map(backlog => 
-      backlog.id === backlogId 
-        ? { ...backlog, items: [...backlog.items, newItem] } 
-        : backlog
-    ));
-    
-    handleCloseItemDialog();
+  const handleDeleteBacklog = async (backlogId) => {
+    setIsSubmitting(true);
+    setError('');
+    try {
+      await dispatch(deleteBacklog({ backlogId })).unwrap();
+    } catch (err) {
+      console.error('[handleDeleteBacklog] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la suppression du backlog';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Fonction pour mettre à jour un item existant
-  const handleUpdateItem = (backlogId, itemId, title, description, assignees) => {
-    setBacklogs(backlogs.map(backlog => 
-      backlog.id === backlogId 
-        ? { 
-            ...backlog, 
-            items: backlog.items.map(item => 
-              item.id === itemId 
-                ? { ...item, title, description, assignees } 
-                : item
-            ) 
-          } 
-        : backlog
-    ));
-    
-    handleCloseItemDialog();
+  const handleAddItem = async () => {
+    if (!formValues.title.trim()) {
+      setError('Le titre de la tâche est requis.');
+      return;
+    }
+    if (!formValues.status) {
+      setError('Le statut de la tâche est requis.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const taskData = {
+        title: formValues.title,
+        description: formValues.description || '',
+        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+        priority: formValues.priority.toUpperCase(),
+        status: formValues.status,
+        projectId: parseInt(projectId),
+        backlogIds: [parseInt(currentBacklog.id)],
+        createdIn: 'backlog', // Mark task as created in backlog
+      };
+      console.log('[handleAddItem] Creating task with payload:', taskData);
+      const result = await dispatch(createTask({ taskData, attachments: [] })).unwrap();
+      console.log('[handleAddItem] Created task:', result);
+
+      // Link the task to the backlog
+      await dispatch(linkTaskToBacklog({ backlogId: parseInt(currentBacklog.id), taskId: result.id })).unwrap();
+
+      // Update the backlog's taskIds in the Redux store
+      dispatch(updateBacklogTaskIds({
+        backlogId: parseInt(currentBacklog.id),
+        taskId: result.id,
+      }));
+
+      formValues.assignedUsers.forEach((user) => {
+        if (user.email) {
+          createTaskNotification(user.email, formValues.title, result.id);
+        }
+      });
+      handleCloseItemDialog();
+    } catch (err) {
+      console.error('[handleAddItem] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.data?.errors && Object.values(err.response?.data?.errors).join(', ')) ||
+        err.message ||
+        'Erreur lors de la création de la tâche';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Fonction pour supprimer un item du backlog
-  const handleDeleteItem = (backlogId, itemId) => {
-    setBacklogs(backlogs.map(backlog => 
-      backlog.id === backlogId 
-        ? { ...backlog, items: backlog.items.filter(item => item.id !== itemId) } 
-        : backlog
-    ));
+  const handleUpdateItem = async () => {
+    if (!formValues.title.trim()) {
+      setError('Le titre de la tâche est requis.');
+      return;
+    }
+    if (!formValues.status) {
+      setError('Le statut de la tâche est requis.');
+      return;
+    }
+    setIsSubmitting(true);
+    setError('');
+    try {
+      const taskData = {
+        title: formValues.title,
+        description: formValues.description || '',
+        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+        priority: formValues.priority.toUpperCase(),
+        status: formValues.status,
+        projectId: parseInt(projectId),
+        backlogIds: currentItem?.backlogIds || [parseInt(currentBacklog.id)],
+        kanbanColumnId: currentItem?.kanbanColumnId || null,
+      };
+      console.log('[handleUpdateItem] Updating task with payload:', taskData);
+      const result = await dispatch(updateTask({ taskId: currentItem.id, taskData, attachments: [] })).unwrap();
+      formValues.assignedUsers.forEach((user) => {
+        if (user.email) {
+          updateTaskNotification(user.email, formValues.title, result.id);
+        }
+      });
+      handleCloseItemDialog();
+    } catch (err) {
+      console.error('[handleUpdateItem] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.data?.errors && Object.values(err.response?.data?.errors).join(', ')) ||
+        err.message ||
+        'Erreur lors de la mise à jour de la tâche';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Fonction pour ajouter un item à un sprint
+  const handleDeleteItem = async (taskId) => {
+    setIsSubmitting(true);
+    setError('');
+    try {
+      await dispatch(deleteTask(taskId)).unwrap();
+    } catch (err) {
+      console.error('[handleDeleteItem] Error:', {
+        message: err.message,
+        response: err.response?.data,
+      });
+      const errorMessage =
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        err.message ||
+        'Erreur lors de la suppression de la tâche';
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleAddToSprint = (sprintId) => {
-    // Trouver l'item dans le backlog
-    const backlog = backlogs.find(b => b.id === selectedBacklogForSprint);
+    const backlog = backlogs.find((b) => b.id === selectedBacklogForSprint);
     if (!backlog) return;
-    
-    const item = backlog.items.find(i => i.id === selectedItemForSprint);
-    if (!item) return;
-    
-    // Ajouter l'item au sprint avec statut initial
-    const newItem = { ...item, status: 'to_do' };
-    
-    setSprints(sprints.map(sprint => 
-      sprint.id === sprintId 
-        ? { ...sprint, items: [...sprint.items, newItem] } 
-        : sprint
+    const task = tasks.find((t) => t.id === selectedItemForSprint);
+    if (!task) return;
+    const newItem = {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status: task.status || 'À faire',
+      assignees: task.assignedUserEmails.map((email) => projectUsers.find((u) => u.email === email)?.email || email),
+    };
+    setSprints(sprints.map((sprint) =>
+      sprint.id === sprintId ? { ...sprint, items: [...sprint.items, newItem] } : sprint
     ));
-    
     handleCloseAddToSprintDialog();
   };
 
-  // Fonction pour créer un nouveau sprint
-  const handleCreateSprint = (name, startDate, endDate) => {
+  const handleCreateSprint = () => {
+    const name = document.getElementById('sprint-name').value;
+    const startDate = document.getElementById('sprint-start-date').value;
+    const endDate = document.getElementById('sprint-end-date').value;
+    if (!name.trim()) {
+      setError('Le nom du sprint est requis.');
+      return;
+    }
     const newSprint = {
-      id: Math.max(0, ...sprints.map(s => s.id)) + 1,
+      id: Math.max(0, ...sprints.map((s) => s.id)) + 1,
       name,
       startDate,
       endDate,
       isActive: false,
-      items: []
+      items: [],
     };
-    
     setSprints([...sprints, newSprint]);
     handleCloseSprintDialog();
   };
 
-  // Fonction pour mettre à jour le statut d'un item dans un sprint
   const handleUpdateSprintItemStatus = (sprintId, itemId, newStatus) => {
-    setSprints(sprints.map(sprint => 
-      sprint.id === sprintId 
-        ? { 
-            ...sprint, 
-            items: sprint.items.map(item => 
-              item.id === itemId 
-                ? { ...item, status: newStatus } 
-                : item
-            ) 
-          } 
+    setSprints(sprints.map((sprint) =>
+      sprint.id === sprintId
+        ? {
+            ...sprint,
+            items: sprint.items.map((item) =>
+              item.id === itemId ? { ...item, status: newStatus } : item
+            ),
+          }
         : sprint
     ));
   };
 
-  // Rendu d'un item de backlog
-  const renderBacklogItem = (backlogId, item) => (
-    <TaskItem key={item.id}>
+  // Form change handler
+  const handleFormChange = (field) => (event, value) => {
+    if (field === 'assignedUsers') {
+      setFormValues((prev) => ({ ...prev, [field]: value || [] }));
+    } else {
+      setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
+    }
+  };
+
+  // Render backlog item
+  const renderBacklogItem = (backlogId, task) => (
+    <TaskItem key={task.id}>
       <DragIndicatorIcon sx={{ color: '#bdbdbd', mr: 1 }} />
-      
       <Box sx={{ flex: 1 }}>
-        <Typography variant="subtitle1">{item.title}</Typography>
+        <Typography variant="subtitle1">{task.title}</Typography>
         <Typography variant="body2" color="text.secondary">
-          {item.description}
+          {task.description}
         </Typography>
       </Box>
-      
       <AvatarGroup max={3} sx={{ mr: 1 }}>
-        {item.assignees.map(id => {
-          const member = teamMembers.find(m => m.id === id);
-          return member ? (
-            <Tooltip key={id} title={member.name}>
-              <Avatar alt={member.name} src={member.avatar}>
-                {member.initials}
+        {task.assignedUserEmails?.map((email) => {
+          const user = projectUsers.find((u) => u.email === email);
+          return user ? (
+            <Tooltip key={email} title={user.name}>
+              <Avatar alt={user.name} sx={{ bgcolor: getAvatarColor(user.name) }}>
+                {generateInitials(user.name)}
               </Avatar>
             </Tooltip>
           ) : null;
         })}
       </AvatarGroup>
-      
       <Box sx={{ display: 'flex' }}>
-        <IconButton 
-          size="small" 
-          onClick={() => handleOpenAddToSprintDialog(backlogId, item.id)}
+        <IconButton
+          size="small"
+          onClick={() => handleOpenAddToSprintDialog(backlogId, task.id)}
           title="Ajouter au sprint"
         >
           <ArrowForwardIcon fontSize="small" />
         </IconButton>
-        <IconButton 
-          size="small" 
-          onClick={() => handleOpenItemDialog(backlogId, item)}
+        <IconButton
+          size="small"
+          onClick={() => handleOpenItemDialog(backlogId, task)}
           title="Modifier"
         >
           <EditIcon fontSize="small" />
         </IconButton>
-        <IconButton 
-          size="small" 
-          onClick={() => handleDeleteItem(backlogId, item.id)}
+        <IconButton
+          size="small"
+          onClick={() => handleDeleteItem(task.id)}
           title="Supprimer"
         >
           <DeleteIcon fontSize="small" />
@@ -424,57 +677,63 @@ function BacklogPage() {
     </TaskItem>
   );
 
-  // Rendu d'un item de sprint
+  // Render sprint item
   const renderSprintItem = (sprintId, item) => (
     <TaskItem key={item.id}>
       <DragIndicatorIcon sx={{ color: '#bdbdbd', mr: 1 }} />
-      
       <Checkbox
-        checked={item.status === 'done'}
-        onChange={() => handleUpdateSprintItemStatus(
-          sprintId, 
-          item.id, 
-          item.status === 'done' ? 'in_progress' : 'done'
-        )}
+        checked={item.status === 'COMPLETED'}
+        onChange={() =>
+          handleUpdateSprintItemStatus(
+            sprintId,
+            item.id,
+            item.status === 'COMPLETED' ? 'OPEN' : 'COMPLETED'
+          )
+        }
       />
-      
       <Box sx={{ flex: 1 }}>
         <Typography variant="subtitle1">{item.title}</Typography>
         <Typography variant="body2" color="text.secondary">
           {item.description}
         </Typography>
       </Box>
-      
-      <Chip 
-        label={item.status === 'to_do' ? 'À faire' : item.status === 'in_progress' ? 'En cours' : 'Terminé'}
+      <Chip
+        label={
+          item.status === 'À faire'
+            ? 'À faire'
+            : item.status === 'IN_PROGRESS'
+            ? 'En cours'
+            : 'Terminé'
+        }
         size="small"
-        color={item.status === 'done' ? 'success' : item.status === 'in_progress' ? 'primary' : 'default'}
+        color={
+          item.status === 'COMPLETED'
+            ? 'success'
+            : item.status === 'IN_PROGRESS'
+            ? 'primary'
+            : 'default'
+        }
         sx={{ mr: 1 }}
       />
-      
       <AvatarGroup max={3} sx={{ mr: 1 }}>
-        {item.assignees.map(id => {
-          const member = teamMembers.find(m => m.id === id);
-          return member ? (
-            <Tooltip key={id} title={member.name}>
-              <Avatar alt={member.name} src={member.avatar}>
-                {member.initials}
+        {item.assignees?.map((email) => {
+          const user = projectUsers.find((u) => u.email === email);
+          return user ? (
+            <Tooltip key={email} title={user.name}>
+              <Avatar alt={user.name} sx={{ bgcolor: getAvatarColor(user.name) }}>
+                {generateInitials(user.name)}
               </Avatar>
             </Tooltip>
           ) : null;
         })}
       </AvatarGroup>
-      
-      <IconButton 
-        size="small" 
-        title="Modifier"
-      >
+      <IconButton size="small" title="Modifier">
         <EditIcon fontSize="small" />
       </IconButton>
     </TaskItem>
   );
 
-  // Rendu du contenu de l'onglet Backlog
+  // Render backlog tab
   const renderBacklogTab = () => (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -487,8 +746,35 @@ function BacklogPage() {
           Nouveau Backlog
         </Button>
       </Box>
-
-      {backlogs.map(backlog => (
+      {status === 'loading' && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <CircularProgress size={40} />
+        </Box>
+      )}
+      {(error || reduxError) && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearTasksError());
+                setError('');
+                dispatch(fetchBacklogs({ projectId: parseInt(projectId) }));
+                dispatch(fetchAllTasks({ projectId: parseInt(projectId) }));
+                dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }));
+              }}
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          {error || reduxError}
+        </Alert>
+      )}
+      {backlogs.map((backlog) => (
         <BacklogContainer key={backlog.id}>
           <BacklogHeader>
             <Box>
@@ -498,12 +784,20 @@ function BacklogPage() {
               </Typography>
             </Box>
             <Box>
-              <IconButton 
-                size="small" 
+              <IconButton
+                size="small"
                 onClick={() => handleOpenBacklogDialog(backlog)}
                 title="Modifier le backlog"
               >
                 <EditIcon fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                onClick={() => handleDeleteBacklog(backlog.id)}
+                title="Supprimer le backlog"
+                disabled={isSubmitting}
+              >
+                <DeleteIcon fontSize="small" />
               </IconButton>
               <Button
                 variant="outlined"
@@ -516,10 +810,11 @@ function BacklogPage() {
               </Button>
             </Box>
           </BacklogHeader>
-          
           <BacklogContent>
-            {backlog.items.length > 0 ? (
-              backlog.items.map(item => renderBacklogItem(backlog.id, item))
+            {backlog.taskIds.length > 0 ? (
+              tasks
+                .filter((task) => backlog.taskIds.includes(task.id))
+                .map((task) => renderBacklogItem(backlog.id, task))
             ) : (
               <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
                 Aucun item dans ce backlog. Cliquez sur "Ajouter Item" pour commencer.
@@ -531,7 +826,7 @@ function BacklogPage() {
     </Box>
   );
 
-  // Rendu du contenu de l'onglet Sprints
+  // Render sprints tab
   const renderSprintsTab = () => (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -544,8 +839,7 @@ function BacklogPage() {
           Nouveau Sprint
         </Button>
       </Box>
-
-      {sprints.map(sprint => (
+      {sprints.map((sprint) => (
         <StyledPaper key={sprint.id}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Box>
@@ -556,9 +850,8 @@ function BacklogPage() {
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <Typography sx={{ mr: 2 }}>
-                {sprint.items.length} tâches • {sprint.items.filter(i => i.status === 'done').length} terminées
+                {sprint.items.length} tâches • {sprint.items.filter((i) => i.status === 'COMPLETED').length} terminées
               </Typography>
-              
               <FormControlLabel
                 control={
                   <Switch
@@ -571,11 +864,9 @@ function BacklogPage() {
               />
             </Box>
           </Box>
-          
           <Divider sx={{ mb: 2 }} />
-          
           {sprint.items.length > 0 ? (
-            sprint.items.map(item => renderSprintItem(sprint.id, item))
+            sprint.items.map((item) => renderSprintItem(sprint.id, item))
           ) : (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
               Aucune tâche dans ce sprint. Ajoutez des tâches depuis le backlog.
@@ -586,159 +877,194 @@ function BacklogPage() {
     </Box>
   );
 
-  // Boîte de dialogue pour créer/modifier un backlog
+  // Render backlog dialog
   const renderBacklogDialog = () => (
     <Dialog open={backlogDialogOpen} onClose={handleCloseBacklogDialog} maxWidth="sm" fullWidth>
       <DialogTitle>
         {currentBacklog ? 'Modifier le backlog' : 'Créer un nouveau backlog'}
       </DialogTitle>
       <DialogContent>
+        {isSubmitting && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <CircularProgress size={30} />
+          </Box>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <TextField
           autoFocus
           margin="dense"
-          id="backlog-name"
           label="Nom du backlog"
           fullWidth
           variant="outlined"
-          defaultValue={currentBacklog?.name || ''}
+          value={formValues.name}
+          onChange={handleFormChange('name')}
           sx={{ mb: 2 }}
+          disabled={isSubmitting}
+          error={!formValues.name.trim()}
+          helperText={!formValues.name.trim() ? 'Le nom est requis' : ''}
         />
         <TextField
           margin="dense"
-          id="backlog-description"
           label="Description"
           fullWidth
           multiline
           rows={3}
           variant="outlined"
-          defaultValue={currentBacklog?.description || ''}
+          value={formValues.description}
+          onChange={handleFormChange('description')}
+          disabled={isSubmitting}
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseBacklogDialog}>Annuler</Button>
-        <Button 
-          variant="contained" 
-          onClick={() => {
-            const nameEl = document.getElementById('backlog-name');
-            const descEl = document.getElementById('backlog-description');
-            
-            if (currentBacklog) {
-              handleUpdateBacklog(currentBacklog.id, nameEl.value, descEl.value);
-            } else {
-              handleAddBacklog(nameEl.value, descEl.value);
-            }
-          }}
+        <Button onClick={handleCloseBacklogDialog} disabled={isSubmitting}>
+          Annuler
+        </Button>
+        <Button
+          variant="contained"
+          onClick={currentBacklog ? handleUpdateBacklog : handleAddBacklog}
+          disabled={isSubmitting || !formValues.name.trim()}
         >
-          {currentBacklog ? 'Mettre à jour' : 'Créer'}
+          {isSubmitting ? 'Traitement...' : currentBacklog ? 'Mettre à jour' : 'Créer'}
         </Button>
       </DialogActions>
     </Dialog>
   );
 
-  // Boîte de dialogue pour créer/modifier un item de backlog
+  // Render item dialog
   const renderItemDialog = () => (
     <Dialog open={itemDialogOpen} onClose={handleCloseItemDialog} maxWidth="sm" fullWidth>
       <DialogTitle>
         {currentItem ? 'Modifier l\'item' : 'Ajouter un nouvel item'}
       </DialogTitle>
       <DialogContent>
+        {isSubmitting && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <CircularProgress size={30} />
+          </Box>
+        )}
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <TextField
           autoFocus
           margin="dense"
-          id="item-title"
           label="Titre"
           fullWidth
           variant="outlined"
-          defaultValue={currentItem?.title || ''}
+          value={formValues.title}
+          onChange={handleFormChange('title')}
           sx={{ mb: 2 }}
+          disabled={isSubmitting}
+          error={!formValues.title.trim()}
+          helperText={!formValues.title.trim() ? 'Le titre est requis' : ''}
         />
         <TextField
           margin="dense"
-          id="item-description"
           label="Description"
           fullWidth
           multiline
           rows={3}
           variant="outlined"
-          defaultValue={currentItem?.description || ''}
+          value={formValues.description}
+          onChange={handleFormChange('description')}
           sx={{ mb: 2 }}
+          disabled={isSubmitting}
         />
-        <FormControl fullWidth>
+        <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel id="assignees-label">Membres assignés</InputLabel>
           <Select
             labelId="assignees-label"
-            id="item-assignees"
             multiple
+            value={formValues.assignedUsers}
+            onChange={(e) => handleFormChange('assignedUsers')(e, e.target.value)}
             label="Membres assignés"
-            defaultValue={currentItem?.assignees || []}
+            disabled={isSubmitting}
             renderValue={(selected) => (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                {selected.map((value) => {
-                  const member = teamMembers.find(m => m.id === value);
-                  return (
-                    <Chip 
-                      key={value} 
-                      label={member?.name} 
-                      size="small"
-                    />
-                  );
-                })}
+                {selected.map((user) => (
+                  <Chip key={user.email} label={user.name} size="small" />
+                ))}
               </Box>
             )}
           >
-            {teamMembers.map((member) => (
-              <MenuItem key={member.id} value={member.id}>
-                <Checkbox checked={(currentItem?.assignees || []).indexOf(member.id) > -1} />
-                {member.name}
+            {projectUsers.map((user) => (
+              <MenuItem key={user.email} value={user}>
+                <Checkbox checked={formValues.assignedUsers.some((u) => u.email === user.email)} />
+                {user.name}
               </MenuItem>
             ))}
           </Select>
         </FormControl>
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel id="priority-label">Priorité</InputLabel>
+          <Select
+            labelId="priority-label"
+            value={formValues.priority}
+            onChange={handleFormChange('priority')}
+            label="Priorité"
+            disabled={isSubmitting}
+          >
+            <MenuItem value="HIGH">Haute</MenuItem>
+            <MenuItem value="MEDIUM">Moyenne</MenuItem>
+            <MenuItem value="LOW">Basse</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl fullWidth sx={{ mb: 2 }} error={!formValues.status}>
+          <InputLabel id="status-label">Statut</InputLabel>
+          <Select
+            labelId="status-label"
+            value={formValues.status}
+            onChange={handleFormChange('status')}
+            label="Statut"
+            disabled={isSubmitting}
+            required
+          >
+            <MenuItem value="À faire">À faire</MenuItem>
+            {currentItem && formValues.status !== 'À faire' && (
+              <>
+                <MenuItem value="IN_PROGRESS">En cours</MenuItem>
+                <MenuItem value="COMPLETED">Terminé</MenuItem>
+              </>
+            )}
+          </Select>
+          {!formValues.status && (
+            <Typography variant="caption" color="error">
+              Le statut est requis
+            </Typography>
+          )}
+        </FormControl>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseItemDialog}>Annuler</Button>
-        <Button 
-          variant="contained" 
-          onClick={() => {
-            const titleEl = document.getElementById('item-title');
-            const descEl = document.getElementById('item-description');
-            const membersEl = document.getElementById('item-assignees');
-            
-            // Récupérer les membres sélectionnés
-            const selectedOptions = Array.from(membersEl.querySelectorAll('input[type="checkbox"]:checked'));
-            const selectedMembers = selectedOptions.map(option => 
-              parseInt(option.closest('li').getAttribute('data-value'))
-            );
-            
-            if (currentItem) {
-              handleUpdateItem(
-                currentBacklog.id, 
-                currentItem.id, 
-                titleEl.value, 
-                descEl.value, 
-                selectedMembers.length ? selectedMembers : currentItem.assignees || []
-              );
-            } else {
-              handleAddItem(
-                currentBacklog.id, 
-                titleEl.value, 
-                descEl.value, 
-                selectedMembers
-              );
-            }
-          }}
+        <Button onClick={handleCloseItemDialog} disabled={isSubmitting}>
+          Annuler
+        </Button>
+        <Button
+          variant="contained"
+          onClick={currentItem ? handleUpdateItem : handleAddItem}
+          disabled={isSubmitting || !formValues.title.trim() || !formValues.status}
         >
-          {currentItem ? 'Mettre à jour' : 'Créer'}
+          {isSubmitting ? 'Traitement...' : currentItem ? 'Mettre à jour' : 'Créer'}
         </Button>
       </DialogActions>
     </Dialog>
   );
 
-  // Boîte de dialogue pour créer un nouveau sprint
+  // Render sprint dialog
   const renderSprintDialog = () => (
     <Dialog open={sprintDialogOpen} onClose={handleCloseSprintDialog} maxWidth="sm" fullWidth>
       <DialogTitle>Créer un nouveau sprint</DialogTitle>
       <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
         <TextField
           autoFocus
           margin="dense"
@@ -747,6 +1073,7 @@ function BacklogPage() {
           fullWidth
           variant="outlined"
           sx={{ mb: 2 }}
+          disabled={isSubmitting}
         />
         <Box sx={{ display: 'flex', gap: 2 }}>
           <TextField
@@ -757,6 +1084,7 @@ function BacklogPage() {
             InputLabelProps={{ shrink: true }}
             defaultValue={new Date().toISOString().split('T')[0]}
             sx={{ mb: 2 }}
+            disabled={isSubmitting}
           />
           <TextField
             id="sprint-end-date"
@@ -766,32 +1094,26 @@ function BacklogPage() {
             InputLabelProps={{ shrink: true }}
             defaultValue={new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
             sx={{ mb: 2 }}
+            disabled={isSubmitting}
           />
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleCloseSprintDialog}>Annuler</Button>
-        <Button 
-          variant="contained" 
-          onClick={() => {
-            const nameEl = document.getElementById('sprint-name');
-            const startDateEl = document.getElementById('sprint-start-date');
-            const endDateEl = document.getElementById('sprint-end-date');
-            
-            handleCreateSprint(
-              nameEl.value, 
-              startDateEl.value, 
-              endDateEl.value
-            );
-          }}
+        <Button onClick={handleCloseSprintDialog} disabled={isSubmitting}>
+          Annuler
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleCreateSprint}
+          disabled={isSubmitting}
         >
-          Créer
+          {isSubmitting ? 'Traitement...' : 'Créer'}
         </Button>
       </DialogActions>
     </Dialog>
   );
 
-  // Boîte de dialogue pour ajouter un item à un sprint
+  // Render add to sprint dialog
   const renderAddToSprintDialog = () => (
     <Dialog open={addToSprintDialogOpen} onClose={handleCloseAddToSprintDialog} maxWidth="sm" fullWidth>
       <DialogTitle>Ajouter au sprint</DialogTitle>
@@ -800,24 +1122,24 @@ function BacklogPage() {
           Sélectionnez le sprint auquel vous souhaitez ajouter cet item :
         </Typography>
         <List>
-          {sprints.map(sprint => (
-            <ListItem 
-              key={sprint.id} 
-              button 
+          {sprints.map((sprint) => (
+            <ListItem
+              key={sprint.id}
+              button
               onClick={() => handleAddToSprint(sprint.id)}
               sx={{
                 border: '1px solid #e0e0e0',
                 borderRadius: 1,
                 mb: 1,
-                '&:hover': { bgcolor: '#f5f5f5' }
+                '&:hover': { bgcolor: '#f5f5f5' },
               }}
             >
               <ListItemIcon>
                 <TimelineIcon />
               </ListItemIcon>
-              <ListItemText 
-                primary={sprint.name} 
-                secondary={`${sprint.startDate} à ${sprint.endDate}`} 
+              <ListItemText
+                primary={sprint.name}
+                secondary={`${sprint.startDate} à ${sprint.endDate}`}
               />
             </ListItem>
           ))}
@@ -829,33 +1151,65 @@ function BacklogPage() {
     </Dialog>
   );
 
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Tabs simplifiés - Appbar supprimée */}
-      <Tabs 
-        value={activeTab} 
-        onChange={handleTabChange}
-        sx={{ 
-          borderBottom: '1px solid #e0e0e0',
-          '& .MuiTab-root': { textTransform: 'none', minWidth: 120 }
-        }}
-      >
-        <Tab label="Backlog" icon={<ListAltIcon />} iconPosition="start" value="backlog" />
-        <Tab label="Sprints" icon={<TimelineIcon />} iconPosition="start" value="sprints" />
-      </Tabs>
-
-      {/* Contenu principal */}
-      <Box sx={{ flex: 1, overflow: 'auto', bgcolor: '#f9fafb' }}>
-        {activeTab === 'backlog' && renderBacklogTab()}
-        {activeTab === 'sprints' && renderSprintsTab()}
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress size={60} />
       </Box>
+    );
+  }
 
-      {/* Boîtes de dialogue */}
-      {renderBacklogDialog()}
-      {renderItemDialog()}
-      {renderSprintDialog()}
-      {renderAddToSprintDialog()}
-    </Box>
+  if (!project) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearTasksError());
+                setError('');
+                dispatch(fetchBacklogs({ projectId: parseInt(projectId) }));
+                dispatch(fetchAllTasks({ projectId: parseInt(projectId) }));
+                dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }));
+              }}
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          {error || 'Projet introuvable.'}
+        </Alert>
+      </Box>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          sx={{
+            borderBottom: '1px solid #e0e0e0',
+            '& .MuiTab-root': { textTransform: 'none', minWidth: 120 },
+          }}
+        >
+          <Tab label="Backlog" icon={<ListAltIcon />} iconPosition="start" value="backlog" />
+          <Tab label="Sprints" icon={<TimelineIcon />} iconPosition="start" value="sprints" />
+        </Tabs>
+        <Box sx={{ flex: 1, overflow: 'auto', bgcolor: '#f9fafb' }}>
+          {activeTab === 'backlog' && renderBacklogTab()}
+          {activeTab === 'sprints' && renderSprintsTab()}
+        </Box>
+        {renderBacklogDialog()}
+        {renderItemDialog()}
+        {renderSprintDialog()}
+        {renderAddToSprintDialog()}
+      </Box>
+    </ErrorBoundary>
   );
 }
 

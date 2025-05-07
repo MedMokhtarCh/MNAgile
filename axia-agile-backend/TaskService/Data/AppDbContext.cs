@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿
+using Microsoft.EntityFrameworkCore;
 using TaskService.Models;
 using Task = TaskService.Models.Task;
 
@@ -12,11 +13,14 @@ namespace TaskService.Data
 
         public DbSet<Task> Tasks { get; set; }
         public DbSet<KanbanColumn> KanbanColumns { get; set; }
+        public DbSet<Backlog> Backlogs { get; set; }
+        public DbSet<TaskBacklog> TaskBacklogs { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
+            // Existing Task configuration
             modelBuilder.Entity<Task>()
                 .Property(t => t.AssignedUserIds)
                 .HasColumnType("nvarchar(max)");
@@ -29,6 +33,7 @@ namespace TaskService.Data
                 .Property(t => t.ProjectId)
                 .IsRequired();
 
+            // Existing KanbanColumn configuration
             modelBuilder.Entity<KanbanColumn>()
                 .Property(c => c.Name)
                 .IsRequired()
@@ -38,10 +43,37 @@ namespace TaskService.Data
                 .Property(c => c.ProjectId)
                 .IsRequired();
 
-            // Ensure unique column names per project
             modelBuilder.Entity<KanbanColumn>()
                 .HasIndex(c => new { c.ProjectId, c.Name })
                 .IsUnique();
+
+            // Backlog configuration
+            modelBuilder.Entity<Backlog>()
+                .Property(b => b.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Backlog>()
+                .Property(b => b.ProjectId)
+                .IsRequired();
+
+            modelBuilder.Entity<Backlog>()
+                .HasIndex(b => new { b.ProjectId, b.Name })
+                .IsUnique();
+
+            // TaskBacklog configuration
+            modelBuilder.Entity<TaskBacklog>()
+                .HasKey(tb => new { tb.TaskId, tb.BacklogId });
+
+            modelBuilder.Entity<TaskBacklog>()
+                .HasOne(tb => tb.Task)
+                .WithMany(t => t.TaskBacklogs)
+                .HasForeignKey(tb => tb.TaskId);
+
+            modelBuilder.Entity<TaskBacklog>()
+                .HasOne(tb => tb.Backlog)
+                .WithMany(b => b.TaskBacklogs)
+                .HasForeignKey(tb => tb.BacklogId);
         }
     }
 }

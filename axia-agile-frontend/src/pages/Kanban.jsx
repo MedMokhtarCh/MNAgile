@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, IconButton, Paper, Card, CardContent, Avatar, Chip, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, FormControl, InputLabel, Select as MuiSelect, OutlinedInput, useMediaQuery, useTheme, Grid, Container,
-  Tooltip, Fade, AppBar, Toolbar, Alert, CircularProgress, List, ListItem, ListItemText, Autocomplete, MenuItem,
+  Tooltip, Fade, AppBar, Toolbar, Alert, CircularProgress, List, ListItem, ListItemText, Autocomplete, MenuItem
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
@@ -12,6 +12,7 @@ import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, horizontalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
@@ -22,7 +23,7 @@ import PageTitle from '../components/common/PageTitle';
 import InputUserAssignment from '../components/common/InputUserAssignment';
 import { useAvatar } from '../hooks/useAvatar';
 import { useNotification } from '../hooks/useNotifications';
-import { fetchAllTasks, createTask, updateTask, deleteTask, clearTasksError } from '../store/slices/taskSlice';
+import { fetchAllTasks, fetchKanbanColumns, createKanbanColumn, updateKanbanColumn, deleteKanbanColumn, createTask, updateTask, deleteTask, clearTasksError, fetchBacklogs } from '../store/slices/taskSlice';
 import { useAuth } from '../contexts/AuthContext';
 import { projectApi } from '../services/api';
 
@@ -140,8 +141,8 @@ const StyledButton = styled(Button)(({ theme }) => ({
   fontWeight: 500,
 }));
 
-function SortableColumn({ columnId, columns, columnLabels, filteredColumns, users, handleAddTask }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: columnId });
+function SortableColumn({ column, columns, filteredColumns, users, handleAddTask, handleEditColumn, handleDeleteColumn }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: column.id.toString() });
   const theme = useTheme();
 
   const style = {
@@ -152,35 +153,55 @@ function SortableColumn({ columnId, columns, columnLabels, filteredColumns, user
   };
 
   return (
-    <KanbanColumn ref={setNodeRef} style={style} id={columnId}>
+    <KanbanColumn ref={setNodeRef} style={style} id={column.id}>
       <ColumnHeader {...attributes} {...listeners}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <DragIndicatorIcon sx={{ color: 'text.secondary', cursor: 'move' }} fontSize="small" />
           <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-            {columnLabels[columnId] || columnId}
+            {column.name}
           </Typography>
           <Chip
-            label={filteredColumns[columnId]?.length || 0}
+            label={filteredColumns[column.name]?.length || 0}
             size="small"
             sx={{ height: 20, fontSize: '0.7rem', bgcolor: theme.palette.grey[200] }}
           />
         </Box>
-        <Tooltip title={`Ajouter à ${columnLabels[columnId] || columnId}`} TransitionComponent={Fade} arrow>
-          <IconButton
-            size="small"
-            onClick={() => handleAddTask(columnId)}
-            sx={{
-              bgcolor: theme.palette.primary.light,
-              color: 'white',
-              '&:hover': { bgcolor: theme.palette.primary.main },
-            }}
-          >
-            <AddIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        <Box>
+          <Tooltip title={`Modifier ${column.name}`} TransitionComponent={Fade} arrow>
+            <IconButton
+              size="small"
+              onClick={() => handleEditColumn(column)}
+              sx={{ mr: 1 }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={`Supprimer ${column.name}`} TransitionComponent={Fade} arrow>
+            <IconButton
+              size="small"
+              onClick={() => handleDeleteColumn(column.id)}
+              sx={{ color: theme.palette.error.main }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={`Ajouter une tâche à ${column.name}`} TransitionComponent={Fade} arrow>
+            <IconButton
+              size="small"
+              onClick={() => handleAddTask(column.name)}
+              sx={{
+                bgcolor: theme.palette.primary.light,
+                color: 'white',
+                '&:hover': { bgcolor: theme.palette.primary.main },
+              }}
+            >
+              <AddIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </ColumnHeader>
       <Box sx={{ flex: 1, maxHeight: 'calc(100vh - 250px)', p: 1 }}>
-        {filteredColumns[columnId]?.length === 0 ? (
+        {filteredColumns[column.name]?.length === 0 ? (
           <EmptyTaskCard>
             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.85rem' }}>
               Aucune tâche
@@ -188,11 +209,11 @@ function SortableColumn({ columnId, columns, columnLabels, filteredColumns, user
           </EmptyTaskCard>
         ) : (
           <SortableContext
-            id={columnId}
-            items={filteredColumns[columnId]?.map((task) => task.id.toString()) || []}
+            id={column.name}
+            items={filteredColumns[column.name]?.map((task) => task.id.toString()) || []}
             strategy={verticalListSortingStrategy}
           >
-            {filteredColumns[columnId].map((task) => (
+            {filteredColumns[column.name].map((task) => (
               <SortableTask key={task.id} task={task} users={users} />
             ))}
           </SortableContext>
@@ -230,12 +251,12 @@ function SortableTask({ task, users }) {
   };
 
   const handleDelete = (e) => {
-    e.stopPropagation(); // Prevent triggering card click
+    e.stopPropagation();
     dispatch(deleteTask(task.id));
   };
 
   const handleEdit = (e) => {
-    e.stopPropagation(); // Prevent triggering card click
+    e.stopPropagation();
     setIsEditing(true);
     setDialogMode('edit');
     setEditingTask(task);
@@ -247,7 +268,8 @@ function SortableTask({ task, users }) {
       priority: task.priority || 'Medium',
       startDate: task.startDate ? task.startDate.split('T')[0] : '',
       endDate: task.endDate ? task.endDate.split('T')[0] : '',
-      attachments: [], // New attachments to be added
+      attachments: [],
+      backlogIds: task.backlogIds || [],
     });
     setDialogOpen(true);
   };
@@ -264,7 +286,8 @@ function SortableTask({ task, users }) {
       priority: task.priority || 'Medium',
       startDate: task.startDate ? task.startDate.split('T')[0] : '',
       endDate: task.endDate ? task.endDate.split('T')[0] : '',
-      attachments: [], // No client-side attachments in view mode
+      attachments: [],
+      backlogIds: task.backlogIds || [],
     });
     setDialogOpen(true);
   };
@@ -366,29 +389,24 @@ function Kanban() {
   const { createNotification } = useNotification();
   const { currentUser } = useAuth();
 
-  // Redux state for tasks
-  const { tasks, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
-
-  // Log tasks for debugging
-  useEffect(() => {
-    console.log('Kanban tasks:', tasks);
-  }, [tasks]);
+  // Redux state for tasks, columns, and backlogs
+  const { tasks, columns, backlogs, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
 
   // Local state
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [kanbanError, setKanbanError] = useState('');
-  const [columnOrder, setColumnOrder] = useState(['ToDo', 'InProgress', 'Done']);
   const [activeId, setActiveId] = useState(null);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedPriority, setSelectedPriority] = useState('');
+  const [selectedBacklog, setSelectedBacklog] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [currentColumn, setCurrentColumn] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [dialogMode, setDialogMode] = useState('view'); // 'view' or 'edit'
+  const [dialogMode, setDialogMode] = useState('view'); // 'view', 'edit', 'addColumn', 'editColumn'
   const [formValues, setFormValues] = useState({
     title: '',
     description: '',
@@ -397,46 +415,52 @@ function Kanban() {
     startDate: '',
     endDate: '',
     attachments: [],
+    columnName: '',
+    columnId: null,
+    backlogIds: [],
   });
 
-  const columnLabels = {
-    ToDo: 'À faire',
-    InProgress: 'En cours',
-    Done: 'Terminé',
-  };
-
-  // Map tasks to columns
-  const columns = {
-    ToDo: tasks.filter((task) => task.status === 'ToDo' || !['InProgress', 'Done'].includes(task.status)),
-    InProgress: tasks.filter((task) => task.status === 'InProgress'),
-    Done: tasks.filter((task) => task.status === 'Done'),
-  };
-
-  // Log columns for debugging
-  useEffect(() => {
-    console.log('Kanban columns:', columns);
-  }, [columns]);
-
-  // Filter tasks by user and priority
-  const filteredColumns = Object.keys(columns).reduce((acc, columnId) => {
-    acc[columnId] = columns[columnId].filter((task) => {
-      const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
-      const matchesPriority = selectedPriority ? task.priority.toLowerCase() === selectedPriority.toLowerCase() : true;
-      return matchesUser && matchesPriority;
+  // Map tasks to columns, filtered by selected backlog
+  const columnsByStatus = columns.reduce((acc, col) => {
+    acc[col.name] = tasks.filter((task) => {
+      const matchesStatus = task.status === col.name;
+      const matchesBacklog = selectedBacklog ? task.backlogIds?.includes(parseInt(selectedBacklog.id)) : true;
+      return matchesStatus && matchesBacklog;
     });
     return acc;
   }, {});
 
-  // Fetch project and tasks
+  // Filter tasks by user, priority, and selected backlog
+  const filteredColumns = columns.reduce((acc, col) => {
+    acc[col.name] = columnsByStatus[col.name]?.filter((task) => {
+      const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
+      const matchesPriority = selectedPriority ? task.priority.toLowerCase() === selectedPriority.toLowerCase() : true;
+      return matchesUser && matchesPriority;
+    }) || [];
+    return acc;
+  }, {});
+
+  // Fetch project, tasks, columns, and backlogs
   const loadData = useCallback(async () => {
     setLoading(true);
     setKanbanError('');
     try {
+      // Validate projectId
+      if (!projectId || isNaN(parseInt(projectId))) {
+        throw new Error('ID du projet invalide');
+      }
+
+      console.log('[loadData] Fetching data for projectId:', projectId);
       const projectResponse = await projectApi.get(`/Projects/${projectId}`);
       const normalizedProject = normalizeProject(projectResponse.data);
       setProject(normalizedProject);
 
-      await dispatch(fetchAllTasks({ projectId })).unwrap();
+      // Fetch tasks, columns, and backlogs
+      await Promise.all([
+        dispatch(fetchAllTasks({ projectId: parseInt(projectId) })).unwrap(),
+        dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) })).unwrap(),
+        dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap(),
+      ]);
 
       const projectUserEmails = [
         ...(normalizedProject.projectManagers || []),
@@ -455,9 +479,14 @@ function Kanban() {
       }));
 
       setProjectUsers(projectUsersData);
-      setLoading(false);
     } catch (err) {
-      console.error('[Kanban] Error loading data:', err);
+      console.error('[loadData] Error:', {
+        message: err.message,
+        response: err.response ? {
+          status: err.response.status,
+          data: err.response.data,
+        } : null,
+      });
       if (err.response?.status === 401) {
         setKanbanError('Non autorisé. Veuillez vous reconnecter.');
         navigate('/login', { replace: true });
@@ -465,15 +494,17 @@ function Kanban() {
         setKanbanError(`Le projet avec l'ID ${projectId} n'existe pas.`);
         navigate('/projects');
       } else {
-        setKanbanError(`Erreur lors du chargement des données: ${err.message || JSON.stringify(err)}`);
+        setKanbanError(`Erreur lors du chargement des données: ${err.message || err || 'Erreur inconnue'}`);
       }
+    } finally {
       setLoading(false);
     }
   }, [projectId, navigate, dispatch]);
 
+  // Run loadData only on mount or when projectId changes
   useEffect(() => {
     loadData();
-  }, [loadData]);
+  }, [loadData, projectId]);
 
   // Notify users of task creation
   const createTaskNotification = (userEmail, taskTitle, taskId) => {
@@ -509,17 +540,12 @@ function Kanban() {
 
   // Notify users of task movement
   const notifyTaskMove = (task, fromColumn, toColumn) => {
-    const columnNames = {
-      ToDo: 'À faire',
-      InProgress: 'En cours',
-      Done: 'Terminé',
-    };
     task.assignedUserEmails.forEach((email) => {
       if (email && email !== currentUser.email) {
         createNotification({
           recipient: email,
           type: 'task',
-          message: `La tâche "${task.title}" a été déplacée de "${columnNames[fromColumn]}" à "${columnNames[toColumn]}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+          message: `La tâche "${task.title}" a été déplacée de "${fromColumn}" à "${toColumn}" dans le projet "${project?.title || 'Projet inconnu'}".`,
           sender: {
             name: currentUser.name || currentUser.email,
             avatar: null,
@@ -543,16 +569,21 @@ function Kanban() {
     if (!active || !over) return;
 
     try {
-      const activeId = active.id;
+      const activeIdValue = active.id;
       const overId = over.id;
 
       // Handle column reordering
-      if (columnOrder.includes(activeId)) {
-        const oldIndex = columnOrder.indexOf(activeId);
-        const newIndex = columnOrder.indexOf(overId);
+      if (columns.some(col => col.id.toString() === activeIdValue)) {
+        const oldIndex = columns.findIndex(col => col.id.toString() === activeIdValue);
+        const newIndex = columns.findIndex(col => col.id.toString() === overId);
         if (oldIndex !== newIndex) {
-          const newColumnOrder = arrayMove(columnOrder, oldIndex, newIndex);
-          setColumnOrder(newColumnOrder);
+          const newColumns = arrayMove(columns, oldIndex, newIndex);
+          newColumns.forEach((col, index) => {
+            dispatch(updateKanbanColumn({
+              columnId: col.id,
+              columnData: { name: col.name, displayOrder: index + 1 }
+            }));
+          });
         }
         return;
       }
@@ -560,10 +591,10 @@ function Kanban() {
       // Find source column and task
       let sourceColumn = null;
       let sourceIndex = -1;
-      Object.keys(columns).forEach((columnId) => {
-        const taskIndex = columns[columnId].findIndex((task) => task.id.toString() === activeId);
+      Object.keys(columnsByStatus).forEach((columnName) => {
+        const taskIndex = columnsByStatus[columnName].findIndex((task) => task.id.toString() === activeIdValue);
         if (taskIndex !== -1) {
-          sourceColumn = columnId;
+          sourceColumn = columnName;
           sourceIndex = taskIndex;
         }
       });
@@ -571,12 +602,12 @@ function Kanban() {
       if (!sourceColumn) return;
 
       // Handle task reordering within the same column
-      if (columns[sourceColumn].some((task) => task.id.toString() === overId)) {
-        const destIndex = columns[sourceColumn].findIndex((task) => task.id.toString() === overId);
+      if (columnsByStatus[sourceColumn].some((task) => task.id.toString() === overId)) {
+        const destIndex = columnsByStatus[sourceColumn].findIndex((task) => task.id.toString() === overId);
         if (destIndex !== -1 && sourceIndex !== destIndex) {
           const newTasks = [...tasks];
-          const columnTasks = newTasks.filter((task) => columns[sourceColumn].some(t => t.id === task.id));
-          const otherTasks = newTasks.filter((task) => !columns[sourceColumn].some(t => t.id === task.id));
+          const columnTasks = newTasks.filter((task) => columnsByStatus[sourceColumn].some(t => t.id === task.id));
+          const otherTasks = newTasks.filter((task) => !columnsByStatus[sourceColumn].some(t => t.id === task.id));
           const reorderedColumnTasks = arrayMove(columnTasks, sourceIndex, destIndex);
           const updatedTasks = [...otherTasks, ...reorderedColumnTasks];
           dispatch({
@@ -589,21 +620,23 @@ function Kanban() {
 
       // Handle task moving to a different column
       let destColumn = null;
-      Object.keys(columns).forEach((columnId) => {
-        if (columns[columnId].some((task) => task.id.toString() === overId) || overId === columnId) {
-          destColumn = columnId;
+      Object.keys(columnsByStatus).forEach((columnName) => {
+        if (columnsByStatus[columnName].some((task) => task.id.toString() === overId) || overId === columnName) {
+          destColumn = columnName;
         }
       });
 
       if (destColumn && destColumn !== sourceColumn) {
-        const task = columns[sourceColumn][sourceIndex];
+        const task = columnsByStatus[sourceColumn][sourceIndex];
+        const updatedTaskData = {
+          ...task,
+          status: destColumn,
+          projectId: parseInt(projectId),
+          backlogIds: task.backlogIds || [],
+        };
         dispatch(updateTask({
           taskId: task.id,
-          taskData: {
-            ...task,
-            status: destColumn,
-            projectId,
-          },
+          taskData: updatedTaskData,
           attachments: [],
         }));
         notifyTaskMove(task, sourceColumn, destColumn);
@@ -615,8 +648,8 @@ function Kanban() {
   };
 
   // Handle task creation dialog
-  const handleAddTask = (columnId) => {
-    setCurrentColumn(columnId);
+  const handleAddTask = (columnName) => {
+    setCurrentColumn(columnName);
     setIsEditing(false);
     setDialogMode('edit');
     setEditingTask(null);
@@ -628,8 +661,25 @@ function Kanban() {
       startDate: '',
       endDate: '',
       attachments: [],
+      backlogIds: selectedBacklog ? [parseInt(selectedBacklog.id)] : [],
     });
     setDialogOpen(true);
+  };
+
+  // Handle edit column
+  const handleEditColumn = (column) => {
+    setDialogMode('editColumn');
+    setFormValues({
+      ...formValues,
+      columnName: column.name,
+      columnId: column.id,
+    });
+    setDialogOpen(true);
+  };
+
+  // Handle delete column
+  const handleDeleteColumn = (columnId) => {
+    dispatch(deleteKanbanColumn({ columnId }));
   };
 
   // Handle form changes
@@ -643,6 +693,8 @@ function Kanban() {
           ...prev,
           attachments: [...prev.attachments, ...files],
         }));
+      } else if (field === 'columnName') {
+        setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
       } else {
         setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
       }
@@ -657,7 +709,7 @@ function Kanban() {
     setFormValues((prev) => ({
       ...prev,
       attachments: prev.attachments.filter((_, index) => `file-${index}` !== attachmentId),
-    }))
+    }));
   };
 
   // Safe date parsing
@@ -690,17 +742,12 @@ function Kanban() {
         priority: formValues.priority,
         startDate: formValues.startDate || null,
         endDate: formValues.endDate || null,
-        status: currentColumn,
-        projectId,
+        status: currentColumn || 'À faire',
+        projectId: parseInt(projectId),
+        backlogIds: formValues.backlogIds || [],
       };
 
       const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
-
-      // Update Redux tasks state
-      dispatch({
-        type: 'tasks/addTask',
-        payload: { ...result, attachments: result.attachments || [] },
-      });
 
       // Send notifications
       formValues.assignedUsers.forEach((user) => {
@@ -717,7 +764,8 @@ function Kanban() {
         priority: result.priority || 'Medium',
         startDate: parseDate(result.startDate),
         endDate: parseDate(result.endDate),
-        attachments: formValues.attachments, // Preserve client-side attachments
+        attachments: [],
+        backlogIds: result.backlogIds || [],
       });
 
       // Update editingTask with server-side data
@@ -728,7 +776,6 @@ function Kanban() {
 
       setDialogMode('view');
       setIsEditing(false);
-      // Keep dialog open to show created task
     } catch (err) {
       console.error('[Kanban] Error creating task:', {
         message: err.message,
@@ -738,7 +785,11 @@ function Kanban() {
         } : null,
         stack: err.stack,
       });
-      setKanbanError(`Erreur lors de la création de la tâche: ${err.message || 'Erreur inconnue. Veuillez vérifier les données et réessayer.'}`);
+      setKanbanError(
+        err.response?.data?.message ||
+        err.message ||
+        'Erreur lors de la création de la tâche. Vérifiez les fichiers et réessayez.'
+      );
     } finally {
       setIsCreatingTask(false);
     }
@@ -762,8 +813,9 @@ function Kanban() {
         priority: formValues.priority,
         startDate: formValues.startDate || null,
         endDate: formValues.endDate || null,
-        status: currentColumn,
-        projectId,
+        status: currentColumn || editingTask.status || 'À faire',
+        projectId: parseInt(projectId),
+        backlogIds: formValues.backlogIds || [],
       };
 
       const result = await dispatch(updateTask({
@@ -788,6 +840,7 @@ function Kanban() {
         startDate: parseDate(result.startDate),
         endDate: parseDate(result.endDate),
         attachments: [],
+        backlogIds: result.backlogIds || [],
       });
 
       // Update editingTask with server-side data
@@ -807,34 +860,112 @@ function Kanban() {
         } : null,
         stack: err.stack,
       });
-      setKanbanError(`Erreur lors de la mise à jour de la tâche: ${err.message || 'Erreur inconnue. Veuillez vérifier les données et réessayer.'}`);
+      setKanbanError(
+        err.response?.data?.message ||
+        err.message ||
+        'Erreur lors de la mise à jour de la tâche. Vérifiez les fichiers et réessayez.'
+      );
     } finally {
       setIsCreatingTask(false);
     }
   };
 
+  // Handle dialog close
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    setFormValues({
+      title: '',
+      description: '',
+      assignedUsers: [],
+      priority: 'Medium',
+      startDate: '',
+      endDate: '',
+      attachments: [],
+      columnName: '',
+      columnId: null,
+      backlogIds: [],
+    });
+    setCurrentColumn(null);
+    setIsEditing(false);
+    setEditingTask(null);
+    setDialogMode('view');
+    setKanbanError('');
+  };
+
+  // Handle form submission for columns
+  const handleFormSubmit = async () => {
+    try {
+      if (dialogMode === 'addColumn' || dialogMode === 'editColumn') {
+        if (!formValues.columnName.trim()) {
+          setKanbanError('Le nom de la colonne est requis.');
+          return;
+        }
+        if (dialogMode === 'addColumn') {
+          await dispatch(createKanbanColumn({
+            columnData: {
+              name: formValues.columnName,
+              projectId: parseInt(projectId),
+              displayOrder: columns.length + 1,
+            }
+          })).unwrap();
+        } else {
+          await dispatch(updateKanbanColumn({
+            columnId: formValues.columnId,
+            columnData: {
+              name: formValues.columnName,
+            }
+          })).unwrap();
+        }
+        handleDialogClose();
+        return;
+      }
+
+      // Task submission
+      if (isEditing) {
+        await handleUpdateTask();
+      } else {
+        await handleCreateTask();
+      }
+    } catch (err) {
+      setKanbanError(err.message || 'Erreur lors de la soumission.');
+    }
+  };
+
   // Get active task for drag overlay
   const getActiveTask = () => {
-    if (!activeId) return null;
-    for (const columnId of Object.keys(columns)) {
-      const task = columns[columnId].find((t) => t.id.toString() === activeId);
+    if (!activeId) {
+      console.log('[getActiveTask] No activeId set');
+      return null;
+    }
+    for (const columnName of Object.keys(columnsByStatus)) {
+      const task = columnsByStatus[columnName].find((t) => t.id.toString() === activeId);
       if (task) return task;
     }
+    console.log('[getActiveTask] No task found for activeId:', activeId);
     return null;
   };
 
   // Get active column for drag overlay
   const getActiveColumn = () => {
-    if (!activeId) return null;
-    if (columnOrder.includes(activeId)) {
-      return { id: activeId };
+    if (!activeId) {
+      console.log('[getActiveColumn] No activeId set');
+      return null;
     }
-    return null;
+    const column = columns.find(col => col.id.toString() === activeId);
+    if (!column) {
+      console.log('[getActiveColumn] No column found for activeId:', activeId);
+    }
+    return column;
   };
 
   // Handle user filter
   const handleUserFilterChange = (event, value) => {
     setSelectedUser(value ? value.email : '');
+  };
+
+  // Handle backlog filter
+  const handleBacklogFilterChange = (event, value) => {
+    setSelectedBacklog(value || null);
   };
 
   // Get priority label
@@ -865,7 +996,16 @@ function Kanban() {
   if (!project) {
     return (
       <Container maxWidth="xl" sx={{ mt: 4, mb: 6 }}>
-        <Alert severity="error">{kanbanError || 'Projet introuvable.'}</Alert>
+        <Alert
+          severity="error"
+          action={
+            <Button color="inherit" size="small" onClick={handleRetryFetch}>
+              Réessayer
+            </Button>
+          }
+        >
+          {kanbanError || 'Projet introuvable.'}
+        </Alert>
       </Container>
     );
   }
@@ -898,6 +1038,30 @@ function Kanban() {
             </Box>
           )}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4, alignItems: 'center' }}>
+            <Autocomplete
+              options={[{ id: '', name: 'Tous les backlogs' }, ...backlogs]}
+              getOptionLabel={(option) => option.name}
+              renderOption={(props, option) => {
+                const { key, ...otherProps } = props;
+                return (
+                  <li key={key} {...otherProps}>
+                    <Typography variant="body2">{option.name}</Typography>
+                  </li>
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Filtrer par backlog"
+                  variant="outlined"
+                  sx={{ minWidth: 300, bgcolor: 'white' }}
+                />
+              )}
+              value={selectedBacklog || { id: '', name: 'Tous les backlogs' }}
+              onChange={handleBacklogFilterChange}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              sx={{ minWidth: 200 }}
+            />
             <Autocomplete
               options={[{ email: '', name: 'Tous les utilisateurs' }, ...projectUsers]}
               getOptionLabel={(option) =>
@@ -957,6 +1121,17 @@ function Kanban() {
                 <MenuItem value="Low">Basse</MenuItem>
               </MuiSelect>
             </FormControl>
+            <StyledButton
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => {
+                setDialogMode('addColumn');
+                setFormValues({ ...formValues, columnName: '' });
+                setDialogOpen(true);
+              }}
+            >
+              Ajouter une colonne
+            </StyledButton>
           </Box>
           <DndContext
             collisionDetection={closestCorners}
@@ -965,119 +1140,108 @@ function Kanban() {
             sensors={sensors}
           >
             <SortableContext
-              items={columnOrder}
+              items={columns.map(col => col.id.toString())}
               strategy={horizontalListSortingStrategy}
             >
               <Grid container spacing={2} sx={{ flexWrap: 'nowrap', overflowX: 'auto', pb: 2 }}>
-                {columnOrder.map((columnId) => (
-                  <Grid item key={columnId}>
+                {[...columns].sort((a, b) => a.displayOrder - b.displayOrder).map((column) => (
+                  <Grid item key={column.id}>
                     <SortableColumn
-                      columnId={columnId}
+                      column={column}
                       columns={columns}
-                      columnLabels={columnLabels}
                       filteredColumns={filteredColumns}
                       users={projectUsers}
                       handleAddTask={handleAddTask}
+                      handleEditColumn={handleEditColumn}
+                      handleDeleteColumn={handleDeleteColumn}
                     />
                   </Grid>
                 ))}
               </Grid>
             </SortableContext>
             <DragOverlay>
-              {getActiveTask() ? (
-                <TaskCard
-                  priority={getActiveTask().priority}
-                  sx={{ cursor: 'grabbing', boxShadow: theme.shadows[8] }}
-                >
-                  <CardContent sx={{ p: '8px !important' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                      <Typography variant="subtitle2" sx={{ fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.3 }}>
-                        {getActiveTask().title}
+              {activeId ? (
+                getActiveTask() ? (
+                  <TaskCard
+                    priority={getActiveTask().priority}
+                    sx={{ cursor: 'grabbing', boxShadow: theme.shadows[8] }}
+                  >
+                    <CardContent sx={{ p: '8px !important' }}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontSize: '0.85rem', fontWeight: 600, lineHeight: 1.3 }}>
+                          {getActiveTask().title}
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          {getActiveTask().attachments?.length > 0 && (
+                            <AttachFileIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+                          )}
+                          <IconButton size="small">
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </Box>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{
+                          mb: 1,
+                          fontSize: '0.75rem',
+                          display: '-webkit-box',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {getActiveTask().description}
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {getActiveTask().attachments?.length > 0 && (
-                          <AttachFileIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
-                        )}
-                        <IconButton size="small">
-                          <MoreVertIcon fontSize="small" />
-                        </IconButton>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                          {getActiveTask().assignedUserEmails?.length > 0 ? (
+                            getActiveTask().assignedUserEmails.map((email) => (
+                              <Tooltip key={email} title={projectUsers.find((u) => u.email === email)?.name || email} placement="top">
+                                <Avatar
+                                  sx={{
+                                    bgcolor: getAvatarColor(projectUsers.find((u) => u.email === email)?.name || email),
+                                    width: 24,
+                                    height: 24,
+                                    fontSize: '0.7rem',
+                                  }}
+                                >
+                                  {generateInitials(projectUsers.find((u) => u.email === email)?.name || email)}
+                                </Avatar>
+                              </Tooltip>
+                            ))
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              Aucun
+                            </Typography>
+                          )}
+                        </Box>
+                        <PriorityChip
+                          priority={getActiveTask().priority}
+                          icon={<FlagIcon />}
+                          label={getPriorityLabel(getActiveTask().priority)}
+                          size="small"
+                        />
                       </Box>
-                    </Box>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{
-                        mb: 1,
-                        fontSize: '0.75rem',
-                        display: '-webkit-box',
-                        WebkitBoxOrient: 'vertical',
-                        WebkitLineClamp: 2,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {getActiveTask().description}
-                    </Typography>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                        {getActiveTask().assignedUserEmails?.length > 0 ? (
-                          getActiveTask().assignedUserEmails.map((email) => (
-                            <Tooltip key={email} title={projectUsers.find((u) => u.email === email)?.name || email} placement="top">
-                              <Avatar
-                                sx={{
-                                  bgcolor: getAvatarColor(projectUsers.find((u) => u.email === email)?.name || email),
-                                  width: 24,
-                                  height: 24,
-                                  fontSize: '0.7rem',
-                                }}
-                              >
-                                {generateInitials(projectUsers.find((u) => u.email === email)?.name || email)}
-                              </Avatar>
-                            </Tooltip>
-                          ))
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            Aucun
-                          </Typography>
-                        )}
-                      </Box>
-                      <PriorityChip
-                        priority={getActiveTask().priority}
-                        icon={<FlagIcon />}
-                        label={getPriorityLabel(getActiveTask().priority)}
-                        size="small"
-                      />
-                    </Box>
-                  </CardContent>
-                </TaskCard>
-              ) : getActiveColumn() ? (
-                <KanbanColumn sx={{ opacity: 0.8, boxShadow: theme.shadows[8] }}>
-                  <ColumnHeader>
-                    <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
-                      {columnLabels[getActiveColumn().id] || getActiveColumn().id}
-                    </Typography>
-                  </ColumnHeader>
-                </KanbanColumn>
+                    </CardContent>
+                  </TaskCard>
+                ) : getActiveColumn() ? (
+                  <KanbanColumn sx={{ opacity: 0.8, boxShadow: theme.shadows[8] }}>
+                    <ColumnHeader>
+                      <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                        {getActiveColumn().name}
+                      </Typography>
+                    </ColumnHeader>
+                  </KanbanColumn>
+                ) : null
               ) : null}
             </DragOverlay>
           </DndContext>
           <Dialog
             open={dialogOpen}
-            onClose={() => {
-              setDialogOpen(false);
-              setIsEditing(false);
-              setEditingTask(null);
-              setDialogMode('view');
-              setFormValues({
-                title: '',
-                description: '',
-                assignedUsers: [],
-                priority: 'Medium',
-                startDate: '',
-                endDate: '',
-                attachments: [],
-              });
-            }}
+            onClose={handleDialogClose}
             maxWidth="md"
             fullWidth
             fullScreen={isMobile}
@@ -1086,7 +1250,11 @@ function Kanban() {
             }}
           >
             <DialogTitle sx={{ fontWeight: 700, fontSize: '1.5rem' }}>
-              {dialogMode === 'view' ? `Détails de la tâche: ${editingTask?.title || ''}` : isEditing ? `Modifier la tâche: ${editingTask?.title || ''}` : `Nouvelle tâche dans ${currentColumn ? (columnLabels[currentColumn] || currentColumn) : 'Non spécifié'}`}
+              {dialogMode === 'addColumn' ? 'Ajouter une colonne' : 
+               dialogMode === 'editColumn' ? `Modifier la colonne: ${formValues.columnName}` : 
+               dialogMode === 'view' ? `Détails de la tâche: ${editingTask?.title || ''}` : 
+               isEditing ? `Modifier la tâche: ${editingTask?.title || ''}` : 
+               `Nouvelle tâche dans ${currentColumn || 'À faire'}`}
             </DialogTitle>
             <DialogContent>
               {isCreatingTask && (
@@ -1100,7 +1268,21 @@ function Kanban() {
                 </Alert>
               )}
               <Box sx={{ my: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {dialogMode === 'view' ? (
+                {dialogMode === 'addColumn' || dialogMode === 'editColumn' ? (
+                  <TextField
+                    autoFocus
+                    label="Nom de la colonne"
+                    variant="outlined"
+                    fullWidth
+                    required
+                    value={formValues.columnName}
+                    onChange={handleFormChange('columnName')}
+                    sx={{ bgcolor: 'white' }}
+                    disabled={isCreatingTask}
+                    error={!formValues.columnName}
+                    helperText={!formValues.columnName ? 'Le nom de la colonne est requis' : ''}
+                  />
+                ) : dialogMode === 'view' ? (
                   <>
                     <Box>
                       <Typography variant="subtitle2" sx={{ mb: 1 }}>Titre</Typography>
@@ -1150,7 +1332,18 @@ function Kanban() {
                       {editingTask?.attachments?.length > 0 ? (
                         <List dense>
                           {editingTask.attachments.map((attachment, index) => (
-                            <ListItem key={`server-attachment-${index}`}>
+                            <ListItem
+                              key={`server-attachment-${index}`}
+                              secondaryAction={
+                                <IconButton
+                                  edge="end"
+                                  onClick={() => window.open(`${attachment.filePath}`, '_blank')}
+                                  disabled={isCreatingTask}
+                                >
+                                  <FileDownloadIcon fontSize="small" />
+                                </IconButton>
+                              }
+                            >
                               <ListItemText
                                 primary={attachment.fileName}
                                 secondary={`Uploaded on ${new Date(attachment.uploadedAt).toLocaleString()}`}
@@ -1263,7 +1456,18 @@ function Kanban() {
                       {editingTask?.attachments?.length > 0 && (
                         <List dense>
                           {editingTask.attachments.map((attachment, index) => (
-                            <ListItem key={`server-attachment-${index}`}>
+                            <ListItem
+                              key={`server-attachment-${index}`}
+                              secondaryAction={
+                                <IconButton
+                                  edge="end"
+                                  onClick={() => window.open(`${attachment.filePath}`, '_blank')}
+                                  disabled={isCreatingTask}
+                                >
+                                  <FileDownloadIcon fontSize="small" />
+                                </IconButton>
+                              }
+                            >
                               <ListItemText
                                 primary={attachment.fileName}
                                 secondary={`Uploaded on ${new Date(attachment.uploadedAt).toLocaleString()}`}
@@ -1313,35 +1517,20 @@ function Kanban() {
             </DialogContent>
             <DialogActions sx={{ px: 3, pb: 3, gap: 2 }}>
               <StyledButton
-                onClick={() => {
-                  setDialogOpen(false);
-                  setIsEditing(false);
-                  setEditingTask(null);
-                  setDialogMode('view');
-                  setFormValues({
-                    title: '',
-                    description: '',
-                    assignedUsers: [],
-                    priority: 'Medium',
-                    startDate: '',
-                    endDate: '',
-                    attachments: [],
-                  });
-                  setKanbanError('');
-                }}
+                onClick={handleDialogClose}
                 variant="outlined"
                 sx={{ bgcolor: 'white' }}
                 disabled={isCreatingTask}
               >
                 {dialogMode === 'view' ? 'Fermer' : 'Annuler'}
               </StyledButton>
-              {dialogMode === 'edit' && (
+              {dialogMode !== 'view' && (
                 <StyledButton
-                  onClick={isEditing ? handleUpdateTask : handleCreateTask}
+                  onClick={handleFormSubmit}
                   variant="contained"
-                  disabled={!formValues.title || !currentColumn || !projectId || isCreatingTask}
+                  disabled={isCreatingTask || (dialogMode === 'edit' && !formValues.title) || (dialogMode === 'addColumn' && !formValues.columnName) || (dialogMode === 'editColumn' && !formValues.columnName)}
                 >
-                  {isCreatingTask ? 'Traitement...' : isEditing ? 'Mettre à jour la tâche' : 'Créer la tâche'}
+                  {isCreatingTask ? 'Traitement...' : dialogMode === 'addColumn' ? 'Créer' : dialogMode === 'editColumn' ? 'Modifier' : isEditing ? 'Mettre à jour la tâche' : 'Créer la tâche'}
                 </StyledButton>
               )}
             </DialogActions>
