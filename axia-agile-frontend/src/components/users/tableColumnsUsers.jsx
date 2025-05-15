@@ -64,7 +64,7 @@ export const adminColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${Array.isArray(admin.claimIds) ? admin.claimIds.length : 0} autorisations`} // Uses claimIds from backend-fetched claims
+          label={`${Array.isArray(admin.claimIds) ? admin.claimIds.length : 0} autorisations`}
           size="small"
           color="info"
           onClick={() => onManagePermissions(admin)}
@@ -101,7 +101,7 @@ export const adminColumns = [
     label: 'Actions',
     align: 'right',
     render: (admin, { onEdit, onDelete }) => {
-      console.log('Admin in actions column:', admin); // Debug log
+      console.log('Admin in actions column:', admin);
       return (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Tooltip title="Modifier">
@@ -109,7 +109,7 @@ export const adminColumns = [
               size="small"
               sx={{ mr: 1 }}
               onClick={() => {
-                console.log('Edit icon clicked for admin:', admin); // Debug log
+                console.log('Edit icon clicked for admin:', admin);
                 onEdit(admin);
               }}
               color="primary"
@@ -193,7 +193,7 @@ export const userColumns = [
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
         <Chip
-          label={`${Array.isArray(user.claimIds) ? user.claimIds.length : 0} autorisations`} // Uses claimIds from backend-fetched claims
+          label={`${Array.isArray(user.claimIds) ? user.claimIds.length : 0} autorisations`}
           size="small"
           color="info"
           onClick={() => onManagePermissions(user)}
@@ -230,7 +230,7 @@ export const userColumns = [
     label: 'Actions',
     align: 'right',
     render: (user, { onEdit, onDelete }) => {
-      console.log('User in actions column:', user); // Debug log
+      console.log('User in actions column:', user);
       return (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Tooltip title="Modifier">
@@ -238,7 +238,7 @@ export const userColumns = [
               size="small"
               sx={{ mr: 1 }}
               onClick={() => {
-                console.log('Edit icon clicked for user:', user); // Debug log
+                console.log('Edit icon clicked for user:', user);
                 onEdit(user);
               }}
               color="primary"
@@ -251,6 +251,102 @@ export const userColumns = [
               size="small"
               color="error"
               onClick={() => onDelete(user.id)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      );
+    },
+  },
+];
+
+export const superadminColumns = [
+  {
+    id: 'email',
+    label: 'Email',
+    render: (superadmin) => (
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Avatar
+          sx={{
+            mr: 2,
+            bgcolor: superadmin.isActive ? 'primary.main' : 'grey.400',
+            color: 'white',
+          }}
+        >
+          {superadmin.email.charAt(0).toUpperCase()}
+        </Avatar>
+        <Box>
+          <Typography variant="body2" fontWeight="medium">
+            {superadmin.email}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Superadministrateur
+          </Typography>
+        </Box>
+      </Box>
+    ),
+  },
+  {
+    id: 'telephone',
+    label: 'Téléphone',
+    render: (superadmin) => (
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <PhoneIcon fontSize="small" sx={{ mr: 1, color: 'text.secondary' }} />
+        <Typography variant="body2">{superadmin.phoneNumber || 'Non renseigné'}</Typography>
+      </Box>
+    ),
+  },
+  {
+    id: 'status',
+    label: 'Statut',
+    render: (superadmin, { onToggleActive }) => (
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Tooltip title={superadmin.isActive ? 'Désactiver' : 'Activer'}>
+          <Switch
+            checked={superadmin.isActive}
+            onChange={() => onToggleActive(superadmin.id)}
+            color="secondary"
+            inputProps={{ 'aria-label': 'Statut du compte' }}
+          />
+        </Tooltip>
+        <Chip
+          icon={superadmin.isActive ? <CheckIcon fontSize="small" /> : <CloseIcon fontSize="small" />}
+          label={superadmin.isActive ? 'Actif' : 'Inactif'}
+          size="small"
+          color={superadmin.isActive ? 'success' : 'error'}
+禁止使用
+          sx={{ ml: 1 }}
+        />
+      </Box>
+    ),
+  },
+  {
+    id: 'actions',
+    label: 'Actions',
+    align: 'right',
+    render: (superadmin, { onEdit, onDelete }) => {
+      console.log('Superadmin in actions column:', superadmin);
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Tooltip title="Modifier">
+            <IconButton
+              size="small"
+              sx={{ mr: 1 }}
+              onClick={() => {
+                console.log('Edit icon clicked for superadmin:', superadmin);
+                onEdit(superadmin);
+              }}
+              color="primary"
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Supprimer">
+            <IconButton
+              size="small"
+              color="error"
+              onClick={() => onDelete(superadmin.id)}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>

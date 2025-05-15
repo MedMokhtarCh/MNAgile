@@ -23,6 +23,11 @@ import ActiveSprintPage from "../pages/ActiveSprintPage";
 import { ProtectedRoute, RoleProtectedRoute } from "./ProtectedRoute";
 import RoleManagement from "../pages/RoleManagement";
 import ClaimManagement from "../pages/ClaimManagement";
+import LoadingPage from "../pages/LoadingPage";
+import SuperadminManagement from "../pages/SuperadminManagement";
+import MeetingScheduler from "../pages/MeetingScheduler";
+
+
 
 
 const AppRoutes = () => {
@@ -54,6 +59,7 @@ const AppRoutes = () => {
         <Route path="/" element={<AdminLayout />}>
           <Route path="/AdminManagement" element={<AdminManagement />} />
           <Route path="/SuperAdminStatistics" element={<SuperAdminStatistics />} />
+          <Route path="/SuperadminManagement" element={<SuperadminManagement />} />
           <Route path="/RoleManagement" element={<RoleManagement />} />
           <Route path="/ClaimManagement" element={<ClaimManagement />} />
           
@@ -65,14 +71,12 @@ const AppRoutes = () => {
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/projects" element={<Projects />} />
-        
-      
+              <Route path="/meetings" element={<MeetingScheduler />} />
           
+          
+        
         </Route>
       </Route>
-
- 
-  
         <Route element={<ProtectedRoute />}>
         <Route path="/projects" element={<Projects />} />
           <Route path="/project/:projectId" element={<ProjectLayout />}>
@@ -88,6 +92,7 @@ const AppRoutes = () => {
       {/* Error routes */}
     
       <Route path="*" element={<NotFound />} />
+      <Route path="LoadingPage" element={<LoadingPage />} />
       
     </Routes>
   );

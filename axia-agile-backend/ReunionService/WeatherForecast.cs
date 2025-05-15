@@ -1,4 +1,4 @@
-namespace ProjectService
+namespace ReunionService
 {
     public class WeatherForecast
     {

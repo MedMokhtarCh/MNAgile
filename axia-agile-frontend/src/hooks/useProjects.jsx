@@ -91,18 +91,37 @@ export const useProject = () => {
   const getFilteredProjects = useCallback(() => {
     let filteredProjects = [...projects];
 
+    // Filter projects based on current user's involvement
+    if (currentUser?.email && !hasRole(['Admin'])) {
+      filteredProjects = filteredProjects.filter((project) => {
+        const isCreator = project.createdBy === currentUser.email;
+        const isAssigned = [
+          ...(project.projectManagers || []),
+          ...(project.productOwners || []),
+          ...(project.scrumMasters || []),
+          ...(project.users || []),
+          ...(project.testers || []),
+          ...(project.observers || []),
+        ].includes(currentUser.email);
+        return isCreator || isAssigned;
+      });
+    }
+
+    // Apply search filter
     if (searchQuery) {
       filteredProjects = filteredProjects.filter((project) =>
         project.title?.toLowerCase()?.includes(searchQuery.toLowerCase())
       );
     }
 
+    // Apply date filter
     if (dateFilter) {
       filteredProjects = filteredProjects.filter(
         (project) => project.createdAt.split('T')[0] === dateFilter
       );
     }
 
+    // Sort projects
     filteredProjects.sort((a, b) => {
       const dateA = new Date(a.createdAt || '1970-01-01');
       const dateB = new Date(b.createdAt || '1970-01-01');
@@ -110,7 +129,7 @@ export const useProject = () => {
     });
 
     return filteredProjects;
-  }, [projects, searchQuery, dateFilter, sortOrder]);
+  }, [projects, searchQuery, dateFilter, sortOrder, currentUser, hasRole]);
 
   const navigateToProject = useCallback(
     (projectId) => {

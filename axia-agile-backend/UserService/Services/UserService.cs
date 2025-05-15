@@ -35,12 +35,11 @@ namespace UserService.Services
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-                // Assign default claims based on role
-                if (user.RoleId == 1) // SuperAdmin
+                if (user.RoleId == 1)
                 {
                     claimIds = await _context.Claims.Select(c => c.Id).ToListAsync();
                 }
-                else if (user.RoleId == 2) // Admin
+                else if (user.RoleId == 2)
                 {
                     var defaultAdminClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers" || c.Name == "CanCreateUsers")
@@ -48,7 +47,7 @@ namespace UserService.Services
                         .ToListAsync();
                     claimIds.AddRange(defaultAdminClaims);
                 }
-                else if (user.RoleId == 3) // ChefProjet
+                else if (user.RoleId == 3)
                 {
                     var defaultChefProjetClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers")
@@ -57,7 +56,6 @@ namespace UserService.Services
                     claimIds.AddRange(defaultChefProjetClaims);
                 }
 
-                // Ensure claimIds are unique and valid
                 claimIds = claimIds.Distinct().ToList();
                 foreach (var claimId in claimIds)
                 {
@@ -82,8 +80,19 @@ namespace UserService.Services
             }
         }
 
+        public async Task<List<User>> GetAllUsersAsync(int createdById)
+        {
+            _logger.LogInformation($"Fetching users created by ID {createdById}");
+            return await _context.Users
+                .Where(u => u.CreatedById == createdById)
+                .Include(u => u.UserClaims)
+                .ThenInclude(uc => uc.Claim)
+                .ToListAsync();
+        }
+
         public async Task<User> GetUserByIdAsync(int id)
         {
+            _logger.LogInformation($"Fetching user by ID {id}");
             return await _context.Users
                 .Include(u => u.Role)
                 .Include(u => u.UserClaims)
@@ -93,6 +102,7 @@ namespace UserService.Services
 
         public async Task<List<User>> GetAllUsersAsync()
         {
+            _logger.LogInformation("Fetching all users");
             return await _context.Users
                 .Include(u => u.Role)
                 .Include(u => u.UserClaims)
@@ -142,6 +152,41 @@ namespace UserService.Services
             }
         }
 
+        public async Task<User> PatchUserClaimsAsync(User user, List<int> claimIds)
+        {
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                foreach (var claimId in claimIds)
+                {
+                    if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
+                    {
+                        throw new InvalidOperationException($"Claim ID {claimId} n'existe pas.");
+                    }
+                }
+
+                var existingClaims = await _context.UserClaims.Where(uc => uc.UserId == user.Id).ToListAsync();
+                _context.UserClaims.RemoveRange(existingClaims);
+
+                foreach (var claimId in claimIds)
+                {
+                    _context.UserClaims.Add(new UserClaim { UserId = user.Id, ClaimId = claimId });
+                }
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation($"User {user.Email} claims patched successfully with claimIds: {string.Join(", ", claimIds)}");
+                return user;
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _logger.LogError($"Error patching user {user.Email} claims: {ex.Message}");
+                throw;
+            }
+        }
+
         public async Task DeleteUserAsync(int id)
         {
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -168,6 +213,5 @@ namespace UserService.Services
         {
             return await _context.Users.AnyAsync(u => u.Email == email);
         }
-
     }
 }

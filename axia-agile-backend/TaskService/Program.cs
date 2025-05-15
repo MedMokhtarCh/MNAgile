@@ -40,6 +40,7 @@ builder.Services.AddScoped<ProjectServiceClient>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<KanbanColumnService>();
 builder.Services.AddScoped<BacklogService>();
+builder.Services.AddScoped<SprintService>();
 
 // --------------------- JWT Auth + Cookie ---------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");

@@ -105,6 +105,7 @@ builder.Services.AddAuthorization(options =>
 
 // Add CSRF protection
 builder.Services.AddAntiforgery();
+builder.Services.AddScoped<EmailService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

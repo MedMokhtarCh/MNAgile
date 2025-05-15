@@ -32,7 +32,15 @@ const taskApi = axios.create({
   withCredentials: true,
 });
 
+const discussionApi = axios.create({
+  baseURL: 'https://localhost:7270/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  withCredentials: true,
+});
 
 
 
-export { userApi, profileApi, projectApi, taskApi };
+
+export { userApi, profileApi, projectApi, taskApi,discussionApi };

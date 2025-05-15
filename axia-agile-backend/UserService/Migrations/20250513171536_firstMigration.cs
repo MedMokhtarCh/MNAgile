@@ -54,7 +54,8 @@ namespace UserService.Migrations
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     DateCreated = table.Column<DateTime>(type: "datetime2", nullable: false),
                     LastLogin = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    RoleId = table.Column<int>(type: "int", nullable: false)
+                    RoleId = table.Column<int>(type: "int", nullable: false),
+                    CreatedById = table.Column<int>(type: "int", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -63,6 +64,12 @@ namespace UserService.Migrations
                         name: "FK_Users_Roles_RoleId",
                         column: x => x.RoleId,
                         principalTable: "Roles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_Users_Users_CreatedById",
+                        column: x => x.CreatedById,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -125,6 +132,11 @@ namespace UserService.Migrations
                 name: "IX_UserClaims_ClaimId",
                 table: "UserClaims",
                 column: "ClaimId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_CreatedById",
+                table: "Users",
+                column: "CreatedById");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_RoleId",

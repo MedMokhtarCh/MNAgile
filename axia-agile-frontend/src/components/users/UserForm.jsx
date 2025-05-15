@@ -13,6 +13,7 @@ import {
   MenuItem,
   InputAdornment,
   Box,
+  IconButton,
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -23,6 +24,7 @@ import {
   Business as BusinessIcon,
   Security as SecurityIcon,
   SupervisorAccount as SupervisorAccountIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import PermissionForm from '../permissions/PermissionForm';
 
@@ -47,15 +49,16 @@ const UserForm = ({
   onSave,
   isEditMode,
   roles,
-  claims, // Replaced permissionsGroups with claims
+  claims,
   disabledFields = [],
   requiredFields = ['email', 'firstName', 'lastName'],
   showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
 }) => {
-  console.log('UserForm open prop:', open);
+  console.log('UserForm - Open:', open, 'User:', user);
   const [errors, setErrors] = useState({});
 
   const handleChange = (field, value) => {
+    console.log(`UserForm - Changing ${field}:`, value);
     setUser({ ...user, [field]: value });
     if (errors[field]) {
       setErrors({ ...errors, [field]: null });
@@ -63,13 +66,16 @@ const UserForm = ({
   };
 
   const handlePermissionChange = (permissionId) => {
+    console.log('UserForm - Toggling permission:', permissionId);
     const claimIds = user.claimIds.includes(permissionId)
       ? user.claimIds.filter((id) => id !== permissionId)
       : [...user.claimIds, permissionId];
+    console.log('UserForm - Updated claimIds:', claimIds);
     setUser({ ...user, claimIds });
   };
 
   const handleSubmit = () => {
+    console.log('UserForm - Submitting user:', user);
     const newErrors = {};
 
     requiredFields.forEach((field) => {
@@ -82,11 +88,11 @@ const UserForm = ({
       newErrors.entreprise = "L'entreprise est requise pour les administrateurs";
     }
 
-    if (user.roleId === 3 && !user.jobTitle) {
+    if ([3, 4].includes(user.roleId) && !user.jobTitle) {
       newErrors.jobTitle = 'Le titre de poste est requis pour les chefs de projet';
     }
 
-    console.log('Form validation errors:', newErrors);
+    console.log('UserForm - Validation errors:', newErrors);
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -97,11 +103,18 @@ const UserForm = ({
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>{isEditMode ? 'Modifier utilisateur' : 'Créer utilisateur'}</DialogTitle>
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth disableBackdropClick disableEscapeKeyDown>
+      <DialogTitle>
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <span>{isEditMode ? 'Modifier utilisateur' : 'Créer utilisateur'}</span>
+          <IconButton onClick={onClose} aria-label="close">
+            <CloseIcon />
+          </IconButton>
+        </Box>
+      </DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={user.roleId === 1 ? 12 : 6}>
             <Grid container spacing={2}>
               {showFields.includes('firstName') && (
                 <Grid item xs={12} sm={6}>
@@ -251,46 +264,50 @@ const UserForm = ({
                   />
                 </Grid>
               )}
-             {showFields.includes('role') && (
-  <Grid item xs={12}>
-    <FormControl fullWidth error={!!errors.roleId}>
-      <InputLabel>Rôle</InputLabel>
-      <Select
-        value={user.roleId || (roles.length > 0 ? roles[0].id : '')}
-        label="Rôle"
-        onChange={(e) => handleChange('roleId', e.target.value)}
-        disabled={disabledFields.includes('role')}
-      >
-        {roles.length > 0 ? (
-          roles.map((role) => (
-            <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                {getIconComponent(role.iconName)}
-                <Box sx={{ ml: 1 }}>{role.label}</Box>
-              </Box>
-            </MenuItem>
-          ))
-        ) : (
-          <MenuItem value="" disabled>
-            Aucun rôle disponible
-          </MenuItem>
-        )}
-      </Select>
-      {errors.roleId && (
-        <span className="MuiFormHelperText-root Mui-error">{errors.roleId}</span>
-      )}
-    </FormControl>
-  </Grid>
-)}
+              {showFields.includes('role') && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth error={!!errors.roleId}>
+                    <InputLabel>Rôle</InputLabel>
+                    <Select
+                      value={user.roleId || (roles.length > 0 ? roles[0].id : '')}
+                      label="Rôle"
+                      onChange={(e) => handleChange('roleId', e.target.value)}
+                      disabled={disabledFields.includes('role')}
+                      sx={{ backgroundColor: disabledFields.includes('role') ? '#f5f5f5' : 'inherit' }}
+                    >
+                      {roles.length > 0 ? (
+                        roles.map((role) => (
+                          <MenuItem key={role.id} value={role.id} disabled={role.disabled}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              {getIconComponent(role.iconName)}
+                              <Box sx={{ ml: 1 }}>{role.label}</Box>
+                            </Box>
+                          </MenuItem>
+                        ))
+                      ) : (
+                        <MenuItem value="" disabled>
+                          Aucun rôle disponible
+                        </MenuItem>
+                      )}
+                    </Select>
+                    {errors.roleId && (
+                      <span className="MuiFormHelperText-root Mui-error">{errors.roleId}</span>
+                    )}
+                  </FormControl>
+                </Grid>
+              )}
             </Grid>
           </Grid>
-          <Grid item xs={12} md={6}>
-            <PermissionForm
-              claims={claims} // Pass claims instead of permissionsGroups
-              selectedPermissions={user.claimIds}
-              onPermissionChange={handlePermissionChange}
-            />
-          </Grid>
+          {user.roleId !== 1 && showFields.includes('permissions') && (
+            <Grid item xs={12} md={6}>
+              <PermissionForm
+                claims={claims}
+                selectedPermissions={Array.isArray(user.claimIds) ? user.claimIds : []}
+                onPermissionChange={handlePermissionChange}
+                userRoleId={user.roleId}
+              />
+            </Grid>
+          )}
         </Grid>
       </DialogContent>
       <DialogActions>

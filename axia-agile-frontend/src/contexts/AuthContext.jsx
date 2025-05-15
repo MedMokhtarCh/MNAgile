@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { login, logoutUser, fetchCurrentUser } from '../store/slices/authSlice';
+import LoadingPage from '../pages/LoadingPage';
 
 const AuthContext = createContext(null);
 
@@ -64,7 +65,7 @@ export const AuthProvider = ({ children }) => {
 
   // Ne rendre les enfants que lorsque l'authentification a été vérifiée
   if (!isInitialized) {
-    return <div>Chargement...</div>; 
+    return <LoadingPage />; 
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -33,8 +33,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
 import InputUserAssignment from '../common/InputUserAssignment';
 
-
-// Styled Components
+// Styled Components (unchanged)
 const StepperContainer = styled(Box)(({ theme }) => ({
   margin: '24px 0',
   padding: '12px 16px',
@@ -102,7 +101,7 @@ const FormButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-// Transition pour l'animation du dialogue
+// Transition for dialog animation
 const Transition = React.forwardRef(function Transition(props, ref) {
   return <Fade ref={ref} {...props} />;
 });
@@ -121,8 +120,8 @@ const ProjectFormStepper = ({
   registeredUsers,
   projectManagers,
   setProjectManagers,
-  observers, // Added observers prop
-  setObservers, // Corrected to setObservers
+  observers,
+  setObservers,
   productOwners,
   setProductOwners,
   scrumMasters,
@@ -139,14 +138,13 @@ const ProjectFormStepper = ({
 
   // Helper function to get user display name
   const getUserDisplayName = (user) => {
-    // Prioritize nom and prenom, fallback to name, then email
     if (user.nom && user.prenom) {
       return `${user.nom} ${user.prenom}`;
     }
     return user.name || user.email || 'Utilisateur inconnu';
   };
 
-  // Fonction pour rendre des chips d'utilisateurs à partir d'un tableau d'objets utilisateur
+  // Function to render user chips
   const renderUserChips = (users) => (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
       {users && users.length > 0 ? (
@@ -260,7 +258,7 @@ const ProjectFormStepper = ({
               placeholder="Sélectionner les chefs de projet"
               getAvatarColor={getAvatarColor}
               generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName} // Added to ensure consistent name display
+              getOptionLabel={getUserDisplayName}
             />
             <InputUserAssignment
               options={registeredUsers}
@@ -305,7 +303,7 @@ const ProjectFormStepper = ({
             <InputUserAssignment
               options={registeredUsers}
               value={observers}
-              onChange={(event, value) => setObservers(value)} // Corrected to setObservers
+              onChange={(event, value) => setObservers(value)}
               label="Observateurs"
               placeholder="Sélectionner les observateurs"
               getAvatarColor={getAvatarColor}
@@ -395,14 +393,25 @@ const ProjectFormStepper = ({
     }
   };
 
+  // Handle dialog close only for specific reasons
+  const handleDialogClose = (event, reason) => {
+    // Prevent closing when clicking on the backdrop
+    if (reason === 'backdropClick') {
+      return;
+    }
+    // Allow closing for other reasons (e.g., clicking Close icon or Cancel button)
+    onClose();
+  };
+
   return (
     <Dialog
       fullScreen={isMobile}
       open={open}
-      onClose={onClose}
+      onClose={handleDialogClose} // Use custom close handler
       maxWidth="md"
       fullWidth
       TransitionComponent={Transition}
+      disableEscapeKeyDown // Optional: Prevent closing with Escape key
     >
       <AppBar
         position="relative"

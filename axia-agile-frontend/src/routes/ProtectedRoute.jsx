@@ -1,9 +1,11 @@
 import React from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; // Assurez-vous que useAuth est importé
+import { useAuth } from '../contexts/AuthContext'; 
+import LoadingPage from '../pages/LoadingPage';
 
 
-// Utilitaire pour mapper les roleId aux noms de rôles
+
+
 export const mapRoleIdToRole = (roleId) => {
   switch (roleId) {
     case 1:
@@ -25,7 +27,7 @@ export const ProtectedRoute = ({ children }) => {
   const location = useLocation();
 
   if (!isInitialized || loading) {
-    return <div>Chargement...</div>; 
+    return <LoadingPage />; 
   }
 
   if (!isAuthenticated) {
@@ -42,7 +44,7 @@ export const RoleProtectedRoute = ({ allowedRoles, children }) => {
   console.log(isAuthenticated)
 
   if (!isInitialized || loading) {
-    return <div>Chargement...</div>; 
+    return <LoadingPage />; 
   }
 
   if (!isAuthenticated) {

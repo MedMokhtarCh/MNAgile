@@ -1,15 +1,30 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { taskApi } from '../../services/api';
 
+// Normalize priority value
+const normalizePriority = (priority) => {
+  if (!priority) return 'MEDIUM';
+  const priorityMap = {
+    high: 'HIGH',
+    medium: 'MEDIUM',
+    low: 'LOW',
+    HIGH: 'HIGH',
+    MEDIUM: 'MEDIUM',
+    LOW: 'LOW',
+  };
+  return priorityMap[priority.toUpperCase()] || 'MEDIUM';
+};
+
 // Fetch all tasks
 export const fetchAllTasks = createAsyncThunk(
   'tasks/fetchAllTasks',
-  async ({ projectId, backlogId }, { rejectWithValue }) => {
+  async ({ projectId, backlogId, sprintId }, { rejectWithValue }) => {
     try {
       let url = '/Tasks';
       const params = [];
       if (projectId) params.push(`projectId=${projectId}`);
       if (backlogId) params.push(`backlogId=${backlogId}`);
+      if (sprintId) params.push(`sprintId=${sprintId}`);
       if (params.length) url += `?${params.join('&')}`;
       const response = await taskApi.get(url);
       return response.data;
@@ -175,6 +190,70 @@ export const unlinkTaskFromBacklog = createAsyncThunk(
   }
 );
 
+// Fetch sprints
+export const fetchSprints = createAsyncThunk(
+  'tasks/fetchSprints',
+  async ({ projectId }, { rejectWithValue }) => {
+    try {
+      const response = await taskApi.get(`/Sprints/project/${projectId}`);
+      return response.data;
+    } catch (err) {
+      console.error('[fetchSprints] Error:', {
+        message: err.message,
+        response: err.response ? {
+          status: err.response.status,
+          data: err.response.data,
+        } : null,
+      });
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Create sprint
+export const createSprint = createAsyncThunk(
+  'tasks/createSprint',
+  async ({ sprintData }, { rejectWithValue }) => {
+    try {
+      console.log('[createSprint] Sending payload:', sprintData);
+      const response = await taskApi.post('/Sprints', sprintData);
+      return response.data;
+    } catch (err) {
+      console.error('[createSprint] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Update sprint
+export const updateSprint = createAsyncThunk(
+  'tasks/updateSprint',
+  async ({ sprintId, sprintData }, { rejectWithValue }) => {
+    try {
+      console.log('[updateSprint] Sending payload:', sprintData);
+      const response = await taskApi.put(`/Sprints/${sprintId}`, sprintData);
+      return response.data;
+    } catch (err) {
+      console.error('[updateSprint] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// Delete sprint
+export const deleteSprint = createAsyncThunk(
+  'tasks/deleteSprint',
+  async ({ sprintId }, { rejectWithValue }) => {
+    try {
+      await taskApi.delete(`/Sprints/${sprintId}`);
+      return sprintId;
+    } catch (err) {
+      console.error('[deleteSprint] Error:', err);
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
 // Create task
 export const createTask = createAsyncThunk(
   'tasks/createTask',
@@ -183,7 +262,14 @@ export const createTask = createAsyncThunk(
       const formData = new FormData();
       // Ensure createdIn is included in metadata
       const metadata = { createdIn: taskData.createdIn || 'kanban' }; // Default to 'kanban' if not specified
-      const taskPayload = { ...taskData, metadata };
+      const taskPayload = { 
+        ...taskData, 
+        metadata,
+        priority: normalizePriority(taskData.priority), // Normalize priority
+        backlogIds: taskData.backlogIds || [], // Ensure backlogIds is an array
+        subtasks: taskData.subtasks || [], // Ensure subtasks is an array
+        sprintId: taskData.sprintId || null // Include sprintId (null if not provided)
+      };
       Object.keys(taskPayload).forEach((key) => {
         if (Array.isArray(taskPayload[key])) {
           taskPayload[key].forEach((item, index) => {
@@ -219,7 +305,14 @@ export const updateTask = createAsyncThunk(
       const formData = new FormData();
       // Preserve or set createdIn in metadata
       const metadata = { createdIn: taskData.createdIn || taskData.metadata?.createdIn || 'kanban' };
-      const taskPayload = { ...taskData, metadata };
+      const taskPayload = { 
+        ...taskData, 
+        metadata,
+        priority: normalizePriority(taskData.priority), // Normalize priority
+        backlogIds: taskData.backlogIds || [], // Ensure backlogIds is an array
+        subtasks: taskData.subtasks || [], // Ensure subtasks is an array
+        sprintId: taskData.sprintId || null // Include sprintId (null if not provided)
+      };
       Object.keys(taskPayload).forEach((key) => {
         if (Array.isArray(taskPayload[key])) {
           taskPayload[key].forEach((item, index) => {
@@ -242,7 +335,11 @@ export const updateTask = createAsyncThunk(
       return response.data;
     } catch (err) {
       console.error('[updateTask] Error:', err);
-      return rejectWithValue(err.response?.data || err.message);
+      return rejectWithValue({
+        message: err.response?.data?.message || err.message,
+        errors: err.response?.data?.errors || null,
+        status: err.response?.status || null
+      });
     }
   }
 );
@@ -267,6 +364,7 @@ const taskSlice = createSlice({
     tasks: [],
     columns: [],
     backlogs: [],
+    sprints: [],
     status: 'idle',
     error: null,
   },
@@ -300,7 +398,7 @@ const taskSlice = createSlice({
       })
       .addCase(fetchAllTasks.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to fetch tasks';
+        state.error = action.payload.message || 'Failed to fetch tasks';
       })
       // Fetch Kanban Columns
       .addCase(fetchKanbanColumns.pending, (state) => {
@@ -312,7 +410,7 @@ const taskSlice = createSlice({
       })
       .addCase(fetchKanbanColumns.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to fetch columns';
+        state.error = action.payload.message || 'Failed to fetch columns';
       })
       // Create Kanban Column
       .addCase(createKanbanColumn.pending, (state) => {
@@ -324,7 +422,7 @@ const taskSlice = createSlice({
       })
       .addCase(createKanbanColumn.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to create column';
+        state.error = action.payload.message || 'Failed to create column';
       })
       // Update Kanban Column
       .addCase(updateKanbanColumn.pending, (state) => {
@@ -339,7 +437,7 @@ const taskSlice = createSlice({
       })
       .addCase(updateKanbanColumn.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to update column';
+        state.error = action.payload.message || 'Failed to update column';
       })
       // Delete Kanban Column
       .addCase(deleteKanbanColumn.pending, (state) => {
@@ -351,7 +449,7 @@ const taskSlice = createSlice({
       })
       .addCase(deleteKanbanColumn.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to delete column';
+        state.error = action.payload.message || 'Failed to update column';
       })
       // Fetch Backlogs
       .addCase(fetchBacklogs.pending, (state) => {
@@ -363,7 +461,7 @@ const taskSlice = createSlice({
       })
       .addCase(fetchBacklogs.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to fetch backlogs';
+        state.error = action.payload.message || 'Failed to fetch backlogs';
       })
       // Create Backlog
       .addCase(createBacklog.pending, (state) => {
@@ -375,7 +473,7 @@ const taskSlice = createSlice({
       })
       .addCase(createBacklog.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to create backlog';
+        state.error = action.payload.message || 'Failed to create backlog';
       })
       // Update Backlog
       .addCase(updateBacklog.pending, (state) => {
@@ -390,7 +488,7 @@ const taskSlice = createSlice({
       })
       .addCase(updateBacklog.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to update backlog';
+        state.error = action.payload.message || 'Failed to update backlog';
       })
       // Delete Backlog
       .addCase(deleteBacklog.pending, (state) => {
@@ -402,7 +500,62 @@ const taskSlice = createSlice({
       })
       .addCase(deleteBacklog.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to delete backlog';
+        state.error = action.payload.message || 'Failed to delete backlog';
+      })
+      // Fetch Sprints
+      .addCase(fetchSprints.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(fetchSprints.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.sprints = action.payload;
+      })
+      .addCase(fetchSprints.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload.message || 'Failed to fetch sprints';
+      })
+      // Create Sprint
+      .addCase(createSprint.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(createSprint.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.sprints.push(action.payload);
+      })
+      .addCase(createSprint.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload.message || 'Failed to create sprint';
+      })
+      // Update Sprint
+      .addCase(updateSprint.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(updateSprint.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        const index = state.sprints.findIndex((sprint) => sprint.id === action.payload.id);
+        if (index !== -1) {
+          state.sprints[index] = action.payload;
+        }
+      })
+      .addCase(updateSprint.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload.message || 'Failed to update sprint';
+      })
+      // Delete Sprint
+      .addCase(deleteSprint.pending, (state) => {
+        state.status = 'loading';
+      })
+      .addCase(deleteSprint.fulfilled, (state, action) => {
+        state.status = 'succeeded';
+        state.sprints = state.sprints.filter((sprint) => sprint.id !== action.payload);
+        // Optionally clear sprintId from tasks
+        state.tasks = state.tasks.map((task) =>
+          task.sprintId === action.payload ? { ...task, sprintId: null } : task
+        );
+      })
+      .addCase(deleteSprint.rejected, (state, action) => {
+        state.status = 'failed';
+        state.error = action.payload.message || 'Failed to delete sprint';
       })
       // Link Task to Backlog
       .addCase(linkTaskToBacklog.pending, (state) => {
@@ -418,7 +571,7 @@ const taskSlice = createSlice({
       })
       .addCase(linkTaskToBacklog.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to link task to backlog';
+        state.error = action.payload.message || 'Failed to link task to backlog';
       })
       // Unlink Task from Backlog
       .addCase(unlinkTaskFromBacklog.pending, (state) => {
@@ -434,7 +587,7 @@ const taskSlice = createSlice({
       })
       .addCase(unlinkTaskFromBacklog.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to unlink task from backlog';
+        state.error = action.payload.message || 'Failed to unlink task from backlog';
       })
       // Create Task
       .addCase(createTask.pending, (state) => {
@@ -446,7 +599,7 @@ const taskSlice = createSlice({
       })
       .addCase(createTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to create task';
+        state.error = action.payload.message || 'Failed to create task';
       })
       // Update Task
       .addCase(updateTask.pending, (state) => {
@@ -461,7 +614,7 @@ const taskSlice = createSlice({
       })
       .addCase(updateTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to update task';
+        state.error = action.payload.message || 'Failed to update task';
       })
       // Delete Task
       .addCase(deleteTask.pending, (state) => {
@@ -473,7 +626,7 @@ const taskSlice = createSlice({
       })
       .addCase(deleteTask.rejected, (state, action) => {
         state.status = 'failed';
-        state.error = action.payload || 'Failed to delete task';
+        state.error = action.payload.message || 'Failed to delete task';
       });
   },
 });

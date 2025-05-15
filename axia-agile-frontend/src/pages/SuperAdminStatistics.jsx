@@ -1,7 +1,9 @@
-import React, { useEffect } from 'react';
+import React from 'react';
+import { useEffect } from 'react';
 import { Box, CircularProgress, Typography, Button } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchUsers } from '../store/slices/usersSlice';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchUsersByCreatedById } from '../store/slices/usersSlice';
 import PageTitle from '../components/common/PageTitle';
 import StatisticsCards from '../components/superAdminDashboard/StatisticsCards';
 import AdminDistributionChart from '../components/superAdminDashboard/AdminDistributionChart';
@@ -10,17 +12,19 @@ import EnterpriseList from '../components/superAdminDashboard/EnterpriseList';
 const SuperAdminStatistics = () => {
   const dispatch = useDispatch();
   const { users, loading, error } = useSelector((state) => state.users);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
-    dispatch(fetchUsers());
-  }, [dispatch]);
+    if (currentUser) {
+      console.log('[SuperAdminStatistics] Dispatching fetchUsersByCreatedById with currentUser:', currentUser);
+      dispatch(fetchUsersByCreatedById(currentUser.id));
+    }
+  }, [dispatch, currentUser]);
 
-  // Compute stats and entrepriseData
   const { stats, entrepriseData } = React.useMemo(() => {
-    // Filter admins (roleId 2), exclude superadmin (roleId 1) and others
+    console.log('[SuperAdminStatistics] Calculating stats and entrepriseData with users:', users);
     const admins = users.filter((user) => user.roleId === 2);
 
-    // Compute stats and group by entreprise in one pass
     const { totalAdmins, activeAdmins, entrepriseMap } = admins.reduce(
       (acc, admin) => {
         acc.totalAdmins += 1;
@@ -59,37 +63,37 @@ const SuperAdminStatistics = () => {
     };
   }, [users]);
 
+  console.log('[SuperAdminStatistics] Rendering with state:', { users, loading, error, stats, entrepriseData });
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+        <Typography color="error">Erreur: {error}</Typography>
+        <Button
+          onClick={() => dispatch(fetchUsersByCreatedById(currentUser?.id))}
+          variant="contained"
+          sx={{ ml: 2 }}
+        >
+          Réessayer
+        </Button>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ p: 3 }}>
       <PageTitle>Rapport Statistique des Comptes Admin</PageTitle>
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
-          <CircularProgress size={60} />
-        </Box>
-      ) : error ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
-          <Typography color="error">Erreur: {error}</Typography>
-          <Button
-            onClick={() => dispatch(fetchUsers())}
-            variant="contained"
-            sx={{ ml: 2 }}
-          >
-            Réessayer
-          </Button>
-        </Box>
-      ) : (
-        <>
-          {/* Cartes de statistiques */}
-          <StatisticsCards stats={stats} />
-
-          {/* Graphiques */}
-          <AdminDistributionChart stats={stats} />
-
-          {/* Liste des entreprises et de leurs admins */}
-          <EnterpriseList entrepriseData={entrepriseData} />
-        </>
-      )}
+      <StatisticsCards stats={stats} />
+      <AdminDistributionChart stats={stats} />
+      <EnterpriseList entrepriseData={entrepriseData} />
     </Box>
   );
 };

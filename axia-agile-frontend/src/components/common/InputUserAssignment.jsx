@@ -9,6 +9,7 @@ const InputUserAssignment = ({
   placeholder,
   getAvatarColor,
   generateInitials,
+  disabled,
 }) => {
   const safeOptions = Array.isArray(options) ? options : [];
   const safeValue = Array.isArray(value) ? value : [];
@@ -46,22 +47,26 @@ const InputUserAssignment = ({
           label={label}
           placeholder={placeholder}
           variant="outlined"
+          disabled={disabled}
         />
       )}
       renderTags={(tagValue, getTagProps) =>
-        tagValue.map((option, index) => (
-          <Chip
-            key={option.email || index}
-            avatar={
-              <Avatar sx={{ bgcolor: getAvatarColor(getFullName(option)) }}>
-                {generateInitials(getFullName(option))}
-              </Avatar>
-            }
-            label={getFullName(option)}
-            {...getTagProps({ index })}
-            sx={{ borderRadius: 16 }}
-          />
-        ))
+        tagValue.map((option, index) => {
+          const { key, ...chipProps } = getTagProps({ index }); // Exclude key from spread
+          return (
+            <Chip
+              key={option.email || index}
+              avatar={
+                <Avatar sx={{ bgcolor: getAvatarColor(getFullName(option)) }}>
+                  {generateInitials(getFullName(option))}
+                </Avatar>
+              }
+              label={getFullName(option)}
+              {...chipProps}
+              sx={{ borderRadius: 16 }}
+            />
+          );
+        })
       }
       renderOption={(props, option) => (
         <li {...props}>
@@ -80,6 +85,7 @@ const InputUserAssignment = ({
         </li>
       )}
       sx={{ mb: 2 }}
+      disabled={disabled}
     />
   );
 };

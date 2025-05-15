@@ -119,9 +119,7 @@ const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
                 error={!!errors.name}
                 helperText={errors.name}
               />
-              <FormHelperText>
-                Le nom du rôle sera affiché dans les listes d'utilisateurs et les menus de sélection.
-              </FormHelperText>
+           
             </Grid>
           </Grid>
         )}

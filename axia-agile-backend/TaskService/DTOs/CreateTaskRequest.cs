@@ -14,7 +14,9 @@ namespace TaskService.DTOs
         public DateTime? EndDate { get; set; }
         public List<string?> AssignedUserEmails { get; set; } = new List<string>();
         public int ProjectId { get; set; }
-        public List<int> BacklogIds { get; set; } = new List<int>(); // New field
+        public List<int>? BacklogIds { get; set; } = new List<int>();
+        public List<string>? Subtasks { get; set; } = new List<string>();
+        public int? SprintId { get; set; }
 
         public void Validate()
         {
@@ -24,6 +26,8 @@ namespace TaskService.DTOs
                 throw new ArgumentException("Un ID de projet valide est requis.");
             if (AssignedUserEmails != null && AssignedUserEmails.Any(email => string.IsNullOrEmpty(email) || !IsValidEmail(email)))
                 throw new ArgumentException("Tous les emails fournis doivent être valides.");
+            if (Subtasks != null && Subtasks.Any(s => string.IsNullOrWhiteSpace(s)))
+                throw new ArgumentException("Les sous-tâches ne peuvent pas être vides.");
         }
 
         private bool IsValidEmail(string email)

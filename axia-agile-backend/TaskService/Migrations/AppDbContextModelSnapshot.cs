@@ -83,6 +83,46 @@ namespace TaskService.Migrations
                     b.ToTable("KanbanColumns");
                 });
 
+            modelBuilder.Entity("TaskService.Models.Sprint", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("Sprints");
+                });
+
             modelBuilder.Entity("TaskService.Models.Task", b =>
                 {
                     b.Property<int>("Id")
@@ -118,11 +158,17 @@ namespace TaskService.Migrations
                     b.Property<int>("ProjectId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("SprintId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime?>("StartDate")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Status")
                         .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Subtasks")
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("Title")
@@ -133,6 +179,8 @@ namespace TaskService.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SprintId");
 
                     b.ToTable("Tasks");
                 });
@@ -150,6 +198,13 @@ namespace TaskService.Migrations
                     b.HasIndex("BacklogId");
 
                     b.ToTable("TaskBacklogs");
+                });
+
+            modelBuilder.Entity("TaskService.Models.Task", b =>
+                {
+                    b.HasOne("TaskService.Models.Sprint", null)
+                        .WithMany("Tasks")
+                        .HasForeignKey("SprintId");
                 });
 
             modelBuilder.Entity("TaskService.Models.TaskBacklog", b =>
@@ -174,6 +229,11 @@ namespace TaskService.Migrations
             modelBuilder.Entity("TaskService.Models.Backlog", b =>
                 {
                     b.Navigation("TaskBacklogs");
+                });
+
+            modelBuilder.Entity("TaskService.Models.Sprint", b =>
+                {
+                    b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("TaskService.Models.Task", b =>

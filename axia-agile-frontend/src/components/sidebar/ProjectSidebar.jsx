@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -11,17 +11,13 @@ import {
   Box,
   Divider,
   Avatar,
-  Collapse,
 } from '@mui/material';
 import {
   FaChartBar,
   FaListAlt,
   FaCalendar,
   FaRegCommentDots,
-  FaTasks,
   FaSignOutAlt,
-  FaAngleDown,
-  FaAngleUp,
   FaClipboardList,
   FaPlay,
   FaArrowLeft,
@@ -30,13 +26,8 @@ import FolderIcon from '@mui/icons-material/Folder';
 import './Sidebar.css';
 
 const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
-  const [openScrum, setOpenScrum] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-
-  const handleScrumToggle = () => {
-    setOpenScrum((prev) => !prev);
-  };
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
@@ -180,6 +171,20 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
         <ListItem
           button
           component={Link}
+          to={`/project/${projectId}/backlog`}
+          className={`menu-item ${isActive(`/project/${projectId}/backlog`)}`}
+        >
+          <ListItemIcon className="menu-icon">
+            <Tooltip title="Backlog" placement="right">
+              <FaClipboardList />
+            </Tooltip>
+          </ListItemIcon>
+          {!collapsed && <ListItemText primary="Backlog" />}
+        </ListItem>
+
+        <ListItem
+          button
+          component={Link}
           to={`/project/${projectId}/kanban`}
           className={`menu-item ${isActive(`/project/${projectId}/kanban`)}`}
         >
@@ -193,59 +198,17 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
 
         <ListItem
           button
-          className={`menu-item ${isActive(`/project/${projectId}/backlog`) ||
-            isActive(`/project/${projectId}/ActiveSprintPage`)}`}
-          onClick={handleScrumToggle}
+          component={Link}
+          to={`/project/${projectId}/ActiveSprintPage`}
+          className={`menu-item ${isActive(`/project/${projectId}/ActiveSprintPage`)}`}
         >
           <ListItemIcon className="menu-icon">
-            <Tooltip title="Scrum" placement="right">
-              <FaTasks />
+            <Tooltip title="Sprint" placement="right">
+              <FaPlay />
             </Tooltip>
           </ListItemIcon>
-          {!collapsed && <ListItemText primary="Scrum" />}
-          {!collapsed &&
-            (openScrum ? (
-              <FaAngleUp className="scrum-toggle-icon" />
-            ) : (
-              <FaAngleDown className="scrum-toggle-icon" />
-            ))}
+          {!collapsed && <ListItemText primary="Sprint" />}
         </ListItem>
-
-        <Collapse in={openScrum} timeout="auto" unmountOnExit>
-          <List component="div" disablePadding>
-            <ListItem
-              button
-              component={Link}
-              to={`/project/${projectId}/backlog`}
-              className={`menu-item submenu-item ${isActive(
-                `/project/${projectId}/backlog`
-              )}`}
-            >
-              <ListItemIcon className="menu-icon">
-                <Tooltip title="Backlog" placement="right">
-                  <FaClipboardList />
-                </Tooltip>
-              </ListItemIcon>
-              {!collapsed && <ListItemText primary="Backlog" />}
-            </ListItem>
-
-            <ListItem
-              button
-              component={Link}
-              to={`/project/${projectId}/ActiveSprintPage`}
-              className={`menu-item submenu-item ${isActive(
-                `/project/${projectId}/ActiveSprintPage`
-              )}`}
-            >
-              <ListItemIcon className="menu-icon">
-                <Tooltip title="Sprint" placement="right">
-                  <FaPlay />
-                </Tooltip>
-              </ListItemIcon>
-              {!collapsed && <ListItemText primary="Sprint" />}
-            </ListItem>
-          </List>
-        </Collapse>
 
         <ListItem
           button
@@ -265,9 +228,7 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
           button
           component={Link}
           to={`/project/${projectId}/GroupDiscussion`}
-          className={`menu-item ${isActive(
-            `/project/${projectId}/GroupDiscussion`
-          )}`}
+          className={`menu-item ${isActive(`/project/${projectId}/GroupDiscussion`)}`}
         >
           <ListItemIcon className="menu-icon">
             <Tooltip title="Messages" placement="right">

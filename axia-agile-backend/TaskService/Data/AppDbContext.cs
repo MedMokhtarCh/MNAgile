@@ -1,5 +1,4 @@
-﻿
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TaskService.Models;
 using Task = TaskService.Models.Task;
 
@@ -15,12 +14,13 @@ namespace TaskService.Data
         public DbSet<KanbanColumn> KanbanColumns { get; set; }
         public DbSet<Backlog> Backlogs { get; set; }
         public DbSet<TaskBacklog> TaskBacklogs { get; set; }
+        public DbSet<Sprint> Sprints { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Existing Task configuration
+            // Task configuration
             modelBuilder.Entity<Task>()
                 .Property(t => t.AssignedUserIds)
                 .HasColumnType("nvarchar(max)");
@@ -30,10 +30,14 @@ namespace TaskService.Data
                 .HasColumnType("nvarchar(max)");
 
             modelBuilder.Entity<Task>()
+                .Property(t => t.Subtasks)
+                .HasColumnType("nvarchar(max)");
+
+            modelBuilder.Entity<Task>()
                 .Property(t => t.ProjectId)
                 .IsRequired();
 
-            // Existing KanbanColumn configuration
+            // KanbanColumn configuration
             modelBuilder.Entity<KanbanColumn>()
                 .Property(c => c.Name)
                 .IsRequired()
@@ -74,6 +78,25 @@ namespace TaskService.Data
                 .HasOne(tb => tb.Backlog)
                 .WithMany(b => b.TaskBacklogs)
                 .HasForeignKey(tb => tb.BacklogId);
+
+            // Sprint configuration
+            modelBuilder.Entity<Sprint>()
+                .Property(s => s.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+
+            modelBuilder.Entity<Sprint>()
+                .Property(s => s.ProjectId)
+                .IsRequired();
+
+            modelBuilder.Entity<Sprint>()
+                .HasIndex(s => new { s.ProjectId, s.Name })
+                .IsUnique();
+
+            modelBuilder.Entity<Sprint>()
+                .HasMany(s => s.Tasks)
+                .WithOne()
+                .HasForeignKey(t => t.SprintId);
         }
     }
 }

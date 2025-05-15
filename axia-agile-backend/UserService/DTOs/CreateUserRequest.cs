@@ -8,7 +8,8 @@
         public string LastName { get; set; }
         public string PhoneNumber { get; set; }
         public string JobTitle { get; set; }
-        public string Entreprise { get; set; } 
+        public string Entreprise { get; set; }
+        public int? CreatedById { get; set; }
         public int RoleId { get; set; }
         public List<int> ClaimIds { get; set; } = new List<int>();
     }

@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Http;
+﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
@@ -19,7 +18,8 @@ namespace TaskService.Services
         private readonly UserServiceClient _userServiceClient;
         private readonly ProjectServiceClient _projectServiceClient;
         private readonly KanbanColumnService _kanbanColumnService;
-        private readonly BacklogService _backlogService; 
+        private readonly BacklogService _backlogService;
+        private readonly SprintService _sprintService;
         private readonly ILogger<TaskService> _logger;
         private readonly AppDbContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -30,19 +30,21 @@ namespace TaskService.Services
             ProjectServiceClient projectServiceClient,
             KanbanColumnService kanbanColumnService,
             BacklogService backlogService,
+            SprintService sprintService,
             ILogger<TaskService> logger,
             AppDbContext context,
             IHttpContextAccessor httpContextAccessor,
             FileStorageService fileStorageService)
         {
-            _userServiceClient = userServiceClient;
-            _projectServiceClient = projectServiceClient;
-            _kanbanColumnService = kanbanColumnService;
-            _backlogService = backlogService;
-            _logger = logger;
-            _context = context;
-            _httpContextAccessor = httpContextAccessor;
-            _fileStorageService = fileStorageService;
+            _userServiceClient = userServiceClient ?? throw new ArgumentNullException(nameof(userServiceClient));
+            _projectServiceClient = projectServiceClient ?? throw new ArgumentNullException(nameof(projectServiceClient));
+            _kanbanColumnService = kanbanColumnService ?? throw new ArgumentNullException(nameof(kanbanColumnService));
+            _backlogService = backlogService ?? throw new ArgumentNullException(nameof(backlogService));
+            _sprintService = sprintService ?? throw new ArgumentNullException(nameof(sprintService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _context = context ?? throw new ArgumentNullException(nameof(context));
+            _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
+            _fileStorageService = fileStorageService ?? throw new ArgumentNullException(nameof(fileStorageService));
         }
 
         public async Task<TaskDTO> CreateTaskAsync(CreateTaskRequest request, List<IFormFile> attachments, int userId)
@@ -92,6 +94,17 @@ namespace TaskService.Services
                     {
                         _logger.LogWarning($"One or more backlog IDs are invalid for project {request.ProjectId}.");
                         throw new InvalidOperationException("Un ou plusieurs IDs de backlog sont invalides pour ce projet.");
+                    }
+                }
+
+                // Validate sprint ID
+                if (request.SprintId.HasValue)
+                {
+                    var sprint = await _context.Sprints.FindAsync(request.SprintId.Value);
+                    if (sprint == null || sprint.ProjectId != request.ProjectId)
+                    {
+                        _logger.LogWarning($"Sprint {request.SprintId} is invalid or does not belong to project {request.ProjectId}.");
+                        throw new InvalidOperationException("L'ID du sprint est invalide ou ne correspond pas au projet.");
                     }
                 }
 
@@ -153,7 +166,9 @@ namespace TaskService.Services
                     EndDate = request.EndDate,
                     AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null,
                     Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null,
-                    ProjectId = request.ProjectId
+                    ProjectId = request.ProjectId,
+                    Subtasks = request.Subtasks != null && request.Subtasks.Any() ? JsonSerializer.Serialize(request.Subtasks) : null,
+                    SprintId = request.SprintId
                 };
 
                 _context.Tasks.Add(task);
@@ -183,7 +198,9 @@ namespace TaskService.Services
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = request.AssignedUserEmails,
                     ProjectId = task.ProjectId,
-                    BacklogIds = request.BacklogIds
+                    BacklogIds = request.BacklogIds,
+                    Subtasks = request.Subtasks ?? new List<string>(),
+                    SprintId = task.SprintId
                 };
 
                 _logger.LogInformation($"Task {task.Title} created for user {userId} in project {task.ProjectId}.");
@@ -232,6 +249,10 @@ namespace TaskService.Services
                     ? new List<AttachmentDTO>()
                     : JsonSerializer.Deserialize<List<AttachmentDTO>>(task.Attachments);
 
+                var subtasks = string.IsNullOrEmpty(task.Subtasks)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(task.Subtasks);
+
                 var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
 
                 return new TaskDTO
@@ -250,7 +271,9 @@ namespace TaskService.Services
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = assignedUserEmails,
                     ProjectId = task.ProjectId,
-                    BacklogIds = backlogIds
+                    BacklogIds = backlogIds,
+                    Subtasks = subtasks,
+                    SprintId = task.SprintId
                 };
             }
             catch (Exception ex)
@@ -260,7 +283,7 @@ namespace TaskService.Services
             }
         }
 
-        public async Task<List<TaskDTO>> GetAllTasksAsync(int? projectId = null, int? backlogId = null)
+        public async Task<List<TaskDTO>> GetAllTasksAsync(int? projectId = null, int? backlogId = null, int? sprintId = null)
         {
             try
             {
@@ -279,6 +302,11 @@ namespace TaskService.Services
                 if (backlogId.HasValue)
                 {
                     query = query.Where(t => t.TaskBacklogs.Any(tb => tb.BacklogId == backlogId.Value));
+                }
+
+                if (sprintId.HasValue)
+                {
+                    query = query.Where(t => t.SprintId == sprintId.Value);
                 }
 
                 var tasks = await query.ToListAsync();
@@ -309,6 +337,10 @@ namespace TaskService.Services
                         ? new List<AttachmentDTO>()
                         : JsonSerializer.Deserialize<List<AttachmentDTO>>(task.Attachments);
 
+                    var subtasks = string.IsNullOrEmpty(task.Subtasks)
+                        ? new List<string>()
+                        : JsonSerializer.Deserialize<List<string>>(task.Subtasks);
+
                     var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
 
                     taskDtos.Add(new TaskDTO
@@ -327,7 +359,9 @@ namespace TaskService.Services
                         AssignedUserIds = assignedUserIds,
                         AssignedUserEmails = assignedUserEmails,
                         ProjectId = task.ProjectId,
-                        BacklogIds = backlogIds
+                        BacklogIds = backlogIds,
+                        Subtasks = subtasks,
+                        SprintId = task.SprintId
                     });
                 }
 
@@ -366,8 +400,8 @@ namespace TaskService.Services
                     }
                 }
 
-                // Validate backlog IDs
-                if (request.BacklogIds != null)
+                // Validate backlog IDs if provided and not empty
+                if (request.BacklogIds != null && request.BacklogIds.Any())
                 {
                     var backlogs = await _context.Backlogs
                         .Where(b => b.ProjectId == task.ProjectId && request.BacklogIds.Contains(b.Id))
@@ -376,6 +410,17 @@ namespace TaskService.Services
                     {
                         _logger.LogWarning($"One or more backlog IDs are invalid for project {task.ProjectId}.");
                         throw new InvalidOperationException("Un ou plusieurs IDs de backlog sont invalides pour ce projet.");
+                    }
+                }
+
+                // Validate sprint ID
+                if (request.SprintId.HasValue)
+                {
+                    var sprint = await _context.Sprints.FindAsync(request.SprintId.Value);
+                    if (sprint == null || sprint.ProjectId != task.ProjectId)
+                    {
+                        _logger.LogWarning($"Sprint {request.SprintId} is invalid or does not belong to project {task.ProjectId}.");
+                        throw new InvalidOperationException("L'ID du sprint est invalide ou ne correspond pas au projet.");
                     }
                 }
 
@@ -423,13 +468,16 @@ namespace TaskService.Services
                 task.UpdatedAt = DateTime.UtcNow;
                 task.AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null;
                 task.Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null;
+                task.Subtasks = request.Subtasks != null ? JsonSerializer.Serialize(request.Subtasks) : task.Subtasks;
+                task.SprintId = request.SprintId ?? task.SprintId;
 
                 // Update backlog links
                 if (request.BacklogIds != null)
                 {
                     var existingBacklogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
-                    var backlogsToAdd = request.BacklogIds.Except(existingBacklogIds).ToList();
-                    var backlogsToRemove = existingBacklogIds.Except(request.BacklogIds).ToList();
+                    var targetBacklogIds = request.BacklogIds.Any() ? request.BacklogIds : new List<int>();
+                    var backlogsToAdd = targetBacklogIds.Except(existingBacklogIds).ToList();
+                    var backlogsToRemove = existingBacklogIds.Except(targetBacklogIds).ToList();
 
                     foreach (var backlogId in backlogsToAdd)
                     {
@@ -463,7 +511,9 @@ namespace TaskService.Services
                     AssignedUserIds = assignedUserIds,
                     AssignedUserEmails = request.AssignedUserEmails,
                     ProjectId = task.ProjectId,
-                    BacklogIds = updatedBacklogIds
+                    BacklogIds = updatedBacklogIds,
+                    Subtasks = request.Subtasks ?? JsonSerializer.Deserialize<List<string>>(task.Subtasks ?? "[]"),
+                    SprintId = task.SprintId
                 };
             }
             catch (Exception ex)

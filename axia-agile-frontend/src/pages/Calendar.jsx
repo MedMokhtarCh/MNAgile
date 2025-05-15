@@ -1,174 +1,194 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Button,
   Typography,
   Paper,
-  Grid,
   IconButton,
-  Chip,
-  List,
-  ListItem,
-  Divider,
-  Avatar,
   ThemeProvider,
   createTheme,
+  CircularProgress,
+  Alert,
+  Chip,
+  Divider,
+  Popover,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemText,
 } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import TodayIcon from '@mui/icons-material/Today';
-import ViewDayIcon from '@mui/icons-material/ViewDay';
-import ViewWeekIcon from '@mui/icons-material/ViewWeek';
+import TaskIcon from '@mui/icons-material/Task';
+import EventIcon from '@mui/icons-material/Event';
 import CalendarViewMonthIcon from '@mui/icons-material/CalendarViewMonth';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import AddIcon from '@mui/icons-material/Add';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
-import Brightness1Icon from '@mui/icons-material/Brightness1';
+import CalendarViewWeekIcon from '@mui/icons-material/CalendarViewWeek';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import DescriptionIcon from '@mui/icons-material/Description';
+import AttachmentIcon from '@mui/icons-material/Attachment';
+import SubtasksIcon from '@mui/icons-material/List';
+import CloseIcon from '@mui/icons-material/Close';
+import { useParams } from 'react-router-dom';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchAllTasks, clearTasksError } from '../store/slices/taskSlice';
 
+// Custom Theme
 const theme = createTheme({
   palette: {
-    primary: {
-      main: '#4d75f4',
-    },
-    secondary: {
-      main: '#f6bc66',
-    },
-    success: {
-      main: '#84c887',
-    },
-    error: {
-      main: '#f67d74',
-    },
-    info: {
-      main: '#50c1e9',
-    },
+    primary: { main: '#4d75f4' },
+    secondary: { main: '#f6bc66' },
+    success: { main: '#84c887' },
+    error: { main: '#f67d74' },
+    info: { main: '#50c1e9' },
+
   },
   typography: {
-    fontFamily: 'Roboto, Arial, sans-serif',
+    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+    h5: {
+      fontWeight: 600,
+    },
+    subtitle1: {
+      fontSize: '0.875rem',
+    },
+    caption: {
+      fontSize: '0.75rem',
+    },
   },
   components: {
     MuiPaper: {
       styleOverrides: {
         root: {
-          boxShadow: 'none',
-          borderRadius: 10,
+          boxShadow: '0px 3px 6px rgba(0, 0, 0, 0.08)',
+          borderRadius: 12,
+        },
+      },
+    },
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          textTransform: 'none',
+          borderRadius: 8,
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          height: 24,
+          fontSize: '0.7rem',
         },
       },
     },
   },
 });
 
+// French localization constants
+const weekdaysShort = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const months = [
+  'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+];
+
+// Helper function to format dates
+const formatDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  return `${d.getDate()} ${months[d.getMonth()].substring(0, 3)} ${d.getFullYear()}`;
+};
+
+// Priority colors
+const priorityColors = {
+  HIGH: 'error',
+  MEDIUM: 'secondary',
+  LOW: 'success',
+};
+
 const Calendar = () => {
-  const [view, setView] = useState('week');
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 5, 27)); // June 27, 2025
-  const [selectedDay, setSelectedDay] = useState(27);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState(new Date().getDate());
+  const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState('month'); // 'month' or 'week'
+  const [taskPopover, setTaskPopover] = useState({ anchorEl: null, task: null });
+  const [selectedTask, setSelectedTask] = useState(null); // For task details modal
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
-  const events = [
-    {
-      id: 1,
-      title: 'Workout',
-      start: '08:00',
-      end: '08:40',
-      startDate: new Date(2025, 5, 26),
-      endDate: new Date(2025, 5, 26),
-      color: 'error',
-    },
-    {
-      id: 2,
-      title: 'Workout',
-      start: '08:00',
-      end: '08:40',
-      startDate: new Date(2025, 5, 28),
-      endDate: new Date(2025, 5, 28),
-      color: 'error',
-    },
-    {
-      id: 3,
-      title: 'Brunch with Alex and the design team',
-      start: '09:00',
-      end: '10:30',
-      startDate: new Date(2025, 5, 27),
-      endDate: new Date(2025, 5, 27),
-      color: 'secondary',
-    },
-    {
-      id: 4,
-      title: 'Team Leaders end of month review & lunch',
-      start: '10:00',
-      end: '13:00',
-      startDate: new Date(2025, 5, 26),
-      endDate: new Date(2025, 5, 26),
-      color: 'success',
-    },
-    {
-      id: 5,
-      title: 'Weekly Meeting',
-      start: '10:00',
-      end: '10:50',
-      startDate: new Date(2025, 5, 28),
-      endDate: new Date(2025, 5, 28),
-      color: 'success',
-    },
-    {
-      id: 6,
-      title: 'Roadmap Planning',
-      start: '11:00',
-      end: '13:00',
-      startDate: new Date(2025, 5, 27),
-      endDate: new Date(2025, 5, 29),
-      color: 'secondary',
-    },
-    {
-      id: 7,
-      title: 'Meet up with Hannah',
-      start: '11:00',
-      end: '13:00',
-      startDate: new Date(2025, 5, 29),
-      endDate: new Date(2025, 5, 29),
-      color: 'info',
-    },
-    {
-      id: 8,
-      title: 'Lunch with Steve',
-      start: '12:30',
-      end: '13:50',
-      startDate: new Date(2025, 5, 28),
-      endDate: new Date(2025, 5, 28),
-      color: 'info',
-    },
-    {
-      id: 9,
-      title: '30 Minute Code Review',
-      start: '14:00',
-      end: '14:30',
-      startDate: new Date(2025, 5, 27),
-      endDate: new Date(2025, 5, 27),
-      color: 'success',
-    },
-    {
-      id: 10,
-      title: 'Company Party',
-      start: '18:00',
-      end: '22:00',
-      startDate: new Date(2025, 5, 27),
-      endDate: new Date(2025, 5, 27),
-      color: 'primary',
-      allDay: true,
-    },
-  ];
+  const { projectId } = useParams();
+  const dispatch = useDispatch();
+  const { tasks, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
 
-  const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-  const weekdaysShort = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  // Validate projectId
+  const isValidProjectId = projectId && !isNaN(parseInt(projectId));
 
+  // Fetch tasks with retry mechanism
+  useEffect(() => {
+    let isMounted = true;
+    let retryTimeout;
+
+    const loadTasks = async () => {
+      if (!isValidProjectId) {
+        if (isMounted) {
+          setLoading(false);
+          dispatch(clearTasksError());
+        }
+        return;
+      }
+
+      setLoading(true);
+      try {
+        await dispatch(fetchAllTasks({ projectId: parseInt(projectId) })).unwrap();
+        if (isMounted) {
+          setLoading(false);
+          setRetryCount(0); // Reset retry count on success
+        }
+      } catch (err) {
+        if (isMounted) {
+          setLoading(false);
+          if (retryCount < maxRetries && err.status !== 400) {
+            // Retry for non-400 errors (e.g., network issues)
+            retryTimeout = setTimeout(() => {
+              setRetryCount((prev) => prev + 1);
+              loadTasks();
+            }, 2000 * (retryCount + 1)); // Exponential backoff
+          }
+        }
+      }
+    };
+
+    loadTasks();
+
+    return () => {
+      isMounted = false;
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
+  }, [projectId, dispatch, retryCount, isValidProjectId]);
+
+  // Map tasks to events
+  const events = useMemo(() => tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    description: task.description,
+    startDate: task.startDate ? new Date(task.startDate) : new Date(),
+    endDate: task.endDate ? new Date(task.endDate) : new Date(),
+    color: priorityColors[task.priority] || 'info',
+    priority: task.priority,
+    status: task.status,
+    assignedTo: task.assignedTo,
+    backlogIds: task.backlogIds || [],
+    sprintId: task.sprintId || null,
+    subtasks: task.subtasks || [],
+    attachments: task.attachments || [],
+    metadata: task.metadata || {},
+    originalTask: task,
+  })), [tasks]);
+
+  // Utility functions
   const getDaysInMonth = (date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
-
-  const addDays = (date, days) => {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
   };
 
   const isSameDay = (date1, date2) => {
@@ -179,59 +199,73 @@ const Calendar = () => {
     );
   };
 
-  const getDaysBetween = (startDate, endDate) => {
-    const diffTime = Math.abs(endDate - startDate);
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const isDateInRange = (date, startDate, endDate) => {
+    if (!startDate || !endDate) return false;
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const checkDate = new Date(date);
+    
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    return checkDate >= start && checkDate <= end;
   };
 
+  const isStartDate = (date, startDate) => {
+    if (!startDate) return false;
+    
+    const start = new Date(startDate);
+    const checkDate = new Date(date);
+    
+    start.setHours(0, 0, 0, 0);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    return checkDate.getTime() === start.getTime();
+  };
+
+  const isEndDate = (date, endDate) => {
+    if (!endDate) return false;
+    
+    const end = new Date(endDate);
+    const checkDate = new Date(date);
+    
+    end.setHours(0, 0, 0, 0);
+    checkDate.setHours(0, 0, 0, 0);
+    
+    return checkDate.getTime() === end.getTime();
+  };
+
+  // Navigation functions
   const navigateToday = () => {
     setCurrentDate(new Date());
+    setSelectedDay(new Date().getDate());
   };
 
   const navigatePrevious = () => {
     const prevDate = new Date(currentDate);
-    if (view === 'day') {
-      prevDate.setDate(prevDate.getDate() - 1);
-    } else if (view === 'week') {
-      prevDate.setDate(prevDate.getDate() - 7);
-    } else if (view === 'month') {
+    if (viewMode === 'month') {
       prevDate.setMonth(prevDate.getMonth() - 1);
+    } else {
+      prevDate.setDate(prevDate.getDate() - 7);
     }
     setCurrentDate(prevDate);
+    setSelectedDay(prevDate.getDate());
   };
 
   const navigateNext = () => {
     const nextDate = new Date(currentDate);
-    if (view === 'day') {
-      nextDate.setDate(nextDate.getDate() + 1);
-    } else if (view === 'week') {
-      nextDate.setDate(nextDate.getDate() + 7);
-    } else if (view === 'month') {
+    if (viewMode === 'month') {
       nextDate.setMonth(nextDate.getMonth() + 1);
+    } else {
+      nextDate.setDate(nextDate.getDate() + 7);
     }
     setCurrentDate(nextDate);
+    setSelectedDay(nextDate.getDate());
   };
 
-  const getWeekDates = () => {
-    const day = currentDate.getDay();
-    const diff = currentDate.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(currentDate);
-    monday.setDate(diff);
-
-    return Array.from({ length: 5 }, (_, i) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + i);
-      return {
-        date,
-        day: date.getDate(),
-        weekday: weekdays[i],
-        weekdayShort: weekdaysShort[i],
-        isToday: isSameDay(date, new Date()),
-        isSelected: isSameDay(date, currentDate),
-      };
-    });
-  };
-
+  // Generate dates for month view
   const getMonthDates = () => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
@@ -261,7 +295,7 @@ const Calendar = () => {
         day: i,
         isCurrentMonth: true,
         isToday: isSameDay(date, today),
-        isSelected: i === selectedDay,
+        isSelected: i === selectedDay && date.getMonth() === currentDate.getMonth(),
       });
 
       if (currentWeek.length === 7) {
@@ -287,255 +321,657 @@ const Calendar = () => {
     return result;
   };
 
-  const hours = Array.from({ length: 14 }, (_, i) => i + 8);
+  // Generate dates for week view
+  const getWeekDates = () => {
+    const result = [];
+    const day = currentDate.getDay() || 7; // Convert Sunday (0) to 7
+    const diff = currentDate.getDate() - day + 1; // Adjust to Monday
+    const startOfWeek = new Date(currentDate);
+    startOfWeek.setDate(diff);
 
+    const today = new Date();
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      result.push({
+        date,
+        day: date.getDate(),
+        isToday: isSameDay(date, today),
+        isSelected: isSameDay(date, currentDate),
+      });
+    }
+    return result;
+  };
+
+  // Show task details in popover
+  const handleOpenTaskPopover = (event, task) => {
+    setTaskPopover({
+      anchorEl: event.currentTarget,
+      task,
+    });
+  };
+
+  const handleCloseTaskPopover = () => {
+    setTaskPopover({
+      anchorEl: null,
+      task: null,
+    });
+  };
+
+  // Open task details modal
+  const handleOpenTaskDetails = (task) => {
+    setSelectedTask(task);
+    handleCloseTaskPopover();
+  };
+
+  // Close task details modal
+  const handleCloseTaskDetails = () => {
+    setSelectedTask(null);
+  };
+
+  // Render header
   const renderHeader = () => {
-    const weekDates = getWeekDates();
-    const startDate = weekDates[0].day;
-    const endDate = weekDates[weekDates.length - 1].day;
     const monthName = months[currentDate.getMonth()];
+    let dateTitle;
+    
+    if (viewMode === 'month') {
+      dateTitle = `${monthName} ${currentDate.getFullYear()}`;
+    } else {
+      const weekDates = getWeekDates();
+      const startDate = formatDate(weekDates[0].date);
+      const endDate = formatDate(weekDates[6].date);
+      dateTitle = `${startDate} - ${endDate}`;
+    }
 
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, backgroundColor: 'white', borderBottom: '1px solid #eaeaea' }}>
+      <Paper sx={{ p: 2, backgroundColor: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography variant="h5" sx={{ fontWeight: 500, mr: 2 }}>
-            {view === 'week' ? `${monthName} ${startDate} - ${endDate}` : view === 'day' ? `${monthName} ${currentDate.getDate()}` : `${monthName} ${currentDate.getFullYear()}`}
+          <Typography variant="h5" sx={{ fontWeight: 600, mr: 2 }}>
+            {dateTitle}
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <IconButton size="small" onClick={navigatePrevious}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <IconButton size="small" onClick={navigatePrevious} color="primary">
               <ChevronLeftIcon />
             </IconButton>
-            <Button variant="text" size="small" onClick={navigateToday} sx={{ textTransform: 'none' }}>
-              TODAY
+            <Button 
+              variant="outlined" 
+              size="small" 
+              onClick={navigateToday} 
+              startIcon={<TodayIcon />}
+              sx={{ mx: 1 }}
+            >
+              Aujourd'hui
             </Button>
-            <IconButton size="small" onClick={navigateNext}>
+            <IconButton size="small" onClick={navigateNext} color="primary">
               <ChevronRightIcon />
             </IconButton>
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Box sx={{ display: 'flex', backgroundColor: '#f5f5f5', borderRadius: '8px', mr: 2 }}>
-            <Button variant={view === 'day' ? 'contained' : 'text'} disableElevation onClick={() => setView('day')} sx={{ minWidth: '40px', borderRadius: '8px', color: view === 'day' ? 'white' : 'text.secondary' }}>
-              Day
-            </Button>
-            <Button variant={view === 'week' ? 'contained' : 'text'} disableElevation onClick={() => setView('week')} sx={{ minWidth: '40px', borderRadius: '8px', color: view === 'week' ? 'white' : 'text.secondary' }}>
-              Week
-            </Button>
-            <Button variant={view === 'month' ? 'contained' : 'text'} disableElevation onClick={() => setView('month')} sx={{ minWidth: '40px', borderRadius: '8px', color: view === 'month' ? 'white' : 'text.secondary' }}>
-              Month
-            </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', border: '1px solid #e0e0e0', borderRadius: 1 }}>
+            <IconButton 
+              size="small" 
+              onClick={() => setViewMode('month')} 
+              color={viewMode === 'month' ? 'primary' : 'default'}
+              sx={{ borderRadius: '4px 0 0 4px' }}
+            >
+              <CalendarViewMonthIcon />
+            </IconButton>
+            <IconButton 
+              size="small" 
+              onClick={() => setViewMode('week')} 
+              color={viewMode === 'week' ? 'primary' : 'default'}
+              sx={{ borderRadius: '0 4px 4px 0' }}
+            >
+              <CalendarViewWeekIcon />
+            </IconButton>
           </Box>
-
-          <IconButton color="primary" sx={{ backgroundColor: theme.palette.primary.main, color: 'white', '&:hover': { backgroundColor: theme.palette.primary.dark } }}>
-            <AddIcon />
-          </IconButton>
         </Box>
-      </Box>
+      </Paper>
     );
   };
 
-  const renderWeekView = () => {
-    const weekDates = getWeekDates();
-    const hourHeight = 60;
-
-    const allDayEvents = events.filter(event => event.allDay);
-    const regularEvents = events.filter(event => !event.allDay);
-
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', overflow: 'hidden' }}>
-        {allDayEvents.length > 0 && (
-          <Box sx={{ display: 'flex', borderBottom: '1px solid #eaeaea', pl: '50px' }}>
-            <Box sx={{ width: '50px', p: 1, fontWeight: 'bold', color: 'text.secondary', fontSize: '0.75rem', position: 'absolute', left: 0 }}>
-              ALL DAY
-            </Box>
-            {weekDates.map((day, i) => (
-              <Box key={i} sx={{ flex: 1, position: 'relative', height: '40px', borderRight: i < weekDates.length - 1 ? '1px solid #eaeaea' : 'none' }}>
-                {allDayEvents.filter(event => isSameDay(event.startDate, day.date)).map(event => (
-                  <Box key={event.id} sx={{ position: 'absolute', top: '5px', left: '5px', right: '5px', height: '30px', backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main, borderRadius: '4px', padding: '4px 8px', color: 'white', display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
-                    <Brightness1Icon sx={{ fontSize: '8px', mr: 1 }} />
-                    {event.title}
-                  </Box>
-                ))}
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', borderBottom: '1px solid #eaeaea', pl: '50px' }}>
-          {weekDates.map((day, i) => (
-            <Box key={i} sx={{ flex: 1, p: 1, textAlign: 'center', borderRight: i < weekDates.length - 1 ? '1px solid #eaeaea' : 'none', backgroundColor: day.isSelected ? '#f0f7ff' : 'transparent', cursor: 'pointer' }} onClick={() => { setCurrentDate(day.date); setSelectedDay(day.day); }}>
-              <Typography variant="body2" sx={{ fontWeight: day.isToday ? 'bold' : 'normal', color: day.isToday ? 'primary.main' : 'text.secondary', textTransform: 'uppercase' }}>
-                {day.weekdayShort}
-              </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 'medium', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', borderRadius: '50%', backgroundColor: day.isToday ? 'primary.main' : 'transparent', color: day.isToday ? 'white' : 'inherit' }}>
-                {day.day}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-
-        <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'auto', position: 'relative' }}>
-          <Box sx={{ width: '50px', flexShrink: 0, borderRight: '1px solid #eaeaea' }}>
-            {hours.map((hour, i) => (
-              <Box key={i} sx={{ height: `${hourHeight}px`, borderBottom: '1px solid #eaeaea', padding: '4px', color: 'text.secondary', fontSize: '0.75rem', textAlign: 'right', pr: 1 }}>
-                {hour % 12 === 0 ? 12 : hour % 12}{hour < 12 ? ' AM' : ' PM'}
-              </Box>
-            ))}
-          </Box>
-
-          <Box sx={{ display: 'flex', flexGrow: 1 }}>
-            {weekDates.map((day, dayIndex) => {
-              const dayEvents = regularEvents
-                .filter(event => {
-                  const eventStart = new Date(event.startDate);
-                  const eventEnd = new Date(event.endDate);
-                  return eventStart <= day.date && eventEnd >= addDays(day.date, -dayIndex) && eventStart >= addDays(day.date, -dayIndex);
-                })
-                .sort((a, b) => {
-                  const startA = parseInt(a.start.split(':')[0]) * 60 + parseInt(a.start.split(':')[1]);
-                  const startB = parseInt(b.start.split(':')[0]) * 60 + parseInt(b.start.split(':')[1]);
-                  return startA - startB;
-                });
-
-              return (
-                <Box key={dayIndex} sx={{ flex: 1, position: 'relative', borderRight: dayIndex < weekDates.length - 1 ? '1px solid #eaeaea' : 'none', backgroundColor: day.isSelected ? '#f0f7ff' : 'transparent' }}>
-                  {hours.map((hour, i) => (
-                    <Box key={i} sx={{ height: `${hourHeight}px`, borderBottom: '1px solid #eaeaea' }} />
-                  ))}
-                  <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, p: 1 }}>
-                    {dayEvents.map((event, eventIndex) => {
-                      const eventStart = new Date(event.startDate);
-                      const spanDays = getDaysBetween(eventStart, event.endDate);
-                      const leftOffset = weekDates.findIndex(d => isSameDay(d.date, eventStart));
-                      const width = spanDays * 100;
-
-                      return (
-                        <Box key={event.id} sx={{ position: 'relative', left: `${leftOffset * 100}%`, width: `${width}%`, mb: 1, borderRadius: '4px', padding: '8px', backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main, color: 'white', opacity: 0.9, '&:hover': { opacity: 1 } }}>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>{event.title}</Typography>
-                          <Typography variant="caption">{event.start} - {event.end}</Typography>
-                        </Box>
-                      );
-                    })}
-                  </Box>
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
-
-  const renderDayView = () => {
-    const hourHeight = 60;
-
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)', overflow: 'hidden' }}>
-        <Box sx={{ display: 'flex', borderBottom: '1px solid #eaeaea', pl: '50px' }}>
-          <Box sx={{ flex: 1, p: 1, textAlign: 'center', backgroundColor: '#f0f7ff' }}>
-            <Typography variant="body2" sx={{ fontWeight: isSameDay(currentDate, new Date()) ? 'bold' : 'normal', color: isSameDay(currentDate, new Date()) ? 'primary.main' : 'text.secondary', textTransform: 'uppercase' }}>
-              {weekdaysShort[currentDate.getDay() === 0 ? 6 : currentDate.getDay() - 1]}
-            </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 'medium', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', borderRadius: '50%', backgroundColor: isSameDay(currentDate, new Date()) ? 'primary.main' : 'transparent', color: isSameDay(currentDate, new Date()) ? 'white' : 'inherit' }}>
-              {currentDate.getDate()}
-            </Typography>
-          </Box>
-        </Box>
-
-        {events.filter(event => event.allDay && isSameDay(event.startDate, currentDate)).length > 0 && (
-          <Box sx={{ display: 'flex', borderBottom: '1px solid #eaeaea', pl: '50px' }}>
-            <Box sx={{ width: '50px', p: 1, fontWeight: 'bold', color: 'text.secondary', fontSize: '0.75rem', position: 'absolute', left: 0 }}>
-              ALL DAY
-            </Box>
-            <Box sx={{ flex: 1, position: 'relative', height: '40px' }}>
-              {events.filter(event => event.allDay && isSameDay(event.startDate, currentDate)).map(event => (
-                <Box key={event.id} sx={{ position: 'absolute', top: '5px', left: '5px', right: '5px', height: '30px', backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main, borderRadius: '4px', padding: '4px 8px', color: 'white', display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
-                  <Brightness1Icon sx={{ fontSize: '8px', mr: 1 }} />
-                  {event.title}
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', flexGrow: 1, overflow: 'auto', position: 'relative' }}>
-          <Box sx={{ width: '50px', flexShrink: 0, borderRight: '1px solid #eaeaea' }}>
-            {hours.map((hour, i) => (
-              <Box key={i} sx={{ height: `${hourHeight}px`, borderBottom: '1px solid #eaeaea', padding: '4px', color: 'text.secondary', fontSize: '0.75rem', textAlign: 'right', pr: 1 }}>
-                {hour % 12 === 0 ? 12 : hour % 12}{hour < 12 ? ' AM' : ' PM'}
-              </Box>
-            ))}
-          </Box>
-
-          <Box sx={{ flex: 1, position: 'relative', backgroundColor: '#f0f7ff' }}>
-            {hours.map((hour, i) => (
-              <Box key={i} sx={{ height: `${hourHeight}px`, borderBottom: '1px solid #eaeaea' }} />
-            ))}
-            <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, p: 1 }}>
-              {events
-                .filter(event => !event.allDay && isSameDay(event.startDate, currentDate))
-                .sort((a, b) => {
-                  const startA = parseInt(a.start.split(':')[0]) * 60 + parseInt(a.start.split(':')[1]);
-                  const startB = parseInt(b.start.split(':')[0]) * 60 + parseInt(b.start.split(':')[1]);
-                  return startA - startB;
-                })
-                .map((event, eventIndex) => (
-                  <Box key={event.id} sx={{ position: 'relative', mb: 1, borderRadius: '4px', padding: '8px', backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main, color: 'white', opacity: 0.9, '&:hover': { opacity: 1 } }}>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{event.title}</Typography>
-                    <Typography variant="caption">{event.start} - {event.end}</Typography>
-                  </Box>
-                ))}
-            </Box>
-          </Box>
-        </Box>
-      </Box>
-    );
-  };
-
+  // Render month view
   const renderMonthView = () => {
     const monthDates = getMonthDates();
 
     return (
-      <Box sx={{ height: 'calc(100vh - 100px)', overflow: 'auto' }}>
-        <Box sx={{ display: 'flex', borderBottom: '1px solid #eaeaea', backgroundColor: '#f5f5f5' }}>
+      <Paper sx={{ overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', backgroundColor: '#f9f9f9', borderBottom: '1px solid #eaeaea' }}>
           {weekdaysShort.map((day, i) => (
-            <Box key={i} sx={{ flex: 1, p: 1, textAlign: 'center', color: 'text.secondary', fontWeight: 'medium' }}>
+            <Box
+              key={i}
+              sx={{
+                flex: 1,
+                p: 1,
+                textAlign: 'center',
+                color: 'text.secondary',
+                fontWeight: 'medium',
+                fontSize: '0.85rem',
+              }}
+            >
               {day}
             </Box>
           ))}
         </Box>
 
         {monthDates.map((week, weekIndex) => (
-          <Box key={weekIndex} sx={{ display: 'flex', borderBottom: weekIndex < monthDates.length - 1 ? '1px solid #eaeaea' : 'none', height: '120px' }}>
+          <Box
+            key={weekIndex}
+            sx={{
+              display: 'flex',
+              borderBottom: weekIndex < monthDates.length - 1 ? '1px solid #eaeaea' : 'none',
+            }}
+          >
             {week.map((day, dayIndex) => (
-              <Box key={dayIndex} sx={{ flex: 1, position: 'relative', borderRight: dayIndex < week.length - 1 ? '1px solid #eaeaea' : 'none', backgroundColor: day.isSelected ? '#f0f7ff' : 'transparent', opacity: day.isCurrentMonth ? 1 : 0.4, cursor: 'pointer', overflow: 'hidden', '&:hover': { backgroundColor: day.isCurrentMonth ? '#f5f5f5' : 'transparent' } }} onClick={() => { if (day.isCurrentMonth) { setCurrentDate(day.date); setSelectedDay(day.day); } }}>
+              <Box
+                key={dayIndex}
+                sx={{
+                  flex: 1,
+                  position: 'relative',
+                  borderRight: dayIndex < week.length - 1 ? '1px solid #eaeaea' : 'none',
+                  backgroundColor: day.isSelected ? '#f0f7ff' : day.isToday ? '#fafeff' : 'transparent',
+                  opacity: day.isCurrentMonth ? 1 : 0.4,
+                  cursor: 'pointer',
+                  overflow: 'hidden',
+                  transition: 'all 0.2s',
+                  '&:hover': { backgroundColor: day.isCurrentMonth ? '#f5f9ff' : 'transparent' },
+                  minHeight: '100px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+                onClick={() => {
+                  if (day.isCurrentMonth) {
+                    setCurrentDate(new Date(day.date));
+                    setSelectedDay(day.day);
+                  }
+                }}
+              >
                 <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
-                  <Typography variant="body2" sx={{ width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', backgroundColor: day.isToday ? 'primary.main' : 'transparent', color: day.isToday ? 'white' : day.isSelected ? 'primary.main' : 'inherit', fontWeight: day.isToday || day.isSelected ? 'bold' : 'normal' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      width: '28px',
+                      height: '28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '50%',
+                      backgroundColor: day.isToday ? 'primary.main' : 'transparent',
+                      color: day.isToday ? 'white' : day.isSelected ? 'primary.main' : 'inherit',
+                      fontWeight: day.isToday || day.isSelected ? 'bold' : 'normal',
+                    }}
+                  >
                     {day.day}
                   </Typography>
                 </Box>
-                <Box sx={{ px: 1 }}>
-                  {events.filter(event => isSameDay(event.startDate, day.date)).map(event => (
-                    <Box key={event.id} sx={{ mb: 0.5, borderRadius: '4px', padding: '4px', backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main, color: 'white', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {event.allDay ? <Brightness1Icon sx={{ fontSize: '8px', mr: 1, verticalAlign: 'middle' }} /> : null}
-                      {event.title}
-                    </Box>
-                  ))}
+                <Box sx={{ px: 1, pb: 1, flexGrow: 1 }}>
+                  {events
+                    .filter((event) => isDateInRange(day.date, event.startDate, event.endDate))
+                    .map((event) => {
+                      const isStart = isStartDate(day.date, event.startDate);
+                      const isEnd = isEndDate(day.date, event.endDate);
+                      
+                      return (
+                        <Box
+                          key={event.id}
+                          sx={{
+                            mb: 0.5,
+                            borderRadius: '4px',
+                            padding: '3px 6px',
+                            backgroundColor: theme.palette[event.color]?.main || theme.palette.primary.main,
+                            color: 'white',
+                            fontSize: '0.75rem',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            display: 'flex',
+                            alignItems: 'center',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+                            borderLeft: isStart ? `3px solid ${theme.palette.background.paper}` : 'none',
+                            borderRight: isEnd ? `3px solid ${theme.palette.background.paper}` : 'none',
+                            cursor: 'pointer',
+                            opacity: event.status === 'COMPLETED' ? 0.7 : 1,
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenTaskPopover(e, event);
+                          }}
+                        >
+                          <TaskIcon sx={{ fontSize: '12px', mr: 0.5 }} />
+                          <Typography variant="caption" noWrap>{event.title}</Typography>
+                        </Box>
+                      );
+                    })}
                 </Box>
               </Box>
             ))}
           </Box>
         ))}
-      </Box>
+      </Paper>
     );
   };
 
+  // Render week view
+  const renderWeekView = () => {
+    const weekDates = getWeekDates();
+    
+    return (
+      <Paper sx={{ overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', backgroundColor: '#f9f9f9', borderBottom: '1px solid #eaeaea' }}>
+          <Box sx={{ width: '60px' }}></Box>
+          {weekDates.map((day, i) => (
+            <Box
+              key={i}
+              sx={{
+                flex: 1,
+                p: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                borderLeft: '1px solid #eaeaea',
+              }}
+            >
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: 'text.secondary',
+                  fontWeight: 'medium',
+                  mb: 0.5
+                }}
+              >
+                {weekdaysShort[i]}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  backgroundColor: day.isToday ? 'primary.main' : day.isSelected ? '#e3f2fd' : 'transparent',
+                  color: day.isToday ? 'white' : day.isSelected ? 'primary.main' : 'inherit',
+                  fontWeight: day.isToday || day.isSelected ? 'bold' : 'normal',
+                  cursor: 'pointer',
+                  '&:hover': { backgroundColor: day.isToday ? 'primary.dark' : '#e3f2fd' },
+                }}
+                onClick={() => {
+                  setCurrentDate(new Date(day.date));
+                  setSelectedDay(day.day);
+                }}
+              >
+                {day.day}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        <Box sx={{ maxHeight: 'calc(100vh - 230px)', overflowY: 'auto' }}>
+          {weekDates.map((day, dayIndex) => (
+            <Box key={dayIndex}>
+              <Typography 
+                variant="subtitle2" 
+                sx={{ 
+                  p: 1, 
+                  backgroundColor: '#f5f5f5',
+                  fontWeight: 'bold'
+                }}
+              >
+                {day.date.getDate()} {months[day.date.getMonth()]}
+              </Typography>
+              <Box sx={{ p: 1 }}>
+                {events
+                  .filter((event) => isDateInRange(day.date, event.startDate, event.endDate))
+                  .map((event) => (
+                    <Box
+                      key={event.id}
+                      sx={{
+                        mb: 1,
+                        p: 1,
+                        borderRadius: '4px',
+                        backgroundColor: `${theme.palette[event.color].light}20`,
+                        borderLeft: `4px solid ${theme.palette[event.color].main}`,
+                        cursor: 'pointer',
+                        '&:hover': { backgroundColor: `${theme.palette[event.color].light}40` },
+                        opacity: event.status === 'COMPLETED' ? 0.7 : 1,
+                      }}
+                      onClick={(e) => handleOpenTaskPopover(e, event)}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'medium' }}>
+                          {event.title}
+                        </Typography>
+                        <Chip 
+                          label={event.priority} 
+                          size="small" 
+                          color={event.color} 
+                          sx={{ height: 20, fontSize: '0.65rem' }}
+                        />
+                      </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center', fontSize: '0.75rem', color: 'text.secondary' }}>
+                        <AccessTimeIcon sx={{ fontSize: '0.875rem', mr: 0.5 }} />
+                        <Typography variant="caption">
+                          {formatDate(event.startDate)} - {formatDate(event.endDate)}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                {events.filter((event) => isDateInRange(day.date, event.startDate, event.endDate)).length === 0 && (
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', textAlign: 'center', py: 2 }}>
+                    Aucune tâche pour ce jour
+                  </Typography>
+                )}
+              </Box>
+              {dayIndex < weekDates.length - 1 && <Divider />}
+            </Box>
+          ))}
+        </Box>
+      </Paper>
+    );
+  };
+
+  // Render task popover
+  const renderTaskPopover = () => {
+    if (!taskPopover.task) return null;
+    
+    const { task } = taskPopover;
+    const open = Boolean(taskPopover.anchorEl);
+    const id = open ? 'task-popover' : undefined;
+
+    return (
+      <Popover
+        id={id}
+        open={open}
+        anchorEl={taskPopover.anchorEl}
+        onClose={handleCloseTaskPopover}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+        sx={{ mt: 1 }}
+      >
+        <Box sx={{ width: 320, p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'flex-start' }}>
+            <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 'bold', mr: 2 }}>
+              {task.title}
+            </Typography>
+            <Chip 
+              label={task.priority} 
+              size="small" 
+              color={task.color}
+              sx={{ height: 20, fontSize: '0.65rem' }}
+            />
+          </Box>
+          
+          {task.description && (
+            <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary', fontSize: '0.875rem' }}>
+              {task.description.length > 100 
+                ? `${task.description.substring(0, 100)}...` 
+                : task.description}
+            </Typography>
+          )}
+          
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+              <EventIcon color="action" sx={{ fontSize: '1rem', mr: 1 }} />
+              <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                <strong>Début:</strong> {formatDate(task.startDate)}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <EventIcon color="action" sx={{ fontSize: '1rem', mr: 1 }} />
+              <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                <strong>Fin:</strong> {formatDate(task.endDate)}
+              </Typography>
+            </Box>
+          </Box>
+          
+          {task.assignedTo && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', mr: 1 }}>
+                Assigné à:
+              </Typography>
+              <Chip 
+                label={task.assignedTo} 
+                size="small" 
+                color="info" 
+                sx={{ height: 20, fontSize: '0.65rem' }}
+              />
+            </Box>
+          )}
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button 
+              variant="contained" 
+              size="small" 
+              color="primary"
+              onClick={() => handleOpenTaskDetails(task)}
+            >
+              Détails
+            </Button>
+          </Box>
+        </Box>
+      </Popover>
+    );
+  };
+
+  // Render task details modal
+  const renderTaskDetailsModal = () => {
+    if (!selectedTask) return null;
+
+    return (
+      <Dialog
+        open={Boolean(selectedTask)}
+        onClose={handleCloseTaskDetails}
+        maxWidth="md"
+        fullWidth
+        sx={{ '& .MuiDialog-paper': { borderRadius: 2, p: 2 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Détails de la tâche
+          </Typography>
+          <IconButton onClick={handleCloseTaskDetails}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>{selectedTask.title}</Typography>
+            <Chip
+              label={selectedTask.priority}
+              color={selectedTask.color}
+              sx={{ mb: 1 }}
+            />
+            {selectedTask.status && (
+              <Chip
+                label={selectedTask.status}
+                color="default"
+                sx={{ ml: 1, mb: 1 }}
+              />
+            )}
+          </Box>
+
+          {selectedTask.description && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <DescriptionIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1">Description</Typography>
+              </Box>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {selectedTask.description}
+              </Typography>
+            </>
+          )}
+
+          <Divider sx={{ my: 2 }} />
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Dates</Typography>
+            <Typography variant="body2">
+              <strong>Début:</strong> {formatDate(selectedTask.startDate)}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Fin:</strong> {formatDate(selectedTask.endDate)}
+            </Typography>
+          </Box>
+
+          {selectedTask.assignedTo && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Assigné à</Typography>
+              <Chip label={selectedTask.assignedTo} color="info" />
+            </>
+          )}
+
+          {selectedTask.backlogIds && selectedTask.backlogIds.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Backlogs</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {selectedTask.backlogIds.map((backlogId) => (
+                  <Chip key={backlogId} label={`Backlog ${backlogId}`} color="secondary" />
+                ))}
+              </Box>
+            </>
+          )}
+
+          {selectedTask.sprintId && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Sprint</Typography>
+              <Chip label={`Sprint ${selectedTask.sprintId}`} color="primary" />
+            </>
+          )}
+
+          {selectedTask.subtasks && selectedTask.subtasks.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <SubtasksIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1">Sous-tâches</Typography>
+              </Box>
+              <List dense>
+                {selectedTask.subtasks.map((subtask, index) => (
+                  <ListItem key={index}>
+                    <ListItemText
+                      primary={subtask.title || `Sous-tâche ${index + 1}`}
+                      secondary={subtask.completed ? 'Terminé' : 'En cours'}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          )}
+
+          {selectedTask.attachments && selectedTask.attachments.length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                <AttachmentIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                <Typography variant="subtitle1">Pièces jointes</Typography>
+              </Box>
+              <List dense>
+                {selectedTask.attachments.map((attachment, index) => (
+                  <ListItem key={index}>
+                    <ListItemText
+                      primary={attachment.name || `Pièce jointe ${index + 1}`}
+                      secondary={
+                        attachment.url ? (
+                          <a href={attachment.url} target="_blank" rel="noopener noreferrer">
+                            Télécharger
+                          </a>
+                        ) : 'Non disponible'
+                      }
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            </>
+          )}
+
+          {selectedTask.metadata && Object.keys(selectedTask.metadata).length > 0 && (
+            <>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle1" sx={{ mb: 1 }}>Métadonnées</Typography>
+              <Typography variant="body2">
+                <strong>Créé dans:</strong> {selectedTask.metadata.createdIn || 'Inconnu'}
+              </Typography>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseTaskDetails} color="primary" variant="contained">
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  };
+
+  // Handle errors
+  const handleRetryFetch = () => {
+    dispatch(clearTasksError());
+    setLoading(true);
+    setRetryCount(0); // Reset retry count
+    dispatch(fetchAllTasks({ projectId: parseInt(projectId) }))
+      .unwrap()
+      .finally(() => setLoading(false));
+  };
+
+  // Invalid projectId state
+  if (!isValidProjectId) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert severity="error">
+          ID du projet invalide. Veuillez vérifier l'URL et réessayer.
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Loading state
+  if (loading || taskStatus === 'loading') {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
+  // Error state
+  if (taskError) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Alert
+          severity="error"
+          action={<Button color="inherit" size="small" onClick={handleRetryFetch}>Réessayer</Button>}
+        >
+          {taskError === 'Failed to fetch tasks' && retryCount < maxRetries
+            ? `Tentative de connexion au serveur... (${retryCount + 1}/${maxRetries})`
+            : taskError.includes('400')
+            ? 'Requête invalide. Vérifiez l\'ID du projet ou contactez l\'administrateur.'
+            : taskError || 'Erreur lors du chargement des tâches.'}
+        </Alert>
+      </Box>
+    );
+  }
+
+  // Main render
   return (
     <ThemeProvider theme={theme}>
-      <Box sx={{ backgroundColor: '#fafafa', minHeight: '100vh' }}>
+      <Box sx={{ backgroundColor: theme.palette.background.default, p: 2, minHeight: '100vh' }}>
         {renderHeader()}
-        {view === 'day' ? renderDayView() : view === 'week' ? renderWeekView() : renderMonthView()}
+        {viewMode === 'month' ? renderMonthView() : renderWeekView()}
+        {renderTaskPopover()}
+        {renderTaskDetailsModal()}
       </Box>
     </ThemeProvider>
   );

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchUsers,
+  fetchUsersByCreatedById,
   fetchRoles,
   fetchClaims,
   createUser,
@@ -19,7 +20,7 @@ import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, P
 // Default role IDs that are system-defined
 const DEFAULT_ROLE_IDS = [1, 2, 3, 4];
 
-export const useUsers = (storageKey) => {
+export const useUsers = (userType) => {
   const dispatch = useDispatch();
   const { users, roles, claims, loading, snackbar, userExists } = useSelector((state) => state.users);
   const { currentUser } = useAuth();
@@ -31,47 +32,62 @@ export const useUsers = (storageKey) => {
     firstName: '',
     lastName: '',
     phoneNumber: '',
-    roleId: currentUser?.roleId === 1 ? 2 : 4,
+    roleId: userType === 'superadmins' ? 1 : userType === 'admins' ? 2 : 3,
     jobTitle: '',
     entreprise: '',
-    claimIds: [],
+    claimIds: userType === 'superadmins' ? [] : [],
     isActive: true,
+    createdById: currentUser?.id || null,
   });
   const [editMode, setEditMode] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [emailChecked, setEmailChecked] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const availableRoles = roles
-  .filter((role) => {
-    if (currentUser?.roleId === 1) {
-      // Super admin: can assign role ID 2 and any non-default roles
-      return role.id === 2 || !DEFAULT_ROLE_IDS.includes(role.id);
-    }
-    if (currentUser?.roleId === 2) {
-      // Admin: can assign role IDs 3, 4, and any non-default roles
-      return [3, 4].includes(role.id) || !DEFAULT_ROLE_IDS.includes(role.id);
-    }
-    return false;
-  })
-  .map((role) => ({
-    id: role.id,
-    label: role.label,
-    icon:
-      role.iconName === 'Security' ? <SecurityIcon /> :
-      role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
-  }));
+    .filter((role) => {
+      if (userType === 'superadmins' && currentUser?.roleId === 1) {
+        return role.id === 1;
+      }
+      if (userType === 'admins' && currentUser?.roleId === 1) {
+        return role.id === 2 || !DEFAULT_ROLE_IDS.includes(role.id);
+      }
+      if (userType === 'users' && currentUser?.roleId === 1) {
+        return [3, 4].includes(role.id) || !DEFAULT_ROLE_IDS.includes(role.id);
+      }
+      if (currentUser?.roleId === 2) {
+        return [3, 4].includes(role.id) || !DEFAULT_ROLE_IDS.includes(role.id);
+      }
+      return false;
+    })
+    .map((role) => ({
+      id: role.id,
+      label: role.label,
+      icon:
+        role.iconName === 'Security' ? <SecurityIcon /> :
+        role.iconName === 'SupervisorAccount' ? <SupervisorAccountIcon /> : <PersonIcon />,
+    }));
 
   useEffect(() => {
     if (currentUser) {
-      dispatch(fetchUsers());
+      setNewUser((prev) => ({
+        ...prev,
+        createdById: currentUser.id,
+      }));
+      dispatch(fetchUsersByCreatedById(currentUser.id));
       dispatch(fetchRoles());
       dispatch(fetchClaims());
     }
   }, [dispatch, currentUser]);
 
   useEffect(() => {
-    // Placeholder for any modal-related side effects
+    console.log('useUsers - openModal changed:', openModal, 'Stack:', new Error().stack);
   }, [openModal]);
+
+  const closeModal = () => {
+    console.log('useUsers - closeModal called, Stack:', new Error().stack);
+    setOpenModal(false);
+  };
 
   const handleCloseSnackbar = () => {
     dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
@@ -122,21 +138,30 @@ export const useUsers = (storageKey) => {
       firstName: newUser.firstName,
       lastName: newUser.lastName,
       phoneNumber: newUser.phoneNumber,
-      roleId: storageKey === 'admins' ? 2 : newUser.roleId,
+      roleId: userType === 'superadmins' ? 1 : userType === 'admins' ? 2 : newUser.roleId,
       jobTitle: [3, 4].includes(newUser.roleId) ? newUser.jobTitle : null,
       entreprise: newUser.roleId === 2 ? newUser.entreprise : null,
-      claimIds: newUser.claimIds || [],
+      claimIds: userType === 'superadmins' ? [] : (newUser.claimIds || []),
       isActive: newUser.isActive,
+      createdById: newUser.createdById || currentUser?.id || null,
     };
 
     try {
+      setIsCreating(true);
       const action = editMode ? updateUser({ id: currentUserId, userData }) : createUser(userData);
       const result = await dispatch(action).unwrap();
       resetUserForm();
       dispatch(clearUserExists(newUser.email));
+
+      setTimeout(() => {
+        dispatch(fetchUsersByCreatedById(currentUser.id));
+      }, 1000);
+
       return result;
     } catch (error) {
       throw error;
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -147,15 +172,16 @@ export const useUsers = (storageKey) => {
       firstName: '',
       lastName: '',
       phoneNumber: '',
-      roleId: currentUser?.roleId === 1 ? 2 : 4,
+      roleId: userType === 'superadmins' ? 1 : userType === 'admins' ? 2 : 3,
       jobTitle: '',
       entreprise: '',
-      claimIds: [],
+      claimIds: userType === 'superadmins' ? [] : [],
       isActive: true,
+      createdById: currentUser?.id || null,
     });
     setEditMode(false);
     setCurrentUserId(null);
-    setOpenModal(false);
+    closeModal();
     setEmailChecked(false);
     dispatch(clearUserExists());
   };
@@ -166,10 +192,12 @@ export const useUsers = (storageKey) => {
       dispatch(setSnackbar({ open: true, message: 'Utilisateur non valide.', severity: 'error' }));
       return;
     }
-    console.log('Édition de l\'utilisateur:', user);
+    console.log('useUsers - Editing user:', user);
     setNewUser({
       ...user,
       password: '',
+      claimIds: user.roleId === 1 ? [] : (user.claimIds || []),
+      createdById: user.createdById || currentUser?.id || null,
     });
     setEditMode(true);
     setCurrentUserId(user.id);
@@ -180,6 +208,7 @@ export const useUsers = (storageKey) => {
   const handleDeleteUser = async (id) => {
     try {
       await dispatch(deleteUser(id)).unwrap();
+      dispatch(fetchUsersByCreatedById(currentUser.id));
     } catch (error) {
       // Error handled in usersSlice
     }
@@ -191,6 +220,7 @@ export const useUsers = (storageKey) => {
 
     try {
       await dispatch(toggleUserActive({ id, isActive: !user.isActive })).unwrap();
+      dispatch(fetchUsersByCreatedById(currentUser.id));
     } catch (error) {
       // Error handled in usersSlice
     }
@@ -201,6 +231,7 @@ export const useUsers = (storageKey) => {
   };
 
   const handleCloseModal = () => {
+    console.log('useUsers - handleCloseModal called, Stack:', new Error().stack);
     resetUserForm();
   };
 
@@ -228,5 +259,6 @@ export const useUsers = (storageKey) => {
     handleCheckEmail,
     emailChecked,
     userExists,
+    isCreating,
   };
 };

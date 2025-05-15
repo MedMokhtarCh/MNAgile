@@ -1,4 +1,3 @@
-// UserManagement.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
@@ -14,13 +13,13 @@ import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { useDispatch, useSelector } from 'react-redux';
-import { updateUser, fetchUsers } from '../store/slices/usersSlice';
+import { fetchUsersByCreatedById } from '../store/slices/usersSlice';
 
 const UserManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const { claims } = useSelector((state) => state.users); // Fetch claims from Redux
+  const { claims } = useSelector((state) => state.users);
 
   const {
     users,
@@ -65,6 +64,7 @@ const UserManagement = () => {
       entreprise: '',
       claimIds: [],
       isActive: true,
+      createdById: currentUser?.id || null,
     });
     setEditMode(false);
     setCurrentUserId(null);
@@ -119,6 +119,7 @@ const UserManagement = () => {
                 entreprise: '',
                 claimIds: [],
                 isActive: true,
+                createdById: currentUser?.id || null,
               });
               setOpenModal(true);
             }}
@@ -155,7 +156,7 @@ const UserManagement = () => {
             setFilterRole(values.role);
             setFilterStatus(values.status);
           }}
-          onRefresh={() => dispatch(fetchUsers())}
+          onRefresh={() => dispatch(fetchUsersByCreatedById(currentUser?.id))}
         />
 
         <TableUsers
@@ -185,7 +186,7 @@ const UserManagement = () => {
           onSave={() => handleCreateUser(getRequiredFields())}
           isEditMode={editMode}
           roles={filteredRoles}
-          claims={claims} // Pass claims instead of permissionsGroups
+          claims={claims}
           requiredFields={getRequiredFields()}
           showFields={getShowFields()}
           disabledFields={editMode ? ['role'] : []}
@@ -196,39 +197,17 @@ const UserManagement = () => {
           onClose={() => {
             setOpenPermissionsModal(false);
             setSelectedUser(null);
+            dispatch(fetchUsersByCreatedById(currentUser?.id)); // Refresh users on close
           }}
           user={selectedUser}
-          claims={claims} // Pass claims instead of permissionsGroups
-          onSave={async () => {
-            if (!selectedUser) return;
-            const userData = {
-              id: selectedUser.id,
-              email: selectedUser.email,
-              firstName: selectedUser.firstName,
-              lastName: selectedUser.lastName,
-              phoneNumber: selectedUser.phoneNumber || null,
-              claimIds: selectedUser.claimIds || [],
-              roleId: selectedUser.roleId,
-              jobTitle: selectedUser.jobTitle || '',
-              isActive: selectedUser.isActive,
-            };
-            console.log('Dispatching updateUser with:', userData);
-            try {
-              await dispatch(updateUser({ id: selectedUser.id, userData })).unwrap();
-              setOpenPermissionsModal(false);
-              setSelectedUser(null);
-              dispatch(fetchUsers());
-            } catch (error) {
-              // Snackbar is handled by useUsers
-            }
-          }}
+          claims={claims}
           onPermissionChange={(permissionId) => {
             if (!selectedUser) return;
-            console.log('Permission toggled:', permissionId);
+            console.log('UserManagement - Permission toggled:', permissionId);
             const updatedClaimIds = selectedUser.claimIds.includes(permissionId)
               ? selectedUser.claimIds.filter((id) => id !== permissionId)
               : [...selectedUser.claimIds, permissionId];
-            console.log('Updated claimIds:', updatedClaimIds);
+            console.log('UserManagement - Updated claimIds:', updatedClaimIds);
             setSelectedUser({ ...selectedUser, claimIds: updatedClaimIds });
           }}
         />

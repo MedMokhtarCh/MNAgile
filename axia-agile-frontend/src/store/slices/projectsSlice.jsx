@@ -2,7 +2,7 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { projectApi } from '../../services/api';
 
 // Normalize project data from backend to frontend format
-const normalizeProject = (project) => ({
+export const normalizeProject = (project) => ({
   id: String(project.id || project.Id || ''),
   title: project.title || project.Title || '',
   description: project.description || project.Description || '',
@@ -17,7 +17,7 @@ const normalizeProject = (project) => ({
   users: project.developers || project.Developers || [],
   testers: project.testers || project.Testers || [],
   observers: project.observers || project.Observers || [],
-  kanbanColumns: project.kanbanColumns || [], // Add kanbanColumns to normalized project
+  kanbanColumns: project.kanbanColumns || [], 
 });
 
 // Normalize Kanban column data

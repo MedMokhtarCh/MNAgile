@@ -7,6 +7,7 @@ using UserService.Models;
 using UserService.Services;
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
+using System.Security.Claims;
 
 namespace UserService.Controllers
 {
@@ -16,7 +17,7 @@ namespace UserService.Controllers
     {
         private readonly Services.UserService _userService;
         private readonly AuthService _authService;
-        private readonly EmailService _emailService; // Ajout de EmailService
+        private readonly EmailService _emailService;
         private readonly ILogger<UsersController> _logger;
         private readonly IWebHostEnvironment _environment;
         private readonly AppDbContext _context;
@@ -24,14 +25,14 @@ namespace UserService.Controllers
         public UsersController(
             Services.UserService userService,
             AuthService authService,
-            EmailService emailService, // Injection de EmailService
+            EmailService emailService,
             ILogger<UsersController> logger,
             IWebHostEnvironment environment,
             AppDbContext context)
         {
             _userService = userService;
             _authService = authService;
-            _emailService = emailService; // Initialisation
+            _emailService = emailService;
             _logger = logger;
             _environment = environment;
             _context = context;
@@ -43,7 +44,6 @@ namespace UserService.Controllers
         {
             _logger.LogInformation("Received create user request: {@Request}", request);
 
-            // Validation manuelle
             if (request == null)
             {
                 _logger.LogWarning("Create user request is null");
@@ -84,7 +84,6 @@ namespace UserService.Controllers
                 return BadRequest("Un rôle valide est requis.");
             }
 
-            // Restreindre la création de SuperAdmin aux SuperAdmins uniquement
             if (request.RoleId == 1)
             {
                 var isSuperAdmin = User.HasClaim("RoleId", "1");
@@ -95,7 +94,6 @@ namespace UserService.Controllers
                 }
             }
 
-            // Empêcher la création de SuperAdmin en production
             if (request.RoleId == 1 && _environment.IsProduction())
             {
                 _logger.LogWarning("SuperAdmin creation attempted in production: {Email}", request.Email);
@@ -127,6 +125,9 @@ namespace UserService.Controllers
 
             try
             {
+                var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? throw new InvalidOperationException("User ID not found in JWT token"));
+
                 var user = new User
                 {
                     Email = request.Email,
@@ -138,24 +139,23 @@ namespace UserService.Controllers
                     Entreprise = request.RoleId == 2 ? request.Entreprise : null,
                     RoleId = request.RoleId,
                     IsActive = true,
-                    DateCreated = DateTime.UtcNow
+                    DateCreated = DateTime.UtcNow,
+                    CreatedById = currentUserId
                 };
 
                 var createdUser = await _userService.CreateUserAsync(user, request.ClaimIds ?? new List<int>());
-                _logger.LogInformation($"User {user.Email} created successfully.");
+                _logger.LogInformation($"User {user.Email} created successfully by user ID {currentUserId}.");
 
-                // Envoyer l'email de confirmation avec l'identifiant et le mot de passe
                 var emailSent = await _emailService.SendAccountCreationEmailAsync(
                     user.Email,
                     user.FirstName,
                     user.LastName,
-                    request.Password // Utiliser le mot de passe brut avant hachage
+                    request.Password
                 );
 
                 if (!emailSent)
                 {
                     _logger.LogWarning($"Échec de l'envoi de l'email de création de compte à {user.Email}.");
-                    // Note : On ne renvoie pas une erreur ici pour ne pas interrompre la création
                 }
                 else
                 {
@@ -167,6 +167,29 @@ namespace UserService.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error creating user: {ex.Message}");
+                return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
+            }
+        }
+
+        [HttpGet("created-by/{createdById}")]
+        [Authorize(Policy = "CanViewUsers")]
+        public async Task<ActionResult<List<UserDTO>>> GetUsersByCreatedById(int createdById)
+        {
+            try
+            {
+                var users = await _userService.GetAllUsersAsync(createdById);
+                if (users == null || !users.Any())
+                {
+                    _logger.LogInformation($"No users found created by ID {createdById}.");
+                    return Ok(new List<UserDTO>());
+                }
+
+                _logger.LogInformation($"Retrieved {users.Count} users created by ID {createdById}.");
+                return Ok(users.Select(u => MapUserToDTO(u)).ToList());
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error retrieving users created by ID {createdById}: {ex.Message}");
                 return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
             }
         }
@@ -201,7 +224,6 @@ namespace UserService.Controllers
                 return NotFound("Utilisateur non trouvé.");
             }
 
-            // Validation manuelle
             if (!string.IsNullOrEmpty(request.Email) && !_authService.IsValidEmail(request.Email))
             {
                 _logger.LogWarning("Invalid email: {Email}", request.Email);
@@ -230,7 +252,6 @@ namespace UserService.Controllers
                     _logger.LogWarning($"Email {request.Email} already exists.");
                     return BadRequest("Un compte avec cet email existe déjà.");
                 }
-                // Si l'email change, envoyer un email de notification
                 var emailSent = await _emailService.SendAccountCreationEmailAsync(
                     request.Email,
                     user.FirstName,
@@ -293,6 +314,57 @@ namespace UserService.Controllers
             catch (Exception ex)
             {
                 _logger.LogError($"Error updating user {user.Email}: {ex.Message}");
+                return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
+            }
+        }
+
+        [HttpPatch("{id}/claims")]
+        [Authorize(Policy = "CanUpdateUsers")]
+        public async Task<ActionResult<UserDTO>> PatchUserClaims(int id, [FromBody] PatchUserClaimsRequest request)
+        {
+            _logger.LogInformation("Received patch user claims request for user ID {UserId}: {@Request}", id, request);
+
+            if (request == null || request.ClaimIds == null)
+            {
+                _logger.LogWarning("Patch user claims request is null or ClaimIds missing for user ID {UserId}", id);
+                return BadRequest("La liste des ClaimIds est requise.");
+            }
+
+            var user = await _userService.GetUserByIdAsync(id);
+            if (user == null)
+            {
+                _logger.LogWarning($"User with ID {id} not found.");
+                return NotFound("Utilisateur non trouvé.");
+            }
+
+            foreach (var claimId in request.ClaimIds)
+            {
+                if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
+                {
+                    _logger.LogWarning($"Invalid ClaimId {claimId} for user ID {id}.");
+                    return BadRequest($"Le Claim ID {claimId} n'existe pas.");
+                }
+            }
+
+            if (user.RoleId == 1)
+            {
+                var isSuperAdmin = User.HasClaim("RoleId", "1");
+                if (!isSuperAdmin)
+                {
+                    _logger.LogWarning("Non-SuperAdmin attempted to modify claims for SuperAdmin ID {UserId}", id);
+                    return Forbid("Seul un SuperAdmin peut modifier les claims d'un SuperAdmin.");
+                }
+            }
+
+            try
+            {
+                var updatedUser = await _userService.PatchUserClaimsAsync(user, request.ClaimIds);
+                _logger.LogInformation($"User {user.Email} claims patched successfully with ClaimIds: {string.Join(", ", request.ClaimIds)}");
+                return Ok(MapUserToDTO(updatedUser));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error patching claims for user {user.Email}: {ex.Message}");
                 return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
             }
         }
@@ -380,6 +452,7 @@ namespace UserService.Controllers
                 DateCreated = user.DateCreated,
                 LastLogin = user.LastLogin,
                 RoleId = user.RoleId,
+                CreatedById = user.CreatedById,
                 ClaimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>()
             };
         }

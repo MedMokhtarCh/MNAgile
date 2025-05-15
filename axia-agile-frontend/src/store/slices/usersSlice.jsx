@@ -18,7 +18,7 @@ const normalizeUser = (user) => {
     claimIds: user.claimIds ?? user.ClaimIds ?? [],
     dateCreated: user.dateCreated ?? user.DateCreated ?? new Date().toISOString(),
     lastLogin: user.lastLogin ?? user.LastLogin ?? null,
-    createdBy: user.createdBy ?? user.CreatedBy ?? null,
+    createdById: user.createdById ?? user.CreatedById ?? null,
   };
 };
 
@@ -138,14 +138,14 @@ export const fetchClaims = createAsyncThunk(
   async (_, { rejectWithValue, dispatch }) => {
     try {
       const response = await withRetry(() => userApi.get('/Claims'), 3, 1000);
-      console.log('Fetch claims response:', response.data); // Debug log
+      console.log('Fetch claims response:', response.data);
       return response.data.map((claim) => ({
         id: claim.id ?? claim.Id,
         label: claim.name ?? claim.Name,
         description: claim.description ?? claim.Description ?? '',
       }));
     } catch (error) {
-      console.error('Fetch claims error:', error.response?.data, error.message); // Detailed error log
+      console.error('Fetch claims error:', error.response?.data, error.message);
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
@@ -224,19 +224,40 @@ export const deleteClaim = createAsyncThunk(
     }
   }
 );
-
+// Dans usersSlice.js
 export const fetchUsers = createAsyncThunk(
   'users/fetchUsers',
-  async (_, { rejectWithValue, dispatch }) => {
+  async (_, { rejectWithValue, dispatch }) => { // Retirez le paramètre filters
     try {
-      const response = await userApi.get('/Users');
+      const response = await userApi.get('/Users'); // Appel sans paramètres
       return response.data.map(normalizeUser).filter((user) => user.email);
     } catch (error) {
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch users');
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la récupération des utilisateurs');
+    }
+  }
+);
+
+export const fetchUsersByCreatedById = createAsyncThunk(
+  'users/fetchUsersByCreatedById',
+  async (createdById, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await userApi.get(`/Users/created-by/${createdById}`);
+      const users = response.data.map(normalizeUser).filter((user) => user.email);
+      return users;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (error.response?.status === 404) {
+        return [];
+      }
+      console.error('Fetch users by createdById error:', error.response?.data, error.message);
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la récupération des utilisateurs par créateur');
     }
   }
 );
@@ -272,6 +293,21 @@ export const createUser = createAsyncThunk(
         return rejectWithValue(`Champs requis manquants: ${missingFields.join(', ')}`);
       }
 
+      // Optimistic update: Add user to state immediately
+      const tempId = `temp-${Date.now()}`;
+      const optimisticUser = {
+        ...userData,
+        id: tempId,
+        isActive: true,
+        dateCreated: new Date().toISOString(),
+        claimIds: userData.claimIds || [],
+        createdById: userData.createdById || null, // Include createdById
+      };
+      dispatch({
+        type: 'users/optimisticCreateUser',
+        payload: normalizeUser(optimisticUser),
+      });
+
       const response = await userApi.post('/Users', {
         Email: userData.email,
         Password: userData.password,
@@ -282,9 +318,22 @@ export const createUser = createAsyncThunk(
         RoleId: userData.roleId,
         ClaimIds: userData.claimIds || [],
         JobTitle: userData.roleId === 3 ? userData.jobTitle : userData.jobTitle || 'Administrateur',
+        CreatedById: userData.createdById || null, // Include CreatedById in payload
       });
+
+      // Remove optimistic user and add real user
+      dispatch({
+        type: 'users/removeOptimisticUser',
+        payload: tempId,
+      });
+
       return normalizeUser(response.data);
     } catch (error) {
+      // Revert optimistic update on error
+      dispatch({
+        type: 'users/removeOptimisticUser',
+        payload: tempId,
+      });
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
@@ -311,7 +360,7 @@ export const updateUser = createAsyncThunk(
         userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
         users.some((user) => user.email.toLowerCase() === userData.email.toLowerCase() && user.id !== id)
       ) {
-        return rejectWithValue('Cet email est déjà utilisé par un autre utilisateur');
+        return rejectWithValue('Cet email est déjà utilisé par un Blot utilisateur');
       }
 
       const payload = {};
@@ -332,6 +381,9 @@ export const updateUser = createAsyncThunk(
 
       if (userData.claimIds !== undefined) payload.ClaimIds = userData.claimIds || [];
       else payload.ClaimIds = existingUser.claimIds;
+
+      if (userData.createdById !== undefined) payload.CreatedById = userData.createdById;
+      else payload.CreatedById = existingUser.createdById;
 
       const targetRoleId = userData.roleId !== undefined ? userData.roleId : existingUser.roleId;
       if (userData.jobTitle !== undefined) {
@@ -362,6 +414,33 @@ export const updateUser = createAsyncThunk(
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
       return rejectWithValue(error.response?.data?.message || 'Échec de la mise à jour');
+    }
+  }
+);
+export const updateUserClaims = createAsyncThunk(
+  'users/updateUserClaims',
+  async ({ id, claimIds }, { rejectWithValue, dispatch }) => {
+    try {
+      console.log(`updateUserClaims - Envoi de la requête PATCH pour l'utilisateur ${id} avec claimIds:`, claimIds);
+      const response = await userApi.patch(`/Users/${id}/claims`, { ClaimIds: claimIds });
+      console.log('updateUserClaims - Réponse du serveur:', response.data);
+      return normalizeUser(response.data);
+    } catch (error) {
+      console.error('updateUserClaims - Erreur:', error.response?.data, error.message);
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (error.response?.status === 403) {
+        return rejectWithValue('Vous n\'avez pas l\'autorisation de modifier les claims de cet utilisateur.');
+      }
+      if (error.response?.status === 404) {
+        return rejectWithValue('Utilisateur non trouvé.');
+      }
+      if (error.response?.status === 400) {
+        return rejectWithValue(error.response?.data?.message || 'Un ou plusieurs Claim IDs sont invalides.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de la mise à jour des claims');
     }
   }
 );
@@ -409,10 +488,11 @@ const usersSlice = createSlice({
     claims: [],
     selectedRole: null,
     selectedClaim: null,
-    loading: false,
+    usersLoading: false,
     error: null,
     snackbar: { open: false, message: '', severity: 'success' },
     userExists: {},
+    lastCreateSuccess: false,
   },
   reducers: {
     setSnackbar: (state, action) => {
@@ -431,19 +511,51 @@ const usersSlice = createSlice({
     clearSelectedClaim: (state) => {
       state.selectedClaim = null;
     },
+    optimisticCreateUser: (state, action) => {
+      state.users.push(action.payload);
+      state.loading = true;
+    },
+    removeOptimisticUser: (state, action) => {
+      state.users = state.users.filter((user) => user.id !== action.payload);
+      state.loading = false;
+    },
+    setLastCreateSuccess: (state, action) => {
+      state.lastCreateSuccess = action.payload;
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchUsers.pending, (state) => {
         state.loading = true;
+        state.usersLoading = true;
       })
       .addCase(fetchUsers.fulfilled, (state, action) => {
         state.loading = false;
+        state.usersLoading = false;
         state.users = action.payload;
-        console.log('Users fetched:', action.payload);
       })
       .addCase(fetchUsers.rejected, (state, action) => {
         state.loading = false;
+        state.usersLoading = false;
+        state.error = action.payload;
+        if (!state.lastCreateSuccess) {
+          state.snackbar = { open: true, message: action.payload, severity: 'error' };
+        }
+        state.lastCreateSuccess = false;
+      })
+      .addCase(fetchUsersByCreatedById.pending, (state) => {
+        state.loading = true;
+        state.usersLoading = true;
+      })
+      .addCase(fetchUsersByCreatedById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.usersLoading = false;
+        state.users = action.payload;
+      })
+      .addCase(fetchUsersByCreatedById.rejected, (state, action) => {
+        state.loading = false;
+        state.usersLoading = false;
+        state.error = action.payload;
         state.snackbar = { open: true, message: action.payload, severity: 'error' };
       })
       .addCase(checkUserExists.pending, (state) => {
@@ -457,12 +569,20 @@ const usersSlice = createSlice({
         state.loading = false;
         state.snackbar = { open: true, message: action.payload, severity: 'error' };
       })
+      .addCase(createUser.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(createUser.fulfilled, (state, action) => {
+        state.users = state.users.filter((user) => !user.id.startsWith('temp-'));
         state.users.push(action.payload);
         state.snackbar = { open: true, message: 'Utilisateur créé avec succès', severity: 'success' };
+        state.loading = false;
+        state.lastCreateSuccess = true;
       })
       .addCase(createUser.rejected, (state, action) => {
+        state.loading = false;
         state.snackbar = { open: true, message: action.payload, severity: 'error' };
+        state.lastCreateSuccess = false;
       })
       .addCase(updateUser.fulfilled, (state, action) => {
         const index = state.users.findIndex((user) => user.id === action.payload.id);
@@ -568,7 +688,6 @@ const usersSlice = createSlice({
       })
       .addCase(fetchClaims.rejected, (state, action) => {
         state.loading = false;
-        // Only show snackbar for non-transient errors
         if (action.payload !== 'Failed to fetch claims') {
           state.snackbar = { open: true, message: action.payload, severity: 'error' };
         }
@@ -638,5 +757,5 @@ const usersSlice = createSlice({
   },
 });
 
-export const { setSnackbar, clearUserExists, clearSelectedRole, clearSelectedClaim } = usersSlice.actions;
+export const { setSnackbar, clearUserExists, clearSelectedRole, clearSelectedClaim, optimisticCreateUser, removeOptimisticUser, setLastCreateSuccess } = usersSlice.actions;
 export default usersSlice.reducer;

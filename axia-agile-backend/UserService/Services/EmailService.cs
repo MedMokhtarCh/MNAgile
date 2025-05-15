@@ -1,6 +1,5 @@
-﻿using System.Net.Http;
-using System.Text;
-using System.Text.Json;
+﻿using System.Net.Mail;
+using System.Net;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +9,10 @@ namespace UserService.Services
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
-        private readonly string _apiKey;
+        private readonly string _smtpHost;
+        private readonly int _smtpPort;
+        private readonly string _smtpUsername;
+        private readonly string _smtpPassword;
         private readonly string _fromEmail;
         private readonly string _fromName;
 
@@ -18,13 +20,20 @@ namespace UserService.Services
         {
             _configuration = configuration;
             _logger = logger;
-            _apiKey = _configuration["EmailSettings:ApiKey"];
+            _smtpHost = _configuration["EmailSettings:SmtpHost"];
+            _smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"] ?? "587");
+            _smtpUsername = _configuration["EmailSettings:SmtpUsername"];
+            _smtpPassword = _configuration["EmailSettings:SmtpPassword"];
             _fromEmail = _configuration["EmailSettings:FromEmail"];
             _fromName = _configuration["EmailSettings:FromName"];
 
             // Vérifier que les paramètres sont chargés
-            if (string.IsNullOrEmpty(_apiKey))
-                _logger.LogError("Clé API MailerSend non configurée.");
+            if (string.IsNullOrEmpty(_smtpHost))
+                _logger.LogError("Hôte SMTP non configuré.");
+            if (string.IsNullOrEmpty(_smtpUsername))
+                _logger.LogError("Nom d'utilisateur SMTP non configuré.");
+            if (string.IsNullOrEmpty(_smtpPassword))
+                _logger.LogError("Mot de passe SMTP non configuré.");
             if (string.IsNullOrEmpty(_fromEmail))
                 _logger.LogError("Adresse FromEmail non configurée.");
         }
@@ -33,51 +42,43 @@ namespace UserService.Services
         {
             try
             {
-                _logger.LogInformation($"Tentative d'envoi d'email à {toEmail} depuis {_fromEmail}");
+                _logger.LogInformation($"Tentative d'envoi d'email à {toEmail} depuis {_fromEmail} via SMTP {_smtpHost}:{_smtpPort}");
 
-                using var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
-
-                var payload = new
+                var smtpClient = new SmtpClient(_smtpHost)
                 {
-                    from = new { email = _fromEmail, name = _fromName },
-                    to = new[] { new { email = toEmail, name = $"{firstName} {lastName}" } },
-                    subject = "Bienvenue - Vos identifiants de connexion",
-                    text = $"Bonjour {firstName},\nVotre compte a été créé avec succès. Voici vos identifiants :\n\nEmail: {toEmail}\nMot de passe: {password}\n\nNous vous recommandons de changer votre mot de passe lors de votre première connexion.",
-                    html = $@"
-                        <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
-                            <h2 style='color: #333;'>Bienvenue !</h2>
-                            <p>Bonjour <strong>{firstName}</strong>,</p>
-                            <p>Votre compte a été créé avec succès. Voici vos identifiants de connexion :</p>
-                            <div style='background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;'>
-                                <p><strong>Email:</strong> {toEmail}</p>
-                                <p><strong>Mot de passe:</strong> {password}</p>
-                            </div>
-                            <p>Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe lors de votre première connexion.</p>
-                            <p>Cordialement,<br/>L'équipe Support</p>
-                        </div>"
+                    Port = _smtpPort,
+                    Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                    EnableSsl = true,
                 };
 
-                var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-                var response = await client.PostAsync("https://api.mailersend.com/v1/email", content);
-
-                bool successful = response.IsSuccessStatusCode;
-
-                if (successful)
+                var mailMessage = new MailMessage
                 {
-                    _logger.LogInformation($"Email envoyé avec succès à {toEmail}. Code HTTP: {response.StatusCode}");
-                }
-                else
-                {
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning($"Échec d'envoi d'email à {toEmail}. Code HTTP: {response.StatusCode}, Réponse: {responseContent}");
-                }
+                    From = new MailAddress(_fromEmail, _fromName),
+                    Subject = "Bienvenue - Vos identifiants de connexion",
+                    Body = $@"<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                        <h2 style='color: #333;'>Bienvenue !</h2>
+                        <p>Bonjour <strong>{firstName}</strong>,</p>
+                        <p>Votre compte a été créé avec succès. Voici vos identifiants de connexion :</p>
+                        <div style='background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;'>
+                            <p><strong>Email:</strong> {toEmail}</p>
+                            <p><strong>Mot de passe:</strong> {password}</p>
+                        </div>
+                        <p>Pour des raisons de sécurité, nous vous recommandons de changer votre mot de passe lors de votre première connexion.</p>
+                        <p>Cordialement,<br/>L'équipe Support axiaAgile</p>
+                    </div>",
+                    IsBodyHtml = true,
+                };
 
-                return successful;
+                mailMessage.To.Add(toEmail);
+
+                _logger.LogDebug("Connexion au serveur SMTP...");
+                await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email envoyé avec succès à {toEmail}.");
+                return true;
             }
-            catch (HttpRequestException ex)
+            catch (SmtpException ex)
             {
-                _logger.LogError(ex, $"Erreur réseau lors de l'envoi de l'email à {toEmail}: {ex.Message}");
+                _logger.LogError(ex, $"Erreur SMTP lors de l'envoi de l'email à {toEmail}: {ex.Message}, StatusCode: {ex.StatusCode}");
                 return false;
             }
             catch (Exception ex)

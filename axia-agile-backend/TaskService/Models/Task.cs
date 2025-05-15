@@ -1,5 +1,4 @@
-﻿// TaskService/Models/Task.cs
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -22,6 +21,8 @@ namespace TaskService.Models
         public string? Attachments { get; set; }
         [Required]
         public int ProjectId { get; set; }
-        public List<TaskBacklog> TaskBacklogs { get; set; } = new List<TaskBacklog>(); // New relationship
+        public List<TaskBacklog>? TaskBacklogs { get; set; } = new List<TaskBacklog>();
+        public string? Subtasks { get; set; } // JSON-serialized list of subtask titles
+        public int? SprintId { get; set; } // Link to Sprint
     }
 }

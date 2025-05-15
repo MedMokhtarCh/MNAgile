@@ -4,7 +4,7 @@ import { Outlet, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import ProjectSidebar from '../components/sidebar/ProjectSidebar';
 import { projectApi } from '../services/api';
-import { normalizeProject } from '../utils/projectUtils';
+import { normalizeProject } from '../store/slices/projectsSlice';
 
 const ProjectLayout = () => {
   const { projectId } = useParams();
@@ -52,13 +52,22 @@ const ProjectLayout = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', overflowX: 'auto' }}>
       <ProjectSidebar
         collapsed={false}
         projectId={projectId}
         projectTitle={project?.title || 'Projet inconnu'}
       />
-      <Box sx={{ flexGrow: 1, p: 3, bgcolor: 'background.default' }}>
+      <Box
+        sx={{
+          flexGrow: 1,
+          p: 3,
+          bgcolor: 'background.default',
+          overflowX: 'visible', 
+          overflowY: 'auto', 
+        }}
+        className="main-content content" 
+      >
         <Outlet context={{ project, projectId }} />
       </Box>
     </Box>

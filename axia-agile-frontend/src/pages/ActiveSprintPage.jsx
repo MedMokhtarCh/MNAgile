@@ -1,170 +1,355 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardContent, LinearProgress, Button, Typography, Box, Grid } from '@mui/material';
-import { FaRegClock, FaCheckCircle, FaRegDotCircle } from 'react-icons/fa'; 
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  LinearProgress,
+  Typography,
+  Box,
+  Grid,
+  Paper,
+  Chip,
+  Divider,
+  Collapse,
+  IconButton,
+  Alert,
+  Button,
+  CircularProgress,
+} from '@mui/material';
+import {
+  AccessTime as AccessTimeIcon,
+  Assignment as AssignmentIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+} from '@mui/icons-material';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import { Pie } from 'react-chartjs-2';
+import { fetchSprints, fetchAllTasks, clearTasksError } from '../store/slices/taskSlice';
+import { fetchProjects, normalizeProject } from '../store/slices/projectsSlice';
+import { projectApi } from '../services/api';
+import PageTitle from '../components/common/PageTitle';
 
+// Register ChartJS components
+ChartJS.register(ArcElement, Tooltip, Legend);
 
-const calculateTimeLeft = (endDate) => {
+// Helper function to format dates
+const formatDate = (dateString) => {
+  if (!dateString) return 'N/A';
+  try {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('fr-FR', options);
+  } catch {
+    return 'Date invalide';
+  }
+};
+
+// Calculate days remaining in a sprint
+const calculateDaysRemaining = (endDate) => {
+  if (!endDate) return { days: 0, isExpired: true };
   const now = new Date();
-  const tunisianTime = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Tunis' }));
-  const timeDifference = new Date(endDate) - tunisianTime;
-  const hours = Math.floor((timeDifference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((timeDifference % (1000 * 60 * 60)) / (1000 * 60));
-  return { hours, minutes };
+  const endDateTime = new Date(endDate);
+  const timeDifference = endDateTime - now;
+
+  if (timeDifference <= 0) {
+    return { DAYS: 0, isExpired: true };
+  }
+
+  const days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+  return { days, isExpired: false };
 };
 
 const ActiveSprintPage = () => {
-  const [sprint] = useState({
-    name: "Sprint 1",
-    startDate: "2024-02-20T00:00:00",
-    endDate: "2024-03-05T00:00:00",
-    tasks: [
-      { id: 1, title: "Tâche 1", completed: true },
-      { id: 2, title: "Tâche 2", completed: false },
-      { id: 3, title: "Tâche 3", completed: false },
-      { id: 4, title: "Tâche 4", completed: true }
-    ],
-    meetings: [
-      { id: 1, date: "2024-02-21", title: "Réunion de lancement", status: "in-progress" },
-      { id: 2, date: "2024-02-23", title: "Réunion de suivi", status: "completed" }
-    ]
-  });
+  const { projectId } = useParams();
+  const dispatch = useDispatch();
+  const { sprints, tasks, status: tasksStatus, error: tasksError } = useSelector((state) => state.tasks);
+  const { projects, status: projectsStatus, error: projectsError } = useSelector((state) => state.projects);
+  const [project, setProject] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [expandedSprint, setExpandedSprint] = useState({});
+  const [daysRemaining, setDaysRemaining] = useState({});
 
-  const [timeLeft, setTimeLeft] = useState(calculateTimeLeft(sprint.endDate));
-
-  // Mise à jour du temps restant toutes les minutes
+  // Fetch project, sprints, and tasks on component mount
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft(calculateTimeLeft(sprint.endDate));
-    }, 60000);
-    return () => clearInterval(timer);
-  }, [sprint.endDate]);
+    const loadData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        if (!projectId || isNaN(parseInt(projectId))) {
+          throw new Error('ID du projet invalide');
+        }
 
-  const completedTasks = sprint.tasks.filter(task => task.completed).length;
-  const totalTasks = sprint.tasks.length;
-  const progress = (completedTasks / totalTasks) * 100;
+        console.log('[ActiveSprintPage] Fetching data for projectId:', projectId);
+        const projectResponse = await projectApi.get(`/Projects/${projectId}`);
+        const normalizedProject = normalizeProject(projectResponse.data);
+        setProject(normalizedProject);
 
-  const ongoingMeetings = sprint.meetings.filter(meeting => meeting.status === 'in-progress');
-  const completedMeetings = sprint.meetings.filter(meeting => meeting.status === 'completed');
-  const ongoingTasks = sprint.tasks.filter(task => !task.completed);
-  const completedTasksList = sprint.tasks.filter(task => task.completed);
+        // Fetch projects if not already loaded
+        if (projectsStatus === 'idle') {
+          await dispatch(fetchProjects()).unwrap();
+        }
+
+        await Promise.all([
+          dispatch(fetchSprints({ projectId: parseInt(projectId) })).unwrap(),
+          dispatch(fetchAllTasks({ projectId: parseInt(projectId) })).unwrap(),
+        ]);
+      } catch (err) {
+        console.error('[ActiveSprintPage] Error:', {
+          message: err.message,
+          response: err.response ? {
+            status: err.response.status,
+            data: err.response.data,
+          } : null,
+        });
+        const errorMessage =
+          err.response?.status === 404
+            ? `Le projet avec l'ID ${projectId} n'existe pas.`
+            : err.response?.status === 401
+            ? 'Non autorisé. Veuillez vous reconnecter.'
+            : err.response?.data?.message || err.message || 'Erreur lors du chargement des données';
+        setError(errorMessage);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [projectId, dispatch, projectsStatus]);
+
+  // Update days remaining for each sprint every day
+  useEffect(() => {
+    if (sprints.length > 0) {
+      const updateDays = () => {
+        const newDaysRemaining = {};
+        sprints.forEach((sprint) => {
+          newDaysRemaining[sprint.id] = calculateDaysRemaining(sprint.endDate);
+        });
+        setDaysRemaining(newDaysRemaining);
+      };
+
+      updateDays(); // Initial calculation
+      const timer = setInterval(updateDays, 24 * 60 * 60 * 1000); // Update daily
+
+      return () => clearInterval(timer);
+    }
+  }, [sprints]);
+
+  // Handle expanding/collapsing sprint details
+  const handleToggleSprint = (sprintId) => {
+    setExpandedSprint((prev) => ({
+      ...prev,
+      [sprintId]: !prev[sprintId],
+    }));
+  };
+
+  // Memoized sorted sprints
+  const sortedSprints = useMemo(() => {
+    return [...sprints].sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+  }, [sprints]);
+
+  // Loading state
+if (loading) {
+  return (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <CircularProgress size={60} />
+    </Box>
+  );
+}
+  // Error state
+  if (error || tasksError || projectsError) {
+    return (
+      <Box sx={{ p: 3, bgcolor: '#fff' }}>
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearTasksError());
+                setError('');
+                dispatch(fetchProjects());
+                dispatch(fetchSprints({ projectId: parseInt(projectId) }));
+                dispatch(fetchAllTasks({ projectId: parseInt(projectId) }));
+              }}
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          {error || tasksError || projectsError || 'Erreur lors du chargement des données.'}
+        </Alert>
+      </Box>
+    );
+  }
+
+  // No sprints state
+  if (!sprints || sprints.length === 0) {
+    return (
+      <Box sx={{ p: 3, bgcolor: '#fff' }}>
+        <PageTitle>Aucun sprint disponible</PageTitle>
+        <Typography>
+          Il n'y a pas de sprints pour le projet {project?.title || 'inconnu'}. Veuillez créer un sprint pour commencer.
+        </Typography>
+      </Box>
+    );
+  }
 
   return (
-    <Box sx={{ padding: 4, backgroundColor: '#f4f4f4' }}>
-      <Grid container spacing={4}>
-        {/* Card du sprint actif */}
-        <Grid item xs={12} sm={6} lg={4}>
-          <Card sx={{
-            backgroundColor: '#42A5F5', // Bleu clair
-            color: 'white',
-            borderRadius: 2,
-            boxShadow: 3,
-            padding: 2,
-          }}>
-            <CardHeader 
-              title={`Sprint Actif: ${sprint.name}`} 
-              subheader={`Durée: ${sprint.startDate} - ${sprint.endDate}`} 
-              sx={{ color: 'white' }}
-            />
-            <CardContent>
-              {/* Compte à rebours */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FaRegClock size={20} color="#ffeb3b" />
-                <Typography variant="body1" sx={{ color: '#ffeb3b' }}>
-                  Temps restant: {timeLeft.hours}h {timeLeft.minutes}m
-                </Typography>
-              </Box>
+    <Box sx={{ padding: 3 }}>
+      <PageTitle>Rapport des Sprints du Projet : {project?.title || 'Inconnu'}</PageTitle>
+      <Typography variant="h6" color="textSecondary" sx={{ mb: 3 }}>
+        {sprints.length} sprint{sprints.length !== 1 ? 's' : ''} au total
+      </Typography>
 
-              {/* Barre de progression des tâches */}
-              <Box sx={{ marginTop: 3 }}>
-                <Typography variant="h6" sx={{ color: 'white' }}>Progrès des tâches:</Typography>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={progress} 
-                  sx={{ marginTop: 2, height: 10, borderRadius: 5 }}
-                />
-                <Typography variant="body2" sx={{ marginTop: 2, color: 'white' }}>
-                  {completedTasks} sur {totalTasks} tâches complétées
-                </Typography>
-              </Box>
+      {/* Sprint List */}
+      {sortedSprints.map((sprint) => {
+        // Get tasks for this sprint
+        const sprintTasks = tasks.filter((task) => task.sprintId === sprint.id);
 
-              {/* Réunions en cours et terminées */}
-              <Box sx={{ marginTop: 3 }}>
-                <Typography variant="h6" sx={{ color: 'white' }}>Réunions:</Typography>
-                {ongoingMeetings.map(meeting => (
-                  <Box key={meeting.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                    <FaRegDotCircle color="orange" size={20} />
-                    <Typography variant="body2" sx={{ color: 'white' }}>
-                      {meeting.title} - {meeting.date} (En cours)
+        // Total tasks and subtasks
+        const totalTasks = sprintTasks.length;
+        const totalSubtasks = sprintTasks.reduce((acc, task) => acc + (task.subtasks?.length || 0), 0);
+        const completedSubtasks = sprintTasks.reduce(
+          (acc, task) => acc + (task.subtasks?.filter((sub) => sub.completed).length || 0),
+          0
+        );
+
+        // Task priority distribution
+        const tasksByPriority = {
+          HIGH: sprintTasks.filter((task) => task.priority === 'HIGH').length,
+          MEDIUM: sprintTasks.filter((task) => task.priority === 'MEDIUM').length,
+          LOW: sprintTasks.filter((task) => task.priority === 'LOW').length,
+        };
+
+        // Calculate progress percentage
+        const startDate = new Date(sprint.startDate).getTime();
+        const endDate = new Date(sprint.endDate).getTime();
+        const now = new Date().getTime();
+        const totalDuration = endDate - startDate;
+        const elapsed = now - startDate;
+        const progress = totalDuration > 0 ? Math.min(Math.round((elapsed / totalDuration) * 100), 100) : 0;
+
+        // Priority chart data
+        const taskPriorityData = {
+          labels: ['Haute', 'Moyenne', 'Basse'],
+          datasets: [
+            {
+              data: [tasksByPriority.HIGH, tasksByPriority.MEDIUM, tasksByPriority.LOW],
+              backgroundColor: ['#F44336', '#FFC107', '#4CAF50'],
+              borderWidth: 1,
+            },
+          ],
+        };
+
+        return (
+          <Paper
+            key={sprint.id}
+            elevation={3}
+            sx={{
+              p: 3,
+              mb: 3,
+              borderRadius: 2,
+              borderLeft: `5px solid ${daysRemaining[sprint.id]?.isExpired ? '#F44336' : '#2196F3'}`,
+            }}
+          >
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={4}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Box>
+                    <Typography variant="h5">{sprint.name}</Typography>
+                    <Typography variant="subtitle1" color="textSecondary">
+                      {formatDate(sprint.startDate)} - {formatDate(sprint.endDate)}
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      {sprint.description || 'Aucune description'}
                     </Typography>
                   </Box>
-                ))}
-                {completedMeetings.map(meeting => (
-                  <Box key={meeting.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                    <FaCheckCircle color="green" size={20} />
-                    <Typography variant="body2" sx={{ color: 'white' }}>
-                      {meeting.title} - {meeting.date} (Terminée)
+                  <IconButton onClick={() => handleToggleSprint(sprint.id)}>
+                    {expandedSprint[sprint.id] ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                  </IconButton>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <AccessTimeIcon color="primary" sx={{ mr: 1 }} />
+                    <Typography variant="body1">
+                      {daysRemaining[sprint.id]?.isExpired
+                        ? 'Sprint terminé'
+                        : `${daysRemaining[sprint.id]?.days} jour${daysRemaining[sprint.id]?.days !== 1 ? 's' : ''} restant${daysRemaining[sprint.id]?.days !== 1 ? 's' : ''}`}
                     </Typography>
                   </Box>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
+                  <Box>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                      Progression temporelle: {progress}%
+                    </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={progress}
+                      sx={{ height: 8, borderRadius: 5 }}
+                    />
+                  </Box>
+                </Box>
+              </Grid>
+              <Grid item xs={12} md={4}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="subtitle2" fontWeight="bold">
+                    Statistiques des tâches
+                  </Typography>
+                  <Typography variant="body1">
+                    Total des tâches: {totalTasks}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    <Chip
+                      icon={<AssignmentIcon />}
+                      label={`Haute: ${tasksByPriority.HIGH}`}
+                      size="small"
+                      sx={{ bgcolor: '#F44336', color: 'white', minWidth: 100 }}
+                    />
+                    <Chip
+                      icon={<AssignmentIcon />}
+                      label={`Moyenne: ${tasksByPriority.MEDIUM}`}
+                      size="small"
+                      sx={{ bgcolor: '#FFC107', color: 'black', minWidth: 100 }}
+                    />
+                    <Chip
+                      icon={<AssignmentIcon />}
+                      label={`Basse: ${tasksByPriority.LOW}`}
+                      size="small"
+                      sx={{ bgcolor: '#4CAF50', color: 'white', minWidth: 100 }}
+                    />
+                  </Box>
+                  {totalSubtasks > 0 && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Sous-tâches: {completedSubtasks}/{totalSubtasks} complétées
+                    </Typography>
+                  )}
+                </Box>
+              </Grid>
+            </Grid>
 
-        {/* Card pour afficher les tâches */}
-        <Grid item xs={12} sm={6} lg={4}>
-          <Card sx={{
-            backgroundColor: '#42A5F5', // Bleu clair
-            color: 'white',
-            borderRadius: 2,
-            boxShadow: 3,
-            padding: 2,
-          }}>
-            <CardHeader title="Tâches en cours" sx={{ color: 'white' }} />
-            <CardContent>
-              {ongoingTasks.length === 0 ? (
-                <Typography variant="body2" sx={{ color: 'white' }}>Aucune tâche en cours</Typography>
-              ) : (
-                ongoingTasks.map(task => (
-                  <Box key={task.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                    <FaRegDotCircle color="orange" size={20} />
-                    <Typography variant="body2" sx={{ color: 'white' }}>
-                      {task.title}
-                    </Typography>
-                  </Box>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Card pour afficher les tâches terminées */}
-        <Grid item xs={12} sm={6} lg={4}>
-          <Card sx={{
-            backgroundColor: '#42A5F5', // Bleu clair
-            color: 'white',
-            borderRadius: 2,
-            boxShadow: 3,
-            padding: 2,
-          }}>
-            <CardHeader title="Tâches terminées" sx={{ color: 'white' }} />
-            <CardContent>
-              {completedTasksList.length === 0 ? (
-                <Typography variant="body2" sx={{ color: 'white' }}>Aucune tâche terminée</Typography>
-              ) : (
-                completedTasksList.map(task => (
-                  <Box key={task.id} sx={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                    <FaCheckCircle color="green" size={20} />
-                    <Typography variant="body2" sx={{ color: 'white' }}>
-                      {task.title}
-                    </Typography>
-                  </Box>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+            {/* Priority Distribution Chart */}
+            <Collapse in={expandedSprint[sprint.id]} timeout="auto" unmountOnExit>
+              <Divider sx={{ my: 3 }} />
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Card>
+                    <CardHeader title="Répartition des tâches par priorité" />
+                    <CardContent>
+                      <Box sx={{ height: 200, display: 'flex', justifyContent: 'center' }}>
+                        <Pie data={taskPriorityData} />
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </Collapse>
+          </Paper>
+        );
+      })}
     </Box>
   );
 };

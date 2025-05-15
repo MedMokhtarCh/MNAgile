@@ -9,7 +9,11 @@
         public string? PhoneNumber { get; set; }
         public string? JobTitle { get; set; }
         public string? Entreprise { get; set; }
-        public int RoleId { get; set; } // 0 indicates no change
+        public int RoleId { get; set; } 
         public List<int>? ClaimIds { get; set; }
+    }
+    public class PatchUserClaimsRequest
+    {
+        public List<int> ClaimIds { get; set; } = new List<int>();
     }
 }
