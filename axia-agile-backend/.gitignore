@@ -25,3 +25,5 @@ packages/
 
 # Fichiers de configuration locale
 appsettings.Development.json
+UserService/appsettings.json
+ReunionService/appsettings.json
