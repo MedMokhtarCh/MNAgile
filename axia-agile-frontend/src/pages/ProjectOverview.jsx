@@ -107,7 +107,7 @@ const ProjectOverview = () => {
     baseURL: 'https://api-inference.huggingface.co/models/mixtralai/Mixtral-8x7B-Instruct-v0.1',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer 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', // Remplacez par votre clé valide
+  
     },
   });
 
