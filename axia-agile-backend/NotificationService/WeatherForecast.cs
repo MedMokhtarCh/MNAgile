@@ -1,4 +1,4 @@
-namespace NotificationService
+namespace Notification
 {
     public class WeatherForecast
     {

@@ -68,22 +68,25 @@ const InputUserAssignment = ({
           );
         })
       }
-      renderOption={(props, option) => (
-        <li {...props}>
-          <Avatar
-            sx={{
-              bgcolor: getAvatarColor(getFullName(option)),
-              width: 24,
-              height: 24,
-              fontSize: 12,
-              marginRight: 1,
-            }}
-          >
-            {generateInitials(getFullName(option))}
-          </Avatar>
-          {`${getFullName(option)} (${option.email})`}
-        </li>
-      )}
+      renderOption={(props, option) => {
+        const { key, ...otherProps } = props; // Extract key from props
+        return (
+          <li key={key} {...otherProps}>
+            <Avatar
+              sx={{
+                bgcolor: getAvatarColor(getFullName(option)),
+                width: 24,
+                height: 24,
+                fontSize: 12,
+                marginRight: 1,
+              }}
+            >
+              {generateInitials(getFullName(option))}
+            </Avatar>
+            {`${getFullName(option)} (${option.email})`}
+          </li>
+        );
+      }}
       sx={{ mb: 2 }}
       disabled={disabled}
     />

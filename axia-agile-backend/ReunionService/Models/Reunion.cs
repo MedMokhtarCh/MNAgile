@@ -1,14 +1,15 @@
-﻿namespace ReunionService.Models
+﻿namespace ReunionService.Models;
+
+public class Reunion
 {
-    public class Reunion
-    {
-        public int Id { get; set; }
-        public string Title { get; set; }
-        public string MeetingUri { get; set; }
-        public DateTime StartTime { get; set; }
-        public DateTime EndTime { get; set; }
-        public string CalendarEventId { get; set; }
-        public int CreatedByUserId { get; set; }
-        public DateTime CreatedAt { get; set; }
-    }
+    public string Id { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Location { get; set; }
+    public DateTime StartDateTime { get; set; }
+    public DateTime EndDateTime { get; set; }
+    public string? MeetLink { get; set; }
+    public string HtmlLink { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
 }

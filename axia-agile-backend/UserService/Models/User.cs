@@ -17,5 +17,5 @@ public class User
     public Role Role { get; set; }
     public List<UserClaim> UserClaims { get; set; }
     public int? CreatedById { get; set; } // Add this property
- 
+
 }

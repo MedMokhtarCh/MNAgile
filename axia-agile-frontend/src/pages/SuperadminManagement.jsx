@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
+import { useState, useEffect, useMemo } from 'react';
+import { Box, Button, ThemeProvider, CssBaseline, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import UserForm from '../components/users/UserForm';
@@ -14,7 +14,7 @@ import AdminTabs from './AdminTabs';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchUsersByCreatedById, updateUser, setSnackbar } from '../store/slices/usersSlice';
+import { fetchUsersByCreatedById } from '../store/slices/usersSlice';
 
 const SuperadminManagement = () => {
   const dispatch = useDispatch();
@@ -40,17 +40,35 @@ const SuperadminManagement = () => {
     handleCloseSnackbar,
     openModal,
     setOpenModal,
+    isCreating,
   } = useUsers('superadmins');
 
   const [openPermissionsModal, setOpenPermissionsModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [isSaving, setIsSaving] = useState(false);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+
+  // Memoize filteredSuperadmins with createdById filter
+  const filteredSuperadmins = useMemo(() => {
+    return users.filter(
+      (admin) =>
+        admin.roleId === 1 &&
+        admin.createdById === currentUser?.id &&
+        (admin.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          admin.entreprise?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+        (filterStatus === 'all' ||
+          (filterStatus === 'active' && admin.isActive) ||
+          (filterStatus === 'inactive' && !admin.isActive))
+    );
+  }, [users, searchTerm, filterStatus, currentUser]);
 
   useEffect(() => {
     console.log('SuperadminManagement openModal state:', openModal);
-  }, [openModal]);
+    console.log('SuperadminManagement - Users state updated:', users);
+    console.log('SuperadminManagement - Filtered superadmins:', filteredSuperadmins);
+  }, [openModal, users, filteredSuperadmins]);
 
   const handleCloseModal = () => {
     setOpenModal(false);
@@ -68,17 +86,31 @@ const SuperadminManagement = () => {
     });
     setEditMode(false);
     setCurrentUserId(null);
+    setSearchTerm('');
+    setFilterStatus('all');
   };
 
-  const filteredSuperadmins = users.filter(
-    (admin) =>
-      admin.roleId === 1 &&
-      (admin.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        admin.entreprise?.toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (filterStatus === 'all' ||
-        (filterStatus === 'active' && admin.isActive) ||
-        (filterStatus === 'inactive' && !admin.isActive))
-  );
+  const handleOpenDeleteDialog = (id) => {
+    setUserToDelete(id);
+    setOpenDeleteDialog(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setOpenDeleteDialog(false);
+    setUserToDelete(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (userToDelete) {
+      try {
+        await dispatch(handleDeleteUser(userToDelete)).unwrap();
+        dispatch(fetchUsersByCreatedById(currentUser.id));
+      } catch (error) {
+        // Error handled in usersSlice
+      }
+    }
+    handleCloseDeleteDialog();
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -135,12 +167,12 @@ const SuperadminManagement = () => {
           users={filteredSuperadmins}
           loading={loading}
           onEdit={handleEditUser}
-          onDelete={handleDeleteUser}
+          onDelete={handleOpenDeleteDialog}
           onToggleActive={handleToggleActive}
           onManagePermissions={(admin) => {
             setSelectedAdmin({
               ...admin,
-              claimIds: [],
+              claimIds: [], // Superadmins have no explicit permissions
             });
             setOpenPermissionsModal(true);
           }}
@@ -162,6 +194,7 @@ const SuperadminManagement = () => {
           requiredFields={['email', 'firstName', 'lastName']}
           showFields={['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role']}
           disabledFields={['role']}
+          loading={isCreating}
         />
 
         <PermissionsModal
@@ -169,42 +202,17 @@ const SuperadminManagement = () => {
           onClose={() => {
             setOpenPermissionsModal(false);
             setSelectedAdmin(null);
+            dispatch(fetchUsersByCreatedById(currentUser?.id));
           }}
           user={selectedAdmin}
           claims={claims}
-          onSave={async () => {
-            if (!selectedAdmin) return;
-            setIsSaving(true);
-            const adminData = {
-              id: selectedAdmin.id,
-              email: selectedAdmin.email,
-              firstName: selectedAdmin.firstName,
-              lastName: selectedAdmin.lastName,
-              phoneNumber: selectedAdmin.phoneNumber || null,
-              claimIds: [],
-              roleId: 1,
-              entreprise: selectedAdmin.entreprise || '',
-              isActive: selectedAdmin.isActive,
-              createdById: selectedAdmin.createdById || currentUser?.id || null,
-            };
-            console.log('Dispatching updateUser with:', adminData);
-            try {
-              await dispatch(updateUser({ id: selectedAdmin.id, userData: adminData })).unwrap();
-              setOpenPermissionsModal(false);
-              setSelectedAdmin(null);
-              dispatch(fetchUsersByCreatedById(currentUser?.id));
-            } catch (error) {
-              dispatch(setSnackbar({
-                open: true,
-                message: `Échec de la mise à jour: ${error}`,
-                severity: 'error',
-              }));
-            } finally {
-              setIsSaving(false);
-            }
-          }}
           onPermissionChange={() => {
             // No-op: Superadmins have all permissions implicitly
+          }}
+          onSave={() => {
+            setOpenPermissionsModal(false);
+            setSelectedAdmin(null);
+            dispatch(fetchUsersByCreatedById(currentUser?.id));
           }}
         />
 
@@ -214,6 +222,26 @@ const SuperadminManagement = () => {
           message={snackbar.message}
           severity={snackbar.severity}
         />
+
+        <Dialog
+          open={openDeleteDialog}
+          onClose={handleCloseDeleteDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">Confirmer la suppression</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Êtes-vous sûr de vouloir supprimer ce superadministrateur ? Cette action est irréversible.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDeleteDialog}>Annuler</Button>
+            <Button onClick={handleConfirmDelete} color="error" autoFocus>
+              Supprimer
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );

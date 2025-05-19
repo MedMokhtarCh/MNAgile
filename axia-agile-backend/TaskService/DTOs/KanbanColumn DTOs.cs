@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace TaskService.DTOs
+﻿namespace TaskService.DTOs
 {
     public class KanbanColumnDTO
     {

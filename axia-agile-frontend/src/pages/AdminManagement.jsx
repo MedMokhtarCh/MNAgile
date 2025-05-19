@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Button, ThemeProvider, CssBaseline } from '@mui/material';
+import { Box, Button, ThemeProvider, CssBaseline, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import UserForm from '../components/users/UserForm';
@@ -14,7 +14,7 @@ import AdminTabs from './AdminTabs';
 import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchUsersByCreatedById, updateUserClaims } from '../store/slices/usersSlice';
+import { fetchUsersByCreatedById } from '../store/slices/usersSlice';
 
 const AdminManagement = () => {
   const dispatch = useDispatch();
@@ -40,16 +40,15 @@ const AdminManagement = () => {
     handleCloseSnackbar,
     openModal,
     setOpenModal,
+    isCreating,
   } = useUsers('admins');
 
   const [openPermissionsModal, setOpenPermissionsModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-
-  useEffect(() => {
-    console.log('AdminManagement openModal state:', openModal);
-  }, [openModal]);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
 
   const handleCloseModal = () => {
     setOpenModal(false);
@@ -69,9 +68,32 @@ const AdminManagement = () => {
     setCurrentUserId(null);
   };
 
+  const handleOpenDeleteDialog = (id) => {
+    setUserToDelete(id);
+    setOpenDeleteDialog(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setOpenDeleteDialog(false);
+    setUserToDelete(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (userToDelete) {
+      try {
+        await dispatch(handleDeleteUser(userToDelete)).unwrap();
+        dispatch(fetchUsersByCreatedById(currentUser.id));
+      } catch (error) {
+        // Error handled in usersSlice
+      }
+    }
+    handleCloseDeleteDialog();
+  };
+
   const filteredAdmins = users.filter(
     (admin) =>
       admin.roleId === 2 &&
+      admin.createdById === currentUser?.id &&
       (admin.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         admin.entreprise?.toLowerCase().includes(searchTerm.toLowerCase())) &&
       (filterStatus === 'all' ||
@@ -134,7 +156,7 @@ const AdminManagement = () => {
           users={filteredAdmins}
           loading={loading}
           onEdit={handleEditUser}
-          onDelete={handleDeleteUser}
+          onDelete={handleOpenDeleteDialog}
           onToggleActive={handleToggleActive}
           onManagePermissions={(admin) => {
             setSelectedAdmin({
@@ -161,6 +183,7 @@ const AdminManagement = () => {
           requiredFields={['email', 'firstName', 'lastName', 'entreprise']}
           showFields={['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'entreprise', 'role', 'permissions']}
           disabledFields={editMode ? ['role'] : []}
+          loading={isCreating}
         />
 
         <PermissionsModal
@@ -168,7 +191,7 @@ const AdminManagement = () => {
           onClose={() => {
             setOpenPermissionsModal(false);
             setSelectedAdmin(null);
-            dispatch(fetchUsersByCreatedById(currentUser?.id)); // Refresh admins on close
+            dispatch(fetchUsersByCreatedById(currentUser?.id));
           }}
           user={selectedAdmin}
           claims={claims}
@@ -189,6 +212,26 @@ const AdminManagement = () => {
           message={snackbar.message}
           severity={snackbar.severity}
         />
+
+        <Dialog
+          open={openDeleteDialog}
+          onClose={handleCloseDeleteDialog}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">Confirmer la suppression</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              Êtes-vous sûr de vouloir supprimer cet administrateur ? Cette action est irréversible.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDeleteDialog}>Annuler</Button>
+            <Button onClick={handleConfirmDelete} color="error" autoFocus>
+              Supprimer
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );

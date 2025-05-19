@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace TaskService.Models
 {
@@ -24,5 +22,6 @@ namespace TaskService.Models
         public List<TaskBacklog>? TaskBacklogs { get; set; } = new List<TaskBacklog>();
         public string? Subtasks { get; set; } // JSON-serialized list of subtask titles
         public int? SprintId { get; set; } // Link to Sprint
+        public int DisplayOrder { get; set; } // Order within a Kanban column
     }
 }

@@ -1,11 +1,4 @@
-﻿using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Threading.Tasks;
-
-namespace TaskService.Services
+﻿namespace TaskService.Services
 {
     public class FileStorageService
     {

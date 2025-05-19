@@ -1,6 +1,4 @@
 ﻿// TaskService/Models/Backlog.cs
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace TaskService.Models

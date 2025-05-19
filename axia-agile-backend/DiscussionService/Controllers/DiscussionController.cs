@@ -1,9 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using System.Security.Claims;
-using System.Threading.Tasks;
+﻿using System.Security.Claims;
 using DiscussionService.DTOs;
-using DiscussionService.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DiscussionService.Controllers
 {
@@ -22,6 +20,7 @@ namespace DiscussionService.Controllers
         }
 
         [HttpGet("channels")]
+        [Authorize(Policy = "CanCommunicate")]
         public async Task<ActionResult<List<ChannelDTO>>> GetChannels()
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -38,6 +37,7 @@ namespace DiscussionService.Controllers
         }
 
         [HttpPost("channels")]
+        [Authorize(Policy = "CanCreateChannel")]
         public async Task<ActionResult<ChannelDTO>> CreateChannel([FromBody] CreateChannelRequest request)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -59,6 +59,7 @@ namespace DiscussionService.Controllers
         }
 
         [HttpPost("messages")]
+        [Authorize(Policy = "CanCommunicate")]
         public async Task<ActionResult<MessageDTO>> SendMessage([FromForm] SendMessageRequest request, List<IFormFile> files)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -80,6 +81,8 @@ namespace DiscussionService.Controllers
         }
 
         [HttpGet("channels/{channelId}/messages")]
+        [Authorize(Policy = "CanCommunicate")]
+
         public async Task<ActionResult<List<MessageDTO>>> GetChannelMessages(int channelId)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -100,6 +103,7 @@ namespace DiscussionService.Controllers
             }
         }
         [HttpDelete("channels/{channelId}")]
+        [Authorize(Policy = "CanCreateChannel")]
         public async Task<ActionResult> DeleteChannel(int channelId)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
@@ -126,6 +130,7 @@ namespace DiscussionService.Controllers
         }
 
         [HttpPut("channels/{channelId}")]
+        [Authorize(Policy = "CanCreateChannel")]
         public async Task<ActionResult<ChannelDTO>> UpdateChannel(int channelId, [FromBody] UpdateChannelRequest request)
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);

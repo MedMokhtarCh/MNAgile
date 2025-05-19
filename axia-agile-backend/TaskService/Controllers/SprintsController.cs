@@ -1,12 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using TaskService.DTOs;
 using TaskService.Services;
-using Microsoft.AspNetCore.Http;
 
 namespace TaskService.Controllers
 {
@@ -25,7 +20,7 @@ namespace TaskService.Controllers
         }
 
         [HttpPost]
-        [Authorize(Policy = "CanCreateTasks")]
+        [Authorize(Policy = "CanCreateSprints")]
         [ProducesResponseType(typeof(SprintDTO), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -57,7 +52,8 @@ namespace TaskService.Controllers
         }
 
         [HttpGet("{id}")]
-        [Authorize(Policy = "CanViewTasks")]
+        [Authorize(Policy = "CanViewSprints")]
+
         [ProducesResponseType(typeof(SprintDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -82,7 +78,8 @@ namespace TaskService.Controllers
         }
 
         [HttpGet("project/{projectId}")]
-        [Authorize(Policy = "CanViewTasks")]
+        [Authorize(Policy = "CanViewSprints")]
+
         [ProducesResponseType(typeof(List<SprintDTO>), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
@@ -102,7 +99,8 @@ namespace TaskService.Controllers
         }
 
         [HttpPut("{id}")]
-        [Authorize(Policy = "CanUpdateTasks")]
+        [Authorize(Policy = "CanUpdateSprints")]
+
         [ProducesResponseType(typeof(SprintDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -129,7 +127,8 @@ namespace TaskService.Controllers
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Policy = "CanDeleteTasks")]
+        [Authorize(Policy = "CanDeleteSprints")]
+
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -160,7 +159,7 @@ namespace TaskService.Controllers
         }
 
         [HttpPost("{sprintId}/tasks/{taskId}")]
-        [Authorize(Policy = "CanUpdateTasks")]
+   
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -192,7 +191,7 @@ namespace TaskService.Controllers
         }
 
         [HttpDelete("{sprintId}/tasks/{taskId}")]
-        [Authorize(Policy = "CanUpdateTasks")]
+     
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]

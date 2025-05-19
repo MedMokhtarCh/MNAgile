@@ -1,228 +1,106 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using NotificationService.Data;
 using NotificationService.DTOs;
-using NotificationService.Models;
-using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.SignalR;
 using NotificationService.Hubs;
 
 namespace NotificationService.Services
 {
-    public class NotificationService
+    public interface INotificationService
     {
-        private readonly AppDbContext _context;
-        private readonly ILogger<NotificationService> _logger;
+        Task CreateNotificationAsync(CreateNotificationDto dto);
+        Task<List<NotificationDto>> GetNotificationsAsync(string userId, bool? isRead);
+        Task MarkAsReadAsync(Guid id);
+        Task DeleteNotificationAsync(Guid id);
+    }
+
+    public class NotificationService : INotificationService
+    {
+        private readonly NotificationsDbContext _context;
         private readonly IHubContext<NotificationHub> _hubContext;
 
-        public NotificationService(
-            AppDbContext context,
-            ILogger<NotificationService> logger,
-            IHubContext<NotificationHub> hubContext)
+        public NotificationService(NotificationsDbContext context, IHubContext<NotificationHub> hubContext)
         {
-            _context = context ?? throw new ArgumentNullException(nameof(context));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+            _context = context;
+            _hubContext = hubContext;
         }
 
-        public async Task<NotificationDTO> CreateNotificationAsync(
-            string recipientEmail,
-            string senderName,
-            string message,
-            string type,
-            MetadataDTO metadata = null)
+        public async Task CreateNotificationAsync(CreateNotificationDto dto)
         {
-            if (string.IsNullOrWhiteSpace(recipientEmail))
-                throw new ArgumentException("Recipient email cannot be null or empty.", nameof(recipientEmail));
-            if (string.IsNullOrWhiteSpace(message))
-                throw new ArgumentException("Message cannot be null or empty.", nameof(message));
-            if (string.IsNullOrWhiteSpace(type))
-                throw new ArgumentException("Notification type cannot be null or empty.", nameof(type));
-
-            try
+            var notification = new Notification
             {
-                var notification = new Notification
-                {
-                    RecipientEmail = recipientEmail,
-                    SenderName = senderName ?? "System",
-                    Message = message,
-                    Type = type,
-                    Read = false,
-                    Timestamp = DateTime.UtcNow,
-                    Metadata = metadata != null ? JsonSerializer.Serialize(metadata, new JsonSerializerOptions { IgnoreNullValues = true }) : null
-                };
+                Id = Guid.NewGuid(),
+                UserId = dto.UserId,
+                SenderId = dto.SenderId,
+                Type = dto.Type,
+                Message = dto.Message,
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow,
+                Metadata = dto.Metadata
+            };
 
-                _context.Notifications.Add(notification);
-                await _context.SaveChangesAsync();
+            _context.Notifications.Add(notification);
+            await _context.SaveChangesAsync();
 
-                var notificationDto = MapToDto(notification);
-
-                // Broadcast notification to the recipient's group
-                await _hubContext.Clients.Group(recipientEmail)
-                    .SendAsync("ReceiveNotification", notificationDto);
-
-                _logger.LogInformation($"Notification created and broadcasted for {recipientEmail}: {message}");
-
-                return notificationDto;
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogError(ex, $"Error serializing metadata for notification to {recipientEmail}");
-                throw new InvalidOperationException("Failed to serialize notification metadata.", ex);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error creating notification for {recipientEmail}");
-                throw;
-            }
-        }
-
-        public async Task<List<NotificationDTO>> GetUserNotificationsAsync(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email))
-                throw new ArgumentException("Email cannot be null or empty.", nameof(email));
-
-            try
-            {
-                var notifications = await _context.Notifications
-                    .Where(n => n.RecipientEmail == email)
-                    .OrderByDescending(n => n.Timestamp)
-                    .ToListAsync();
-
-                return notifications.Select(MapToDto).ToList();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error retrieving notifications for {email}");
-                throw;
-            }
-        }
-
-        public async Task MarkNotificationAsReadAsync(int id)
-        {
-            try
-            {
-                var notification = await _context.Notifications.FindAsync(id);
-                if (notification == null)
-                {
-                    throw new InvalidOperationException($"Notification with ID {id} not found.");
-                }
-
-                if (!notification.Read)
-                {
-                    notification.Read = true;
-                    _context.Notifications.Update(notification);
-                    await _context.SaveChangesAsync();
-
-                    // Notify client of updated notification
-                    await _hubContext.Clients.Group(notification.RecipientEmail)
-                        .SendAsync("NotificationUpdated", MapToDto(notification));
-
-                    _logger.LogInformation($"Notification {id} marked as read for {notification.RecipientEmail}.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error marking notification {id} as read");
-                throw;
-            }
-        }
-
-        public async Task MarkAllNotificationsAsReadAsync(string email)
-        {
-            if (string.IsNullOrWhiteSpace(email))
-                throw new ArgumentException("Email cannot be null or empty.", nameof(email));
-
-            try
-            {
-                var notifications = await _context.Notifications
-                    .Where(n => n.RecipientEmail == email && !n.Read)
-                    .ToListAsync();
-
-                if (notifications.Any())
-                {
-                    foreach (var notification in notifications)
-                    {
-                        notification.Read = true;
-                    }
-
-                    _context.Notifications.UpdateRange(notifications);
-                    await _context.SaveChangesAsync();
-
-                    // Notify client of updated notifications
-                    await _hubContext.Clients.Group(email)
-                        .SendAsync("NotificationsUpdated", notifications.Select(MapToDto).ToList());
-
-                    _logger.LogInformation($"Marked {notifications.Count} notifications as read for {email}.");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error marking all notifications as read for {email}");
-                throw;
-            }
-        }
-
-        public async Task DeleteNotificationAsync(int id)
-        {
-            try
-            {
-                var notification = await _context.Notifications.FindAsync(id);
-                if (notification == null)
-                {
-                    throw new InvalidOperationException($"Notification with ID {id} not found.");
-                }
-
-                _context.Notifications.Remove(notification);
-                await _context.SaveChangesAsync();
-
-                // Notify client of deleted notification
-                await _hubContext.Clients.Group(notification.RecipientEmail)
-                    .SendAsync("NotificationDeleted", id);
-
-                _logger.LogInformation($"Notification {id} deleted for {notification.RecipientEmail}.");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error deleting notification {id}");
-                throw;
-            }
-        }
-
-        private NotificationDTO MapToDto(Notification notification)
-        {
-            MetadataDTO metadata = null;
-            if (!string.IsNullOrEmpty(notification.Metadata))
-            {
-                try
-                {
-                    metadata = JsonSerializer.Deserialize<MetadataDTO>(notification.Metadata);
-                }
-                catch (JsonException ex)
-                {
-                    _logger.LogWarning(ex, $"Failed to deserialize metadata for notification {notification.Id}");
-                }
-            }
-
-            return new NotificationDTO
+            var notificationDto = new NotificationDto
             {
                 Id = notification.Id,
-                RecipientEmail = notification.RecipientEmail,
-                Sender = new SenderDTO
-                {
-                    Name = notification.SenderName,
-                    Avatar = null
-                },
-                Message = notification.Message,
+                UserId = notification.UserId,
+                SenderId = notification.SenderId,
                 Type = notification.Type,
-                Read = notification.Read,
-                Timestamp = notification.Timestamp,
-                Metadata = metadata
+                Message = notification.Message,
+                IsRead = notification.IsRead,
+                CreatedAt = notification.CreatedAt,
+                Metadata = notification.Metadata
             };
+
+            await _hubContext.Clients.User(notification.UserId)
+                .SendAsync("ReceiveNotification", notificationDto);
+        }
+
+        public async Task<List<NotificationDto>> GetNotificationsAsync(string userId, bool? isRead)
+        {
+            var query = _context.Notifications
+                .Where(n => n.UserId == userId);
+
+            if (isRead.HasValue)
+            {
+                query = query.Where(n => n.IsRead == isRead.Value);
+            }
+
+            return await query
+                .Select(n => new NotificationDto
+                {
+                    Id = n.Id,
+                    UserId = n.UserId,
+                    SenderId = n.SenderId,
+                    Type = n.Type,
+                    Message = n.Message,
+                    IsRead = n.IsRead,
+                    CreatedAt = n.CreatedAt,
+                    Metadata = n.Metadata
+                })
+                .ToListAsync();
+        }
+
+        public async Task MarkAsReadAsync(Guid id)
+        {
+            var notification = await _context.Notifications.FindAsync(id);
+            if (notification != null)
+            {
+                notification.IsRead = true;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task DeleteNotificationAsync(Guid id)
+        {
+            var notification = await _context.Notifications.FindAsync(id);
+            if (notification != null)
+            {
+                _context.Notifications.Remove(notification);
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }

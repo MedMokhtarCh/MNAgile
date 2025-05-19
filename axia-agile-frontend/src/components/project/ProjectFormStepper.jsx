@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   TextField,
@@ -23,6 +23,7 @@ import {
   IconButton,
   Fade,
   useMediaQuery,
+  CircularProgress, // Ajout pour l'indicateur de chargement
 } from '@mui/material';
 import { styled, useTheme } from '@mui/material/styles';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
@@ -33,7 +34,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
 import InputUserAssignment from '../common/InputUserAssignment';
 
-// Styled Components (unchanged)
+// Styled Components (inchangés)
 const StepperContainer = styled(Box)(({ theme }) => ({
   margin: '24px 0',
   padding: '12px 16px',
@@ -135,6 +136,7 @@ const ProjectFormStepper = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [isCreating, setIsCreating] = useState(false); // État pour l'indicateur de chargement
 
   // Helper function to get user display name
   const getUserDisplayName = (user) => {
@@ -243,75 +245,70 @@ const ProjectFormStepper = ({
             />
           </FormSection>
         );
-      case 1:
-        return (
-          <FormSection>
-            <Box display="flex" alignItems="center" mb={2}>
-              <GroupIcon color="primary" sx={{ mr: 1, fontSize: 28 }} />
-              <SectionTitle variant="h6">Équipe du Projet</SectionTitle>
-            </Box>
-            <InputUserAssignment
-              options={registeredUsers}
-              value={projectManagers}
-              onChange={(event, value) => setProjectManagers(value)}
-              label="Chefs de Projet"
-              placeholder="Sélectionner les chefs de projet"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-            <InputUserAssignment
-              options={registeredUsers}
-              value={productOwners}
-              onChange={(event, value) => setProductOwners(value)}
-              label="Product Owners"
-              placeholder="Sélectionner les product owners"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-            <InputUserAssignment
-              options={registeredUsers}
-              value={scrumMasters}
-              onChange={(event, value) => setScrumMasters(value)}
-              label="Scrum Masters"
-              placeholder="Sélectionner les scrum masters"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-            <InputUserAssignment
-              options={registeredUsers}
-              value={developers}
-              onChange={(event, value) => setDevelopers(value)}
-              label="Développeurs"
-              placeholder="Sélectionner les développeurs"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-            <InputUserAssignment
-              options={registeredUsers}
-              value={testers}
-              onChange={(event, value) => setTesters(value)}
-              label="Testeurs"
-              placeholder="Sélectionner les testeurs"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-            <InputUserAssignment
-              options={registeredUsers}
-              value={observers}
-              onChange={(event, value) => setObservers(value)}
-              label="Observateurs"
-              placeholder="Sélectionner les observateurs"
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-              getOptionLabel={getUserDisplayName}
-            />
-          </FormSection>
-        );
+   case 1:
+  return (
+    <FormSection>
+      <Box display="flex" alignItems="center" mb={2}>
+        <GroupIcon color="primary" sx={{ mr: 1, fontSize: 28 }} />
+        <SectionTitle variant="h6">Équipe du Projet</SectionTitle>
+      </Box>
+      <InputUserAssignment
+        options={registeredUsers}
+        value={projectManagers}
+        onChange={(event, value) => setProjectManagers(value)}
+        label="Chefs de Projet"
+        placeholder="Sélectionner les chefs de projet"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+      <InputUserAssignment
+        options={registeredUsers}
+        value={productOwners}
+        onChange={(event, value) => setProductOwners(value)}
+        label="Product Owners"
+        placeholder="Sélectionner les product owners"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+      <InputUserAssignment
+        options={registeredUsers}
+        value={scrumMasters}
+        onChange={(event, value) => setScrumMasters(value)}
+        label="Scrum Masters"
+        placeholder="Sélectionner les scrum masters"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+      <InputUserAssignment
+        options={registeredUsers}
+        value={developers}
+        onChange={(event, value) => setDevelopers(value)}
+        label="Développeurs"
+        placeholder="Sélectionner les développeurs"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+      <InputUserAssignment
+        options={registeredUsers}
+        value={testers}
+        onChange={(event, value) => setTesters(value)}
+        label="Testeurs"
+        placeholder="Sélectionner les testeurs"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+      <InputUserAssignment
+        options={registeredUsers}
+        value={observers}
+        onChange={(event, value) => setObservers(value)}
+        label="Observateurs"
+        placeholder="Sélectionner les observateurs"
+        getAvatarColor={getAvatarColor}
+        generateInitials={generateInitials}
+      />
+    </FormSection>
+  );
+        
       case 2:
         return (
           <FormSection>
@@ -403,15 +400,27 @@ const ProjectFormStepper = ({
     onClose();
   };
 
+  // Gestion de la sauvegarde avec indicateur de chargement
+  const handleSaveProjectWithLoading = async () => {
+    setIsCreating(true); // Activer l'indicateur de chargement
+    try {
+      await handleSaveProject(); // Appeler la fonction de sauvegarde
+      // Le formulaire est fermé par handleSaveProject dans useProject après 1,5s
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du projet:', error);
+      setIsCreating(false); // Désactiver l'indicateur en cas d'erreur
+    }
+  };
+
   return (
     <Dialog
       fullScreen={isMobile}
       open={open}
-      onClose={handleDialogClose} // Use custom close handler
+      onClose={handleDialogClose}
       maxWidth="md"
       fullWidth
       TransitionComponent={Transition}
-      disableEscapeKeyDown // Optional: Prevent closing with Escape key
+      disableEscapeKeyDown
     >
       <AppBar
         position="relative"
@@ -468,19 +477,20 @@ const ProjectFormStepper = ({
           </FormButton>
           {activeStep === steps.length - 1 ? (
             <FormButton
-              onClick={handleSaveProject}
+              onClick={handleSaveProjectWithLoading} // Utiliser la fonction avec chargement
               variant="contained"
-              startIcon={<SaveIcon />}
+              startIcon={isCreating ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
               color="primary"
+              disabled={isCreating} // Désactiver pendant le chargement
               sx={{ minWidth: 130, '&:hover': { backgroundColor: theme.palette.primary.dark } }}
             >
-              {isEditing ? 'Enregistrer' : 'Créer'}
+              {isCreating ? 'En cours...' : isEditing ? 'Enregistrer' : 'Créer'}
             </FormButton>
           ) : (
             <FormButton
               onClick={handleNext}
               variant="contained"
-              endIcon={<ChevronRightIcon />}
+              end steadilyIcon={<ChevronRightIcon />}
               color="primary"
               sx={{ minWidth: 130, '&:hover': { backgroundColor: theme.palette.primary.dark } }}
             >

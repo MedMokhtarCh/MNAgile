@@ -1,9 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProfileService.DTOs;
-using ProfileService.Services;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 
 namespace ProfileService.Controllers
 {

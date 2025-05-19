@@ -53,7 +53,7 @@ const calculateDaysRemaining = (endDate) => {
   const timeDifference = endDateTime - now;
 
   if (timeDifference <= 0) {
-    return { DAYS: 0, isExpired: true };
+    return { days: 0, isExpired: true };
   }
 
   const days = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
@@ -150,13 +150,14 @@ const ActiveSprintPage = () => {
   }, [sprints]);
 
   // Loading state
-if (loading) {
-  return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <CircularProgress size={60} />
-    </Box>
-  );
-}
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress size={60} />
+      </Box>
+    );
+  }
+
   // Error state
   if (error || tasksError || projectsError) {
     return (
@@ -189,10 +190,84 @@ if (loading) {
   if (!sprints || sprints.length === 0) {
     return (
       <Box sx={{ p: 3, bgcolor: '#fff' }}>
-        <PageTitle>Aucun sprint disponible</PageTitle>
-        <Typography>
-          Il n'y a pas de sprints pour le projet {project?.title || 'inconnu'}. Veuillez créer un sprint pour commencer.
+        <PageTitle>Rapport des Sprints du Projet : {project?.title || 'Inconnu'}</PageTitle>
+        <Typography variant="h6" color="textSecondary" sx={{ mb: 3 }}>
+          0 sprint
         </Typography>
+        <Paper
+          elevation={3}
+          sx={{
+            p: 3,
+            mb: 3,
+            borderRadius: 2,
+            borderLeft: '5px solid #B0BEC5',
+          }}
+        >
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box>
+                  <Typography variant="h5">Aucun sprint disponible</Typography>
+                  <Typography variant="subtitle1" color="textSecondary">
+                    N/A - N/A
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Créez un sprint pour commencer.
+                  </Typography>
+                </Box>
+                <IconButton disabled>
+                  <ExpandMoreIcon />
+                </IconButton>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <AccessTimeIcon color="disabled" sx={{ mr: 1 }} />
+                  <Typography variant="body1">Aucun délai</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    Progression temporelle: 0%
+                  </Typography>
+                  <LinearProgress
+                    variant="determinate"
+                    value={0}
+                    sx={{ height: 8, borderRadius: 5 }}
+                  />
+                </Box>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="subtitle2" fontWeight="bold">
+                  Statistiques des tâches
+                </Typography>
+                <Typography variant="body1">Total des tâches: 0</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Chip
+                    icon={<AssignmentIcon />}
+                    label="Haute: 0"
+                    size="small"
+                    sx={{ bgcolor: '#F44336', color: 'white', minWidth: 100 }}
+                  />
+                  <Chip
+                    icon={<AssignmentIcon />}
+                    label="Moyenne: 0"
+                    size="small"
+                    sx={{ bgcolor: '#FFC107', color: 'black', minWidth: 100 }}
+                  />
+                  <Chip
+                    icon={<AssignmentIcon />}
+                    label="Basse: 0"
+                    size="small"
+                    sx={{ bgcolor: '#4CAF50', color: 'white', minWidth: 100 }}
+                  />
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
+        </Paper>
       </Box>
     );
   }

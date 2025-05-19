@@ -1,5 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
-using DiscussionService.Models;
+﻿using DiscussionService.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace DiscussionService.Data
 {

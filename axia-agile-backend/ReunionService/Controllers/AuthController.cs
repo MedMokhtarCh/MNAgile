@@ -1,63 +1,29 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using ReunionService.DTOs;
+using ReunionService.Services;
 
-namespace ReunionService.Controllers
+namespace ReunionService.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class AuthController : ControllerBase
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
     {
-        private readonly IConfiguration _configuration;
-        private readonly ILogger<AuthController> _logger;
-
-        public AuthController(IConfiguration configuration, ILogger<AuthController> logger)
-        {
-            _configuration = configuration;
-            _logger = logger;
-        }
-
-        [HttpPost("login")]
-        public IActionResult Login([FromBody] LoginRequest request)
-        {
-            // TODO: Replace with real user validation (e.g., database check with hashed passwords)
-            if (request.Username == "testuser" && request.Password == "password")
-            {
-                var userId = 1; // Replace with actual user ID from database
-
-                var jwtSettings = _configuration.GetSection("Jwt");
-                var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]);
-                var tokenDescriptor = new SecurityTokenDescriptor
-                {
-                    Subject = new ClaimsIdentity(new[]
-                    {
-                        new Claim(JwtRegisteredClaimNames.Sub, userId.ToString()),
-                        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-                    }),
-                    Expires = DateTime.UtcNow.AddHours(double.Parse(jwtSettings["ExpireHours"])),
-                    Issuer = jwtSettings["Issuer"],
-                    Audience = jwtSettings["Audience"],
-                    SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
-                };
-
-                var tokenHandler = new JwtSecurityTokenHandler();
-                var token = tokenHandler.CreateToken(tokenDescriptor);
-                var tokenString = tokenHandler.WriteToken(token);
-
-                _logger.LogInformation("User {UserId} logged in successfully.", userId);
-                return Ok(new { Token = tokenString });
-            }
-
-            _logger.LogWarning("Invalid login attempt for username: {Username}", request.Username);
-            return Unauthorized("Invalid credentials.");
-        }
+        _authService = authService;
     }
 
-    public class LoginRequest
+    [HttpPost("exchange-code")]
+    public async Task<IActionResult> ExchangeCode([FromBody] Dictionary<string, string> request)
     {
-        public string Username { get; set; }
-        public string Password { get; set; }
+        if (!request.ContainsKey("code"))
+            return BadRequest("Code is required");
+
+        var response = await _authService.ExchangeCodeForTokenAsync(request["code"]);
+        var jwtToken = _authService.GenerateJwtToken(response.AccessToken.GetHashCode().ToString());
+
+        return Ok(new { AccessToken = response.AccessToken, JwtToken = jwtToken });
     }
 }

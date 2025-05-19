@@ -9,7 +9,7 @@
         public string? PhoneNumber { get; set; }
         public string? JobTitle { get; set; }
         public string? Entreprise { get; set; }
-        public int RoleId { get; set; } 
+        public int RoleId { get; set; }
         public List<int>? ClaimIds { get; set; }
     }
     public class PatchUserClaimsRequest

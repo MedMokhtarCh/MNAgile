@@ -116,6 +116,13 @@ function Projects() {
   const [currentPage, setCurrentPage] = useState(1);
   const projectsPerPage = 9;
 
+  // Redirect if user lacks CanViewProjects
+  useEffect(() => {
+    if (!currentUser?.claims?.includes('CanViewProjects','CanAddProjects','CanEditProjects','CanDeleteProjects',)) {
+      navigate('/no-access', { replace: true });
+    }
+  }, [currentUser, navigate]);
+
   useEffect(() => {
     setErrorAlertOpen(!!formError);
   }, [formError]);
@@ -171,6 +178,11 @@ function Projects() {
   const indexOfFirstProject = indexOfLastProject - projectsPerPage;
   const currentProjects = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
 
+  // Only render if user has CanViewProjects
+  if (!currentUser?.claims?.includes('CanViewProjects')) {
+    return null; // Or render a fallback UI
+  }
+
   return (
     <Container maxWidth="lg" sx={{ py: 5, px: { xs: 2, sm: 4 } }}>
       <Box
@@ -184,7 +196,7 @@ function Projects() {
         }}
       >
         <PageTitle>Mes Projets</PageTitle>
-        {currentUser?.roleId === 3 && (
+        {currentUser?.claims?.includes('CanAddProjects') && (
           <CreateButton
             startIcon={<AddIcon sx={{ fontSize: 26 }} />}
             onClick={() => handleModalOpen(false)}
@@ -334,25 +346,29 @@ function Projects() {
         open={Boolean(menuAnchorEl)}
         onClose={handleMenuClose}
       >
-        <MenuItem
-          onClick={() => {
-            handleModalOpen(true, selectedProject);
-            handleMenuClose();
-          }}
-        >
-          <EditIcon fontSize="small" sx={{ mr: 1 }} />
-          Modifier
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            handleDeleteDialogOpen(selectedProject);
-            handleMenuClose();
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
-          Supprimer
-        </MenuItem>
+        {currentUser?.claims?.includes('CanEditProjects') && (
+          <MenuItem
+            onClick={() => {
+              handleModalOpen(true, selectedProject);
+              handleMenuClose();
+            }}
+          >
+            <EditIcon fontSize="small" sx={{ mr: 1 }} />
+            Modifier
+          </MenuItem>
+        )}
+        {currentUser?.claims?.includes('CanDeleteProjects') && (
+          <MenuItem
+            onClick={() => {
+              handleDeleteDialogOpen(selectedProject);
+              handleMenuClose();
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+            Supprimer
+          </MenuItem>
+        )}
       </Menu>
 
       <Dialog
@@ -409,7 +425,7 @@ function Projects() {
         setTesters={setTesters}
         getAvatarColor={getAvatarColor}
         generateInitials={generateInitials}
-        formError={formError} // Ensure formError is passed
+        formError={formError}
       />
 
       <AlertUser

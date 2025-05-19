@@ -39,7 +39,7 @@ import ListAltIcon from '@mui/icons-material/ListAlt';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchBacklogs,
@@ -166,6 +166,7 @@ function BacklogPage() {
   const { generateInitials, getAvatarColor } = useAvatar();
   const { createNotification } = useNotification();
   const { currentUser } = useAuth();
+  const navigate = useNavigate();
 
   // Redux state
   const { backlogs, tasks, columns, sprints, status, error: reduxError } = useSelector((state) => state.tasks);
@@ -217,6 +218,21 @@ function BacklogPage() {
     })
   );
 
+  // Redirect if user lacks necessary permissions
+  useEffect(() => {
+    if (!currentUser?.claims?.some(claim => [
+      'CanViewProjects',
+      'CanCreateBacklogs',
+      'CanUpdateBacklogs',
+      'CanDeleteBacklogs',
+      'CanCreateSprints',
+      'CanUpdateSprints',
+      'CanDeleteSprints'
+    ].includes(claim))) {
+      navigate('/no-access', { replace: true });
+    }
+  }, [currentUser, navigate]);
+
   // Custom handleDragEnd to enforce two-position movement
   const customHandleDragEnd = (event) => {
     const { active, over } = event;
@@ -262,7 +278,7 @@ function BacklogPage() {
       const isSourceBacklog = 'description' in sourceContainer;
       const isDestBacklog = 'description' in destContainer;
 
-      // Handle reordering within the same container (two positions forward/backward)
+      // Handle reordering within the same container
       if (sourceContainer.id === destContainer.id) {
         const taskIds = [...(sourceContainer.taskIds || [])];
         const sourceIndex = taskIds.findIndex((id) => id.toString() === activeIdValue);
@@ -297,7 +313,6 @@ function BacklogPage() {
             }));
           }
 
-          // Update backend
           dispatch(updateTask({
             taskId: activeTask.id,
             taskData: { ...activeTask, displayOrder: destIndex },
@@ -305,7 +320,7 @@ function BacklogPage() {
           }));
         }
       } else {
-        // Handle moving between containers (use default behavior)
+        // Handle moving between containers
         const sourceTaskIds = [...(sourceContainer.taskIds || [])];
         const destTaskIds = [...(destContainer.taskIds || [])];
         const sourceIndex = sourceTaskIds.findIndex((id) => id.toString() === activeIdValue);
@@ -318,9 +333,7 @@ function BacklogPage() {
           return;
         }
 
-        // Remove from source
         sourceTaskIds.splice(sourceIndex, 1);
-        // Add to destination
         destTaskIds.splice(destIndex, 0, activeTask.id);
 
         console.log('[customHandleDragEnd] Moving task:', {
@@ -329,7 +342,6 @@ function BacklogPage() {
           to: destContainer.name,
         });
 
-        // Update source container
         if (isSourceBacklog) {
           dispatch(updateBacklogTaskIds({
             backlogId: sourceContainer.id,
@@ -342,7 +354,6 @@ function BacklogPage() {
           }));
         }
 
-        // Update destination container
         if (isDestBacklog) {
           dispatch(updateBacklogTaskIds({
             backlogId: destContainer.id,
@@ -355,7 +366,6 @@ function BacklogPage() {
           }));
         }
 
-        // Update task
         const updatedTaskData = {
           ...activeTask,
           sprintId: isDestBacklog ? null : destContainer.id,
@@ -370,7 +380,6 @@ function BacklogPage() {
           attachments: [],
         }));
 
-        // Create notifications
         if (activeTask.assignedUserEmails && Array.isArray(activeTask.assignedUserEmails)) {
           activeTask.assignedUserEmails.forEach((email) => {
             if (email && email !== currentUser?.email) {
@@ -1062,7 +1071,7 @@ function BacklogPage() {
     }));
   };
 
-  // Modified renderBacklogItem to support drag-and-drop
+  // Modified renderBacklogItem to support drag-and-drop and conditional buttons
   const renderBacklogItem = (backlogId, task, isDragging = false, listeners, isSprint = false) => (
     <TaskItem isDragging={isDragging}>
       <DragIndicatorIcon
@@ -1113,7 +1122,7 @@ function BacklogPage() {
         })}
       </AvatarGroup>
       <Box sx={{ display: 'flex' }}>
-        {!isSprint && (
+        {!isSprint && currentUser?.claims?.includes('CanCreateTasks') && (
           <IconButton
             size="small"
             onClick={() => handleOpenAddToSprintDialog(backlogId, task.id)}
@@ -1122,20 +1131,24 @@ function BacklogPage() {
             <ArrowForwardIcon fontSize="small" />
           </IconButton>
         )}
-        <IconButton
-          size="small"
-          onClick={() => handleOpenItemDialog(backlogId, task)}
-          title="Modifier"
-        >
-          <EditIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={() => handleOpenDeleteItemDialog(task.id)}
-          title="Supprimer"
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
+        {currentUser?.claims?.includes('CanUpdateTasks') && (
+          <IconButton
+            size="small"
+            onClick={() => handleOpenItemDialog(backlogId, task)}
+            title="Modifier"
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        )}
+        {currentUser?.claims?.includes('CanDeleteTasks') && (
+          <IconButton
+            size="small"
+            onClick={() => handleOpenDeleteItemDialog(task.id)}
+            title="Supprimer"
+          >
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        )}
       </Box>
     </TaskItem>
   );
@@ -1157,7 +1170,6 @@ function BacklogPage() {
     const paginatedBacklogs = backlogs.slice(startIndex, endIndex);
     const totalBacklogPages = Math.ceil(backlogs.length / backlogsPerPage);
 
-    // Create a list of all droppable containers (backlogs and tasks)
     const droppableIds = [
       ...paginatedBacklogs.map((backlog) => backlog.id.toString()),
       ...tasks.map((task) => task.id.toString()),
@@ -1173,16 +1185,18 @@ function BacklogPage() {
         onDragCancel={handleDragCancel}
       >
         <SortableContext items={droppableIds} strategy={verticalListSortingStrategy}>
-          <ScrollableContainer sx={{ p: 3 }}>
+          <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <PageTitle>Backlogs pour le projet {project.title}</PageTitle>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpenBacklogDialog()}
-              >
-                Nouveau Backlog
-              </Button>
+              {currentUser?.claims?.includes('CanCreateBacklogs') && (
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => handleOpenBacklogDialog()}
+                >
+                  Nouveau Backlog
+                </Button>
+              )}
             </Box>
             {status === 'loading' && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
@@ -1213,76 +1227,131 @@ function BacklogPage() {
                 {error || reduxError}
               </Alert>
             )}
-            {paginatedBacklogs.map((backlog) => (
-              <BacklogContainer key={backlog.id} id={backlog.id.toString()}>
-                <BacklogHeader>
-                  <Box>
-                    <Typography variant="h6">{backlog.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {backlog.description}
-                    </Typography>
-                  </Box>
-                  <Box>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenBacklogDialog(backlog)}
-                      title="Modifier le backlog"
-                    >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton
-                      size="small"
-                      onClick={() => handleOpenDeleteBacklogDialog(backlog.id)}
-                      title="Supprimer le backlog"
-                      disabled={isSubmitting}
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                    <Button
-                      variant="outlined"
-                      startIcon={<AddIcon />}
-                      onClick={() => handleOpenItemDialog(backlog.id)}
-                      size="small"
-                      sx={{ ml: 1 }}
-                    >
-                      Ajouter Item
-                    </Button>
-                  </Box>
-                </BacklogHeader>
-                <BacklogContent>
-                  {backlog.taskIds.length > 0 ? (
-                    <SortableContext
-                      items={backlog.taskIds.map((id) => id.toString())}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {tasks
-                        .filter((task) => backlog.taskIds.includes(task.id))
-                        .map((task) => (
-                          <SortableTaskItem
-                            key={task.id}
-                            task={task}
-                            backlogId={backlog.id}
-                            renderBacklogItem={renderBacklogItem}
-                          />
-                        ))}
-                    </SortableContext>
-                  ) : (
-                    <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                      Aucun item dans ce backlog. Cliquez sur "Ajouter Item" pour commencer.
-                    </Typography>
-                  )}
-                </BacklogContent>
-              </BacklogContainer>
-            ))}
-            {totalBacklogPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalBacklogPages}
-                  page={backlogPage}
-                  onChange={handleBacklogPageChange}
-                  color="primary"
+            {paginatedBacklogs.length === 0 && status !== 'loading' && !error && !reduxError ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flex: 1,
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  py: 8,
+                  px: 4,
+                }}
+              >
+                <ListAltIcon
+                  sx={{
+                    fontSize: 80,
+                    color: 'primary.main',
+                    mb: 2,
+                    opacity: 0.8,
+                  }}
                 />
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
+                  Aucun backlog dans ce projet
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
+                  Commencez à organiser votre projet en créant votre premier backlog.
+                </Typography>
+                {currentUser?.claims?.includes('CanCreateBacklogs') && (
+                  <IconButton
+                    onClick={() => handleOpenBacklogDialog()}
+                    sx={{
+                      mb: 2,
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      '&:hover': { bgcolor: 'primary.dark' },
+                      width: 60,
+                      height: 60,
+                    }}
+                    title="Créer un nouveau backlog"
+                  >
+                    <AddIcon sx={{ fontSize: 40 }} />
+                  </IconButton>
+                )}
               </Box>
+            ) : (
+              <>
+                {paginatedBacklogs.map((backlog) => (
+                  <BacklogContainer key={backlog.id} id={backlog.id.toString()}>
+                    <BacklogHeader>
+                      <Box>
+                        <Typography variant="h6">{backlog.name}</Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {backlog.description}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        {currentUser?.claims?.includes('CanUpdateBacklogs') && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenBacklogDialog(backlog)}
+                            title="Modifier le backlog"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        {currentUser?.claims?.includes('CanDeleteBacklogs') && (
+                          <IconButton
+                            size="small"
+                            onClick={() => handleOpenDeleteBacklogDialog(backlog.id)}
+                            title="Supprimer le backlog"
+                            disabled={isSubmitting}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        )}
+                        {currentUser?.claims?.includes('CanCreateTasks') && (
+                          <Button
+                            variant="outlined"
+                            startIcon={<AddIcon />}
+                            onClick={() => handleOpenItemDialog(backlog.id)}
+                            size="small"
+                            sx={{ ml: 1 }}
+                          >
+                            Ajouter Item
+                          </Button>
+                        )}
+                      </Box>
+                    </BacklogHeader>
+                    <BacklogContent>
+                      {backlog.taskIds.length > 0 ? (
+                        <SortableContext
+                          items={backlog.taskIds.map((id) => id.toString())}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {tasks
+                            .filter((task) => backlog.taskIds.includes(task.id))
+                            .map((task) => (
+                              <SortableTaskItem
+                                key={task.id}
+                                task={task}
+                                backlogId={backlog.id}
+                                renderBacklogItem={renderBacklogItem}
+                              />
+                            ))}
+                        </SortableContext>
+                      ) : (
+                        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                          Aucun item dans ce backlog. {currentUser?.claims?.includes('CanCreateTasks') ? 'Cliquez sur "Ajouter Item" pour commencer.' : ''}
+                        </Typography>
+                      )}
+                    </BacklogContent>
+                  </BacklogContainer>
+                ))}
+                {totalBacklogPages > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                      count={totalBacklogPages}
+                      page={backlogPage}
+                      onChange={handleBacklogPageChange}
+                      color="primary"
+                    />
+                  </Box>
+                )}
+              </>
             )}
           </ScrollableContainer>
         </SortableContext>
@@ -1297,7 +1366,6 @@ function BacklogPage() {
     const paginatedSprints = sprints.slice(startIndex, endIndex);
     const totalSprintPages = Math.ceil(sprints.length / sprintsPerPage);
 
-    // Create a list of all droppable containers (sprints and tasks)
     const droppableIds = [
       ...paginatedSprints.map((sprint) => sprint.id.toString()),
       ...tasks.map((task) => task.id.toString()),
@@ -1313,16 +1381,18 @@ function BacklogPage() {
         onDragCancel={handleDragCancel}
       >
         <SortableContext items={droppableIds} strategy={verticalListSortingStrategy}>
-          <ScrollableContainer sx={{ p: 3 }}>
+          <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
               <PageTitle>Tableau Kanban pour le projet {project.title}</PageTitle>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => handleOpenSprintDialog()}
-              >
-                Nouveau Sprint
-              </Button>
+              {currentUser?.claims?.includes('CanCreateSprints') && (
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => handleOpenSprintDialog()}
+                >
+                  Nouveau Sprint
+                </Button>
+              )}
             </Box>
             {status === 'loading' && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
@@ -1350,66 +1420,119 @@ function BacklogPage() {
                 {error || reduxError}
               </Alert>
             )}
-            {paginatedSprints.map((sprint) => {
-              const sprintTasks = tasks.filter((task) => task.sprintId === sprint.id);
-              return (
-                <StyledPaper key={sprint.id} id={sprint.id.toString()}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Box>
-                      <Typography variant="h6">{sprint.name}</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {sprint.description}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {sprint.startDate} à {sprint.endDate}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Typography sx={{ mr: 2 }}>
-                        {sprintTasks.length} tâches • {sprintTasks.filter((t) => t.status === 'COMPLETED').length} terminées
-                      </Typography>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenSprintDialog(sprint)}
-                        title="Modifier le sprint"
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleOpenDeleteSprintDialog(sprint.id)}
-                        title="Supprimer le sprint"
-                        disabled={isSubmitting}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                  <Divider sx={{ mb: 2 }} />
-                  {sprintTasks.length > 0 ? (
-                    <SortableContext
-                      items={sprintTasks.map((task) => task.id.toString())}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {sprintTasks.map((task) => renderSprintItem(task))}
-                    </SortableContext>
-                  ) : (
-                    <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                      Aucune tâche dans ce sprint. Ajoutez des tâches depuis le backlog.
-                    </Typography>
-                  )}
-                </StyledPaper>
-              );
-            })}
-            {totalSprintPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalSprintPages}
-                  page={sprintPage}
-                  onChange={handleSprintPageChange}
-                  color="primary"
+            {paginatedSprints.length === 0 && status !== 'loading' && !error && !reduxError ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flex: 1,
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  py: 8,
+                  px: 4,
+                }}
+              >
+                <TimelineIcon
+                  sx={{
+                    fontSize: 80,
+                    color: 'primary.main',
+                    mb: 2,
+                    opacity: 0.8,
+                  }}
                 />
+                <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
+                  Aucun sprint dans ce projet
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
+                  Lancez votre projet en créant votre premier sprint.
+                </Typography>
+                {currentUser?.claims?.includes('CanCreateSprints') && (
+                  <IconButton
+                    onClick={() => handleOpenSprintDialog()}
+                    sx={{
+                      mb: 2,
+                      bgcolor: 'primary.main',
+                      color: 'white',
+                      '&:hover': { bgcolor: 'primary.dark' },
+                      width: 60,
+                      height: 60,
+                    }}
+                    title="Créer un nouveau sprint"
+                  >
+                    <AddIcon sx={{ fontSize: 40 }} />
+                  </IconButton>
+                )}
               </Box>
+            ) : (
+              <>
+                {paginatedSprints.map((sprint) => {
+                  const sprintTasks = tasks.filter((task) => task.sprintId === sprint.id);
+                  return (
+                    <StyledPaper key={sprint.id} id={sprint.id.toString()}>
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Box>
+                          <Typography variant="h6">{sprint.name}</Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {sprint.description}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {sprint.startDate} à {sprint.endDate}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Typography sx={{ mr: 2 }}>
+                            {sprintTasks.length} tâches • {sprintTasks.filter((t) => t.status === 'COMPLETED').length} terminées
+                          </Typography>
+                          {currentUser?.claims?.includes('CanUpdateSprints') && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenSprintDialog(sprint)}
+                              title="Modifier le sprint"
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                          {currentUser?.claims?.includes('CanDeleteSprints') && (
+                            <IconButton
+                              size="small"
+                              onClick={() => handleOpenDeleteSprintDialog(sprint.id)}
+                              title="Supprimer le sprint"
+                              disabled={isSubmitting}
+                            >
+                              <DeleteIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
+                      </Box>
+                      <Divider sx={{ mb: 2 }} />
+                      {sprintTasks.length > 0 ? (
+                        <SortableContext
+                          items={sprintTasks.map((task) => task.id.toString())}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {sprintTasks.map((task) => renderSprintItem(task))}
+                        </SortableContext>
+                      ) : (
+                        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                          Aucune tâche dans ce sprint. Ajoutez des tâches depuis le backlog.
+                        </Typography>
+                      )}
+                    </StyledPaper>
+                  );
+                })}
+                {totalSprintPages > 1 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                      count={totalSprintPages}
+                      page={sprintPage}
+                      onChange={handleSprintPageChange}
+                      color="primary"
+                    />
+                  </Box>
+                )}
+              </>
             )}
           </ScrollableContainer>
         </SortableContext>

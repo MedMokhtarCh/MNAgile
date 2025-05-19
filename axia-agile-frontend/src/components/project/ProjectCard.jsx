@@ -103,7 +103,7 @@ const ProjectCard = ({
         <CardContent sx={{ p: 3, flex: 1 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <TitleTypography variant="h6">{project.title}</TitleTypography>
-            {currentUser?.roleId === 3 && (
+            {(currentUser?.claims?.includes('CanEditProjects') || currentUser?.claims?.includes('CanDeleteProjects')) && (
               <IconButton
                 size="small"
                 onClick={(e) => {

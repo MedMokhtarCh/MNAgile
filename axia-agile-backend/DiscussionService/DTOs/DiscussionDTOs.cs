@@ -1,14 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace DiscussionService.DTOs
+﻿namespace DiscussionService.DTOs
 {
     public class ChannelDTO
     {
         public int Id { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
-        public int? CreatorId { get; set; }
+        public int CreatorId { get; set; } // Changed to non-nullable
         public DateTime CreatedAt { get; set; }
         public int UnreadCount { get; set; }
         public List<int> MemberIds { get; set; }
@@ -59,9 +56,11 @@ namespace DiscussionService.DTOs
         public string LastName { get; set; }
         public bool IsActive { get; set; }
     }
+
     public class UpdateChannelRequest
     {
         public string Name { get; set; }
         public List<int> MemberIdsToAdd { get; set; }
+        public List<int> MemberIdsToRemove { get; set; } // Added to support member removal
     }
 }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import AdminLayout from '../layouts/AdminLayout';
+
 import DashboardLayout from '../layouts/DashboardLayout';
 import Profile from './Profile';
 import { useSelector } from 'react-redux';
@@ -16,9 +16,9 @@ const ProfileWithLayout = () => {
 
   if (role === 'admin') {
     return (
-      <AdminLayout>
+      <DashboardLayout>
         <Profile />
-      </AdminLayout>
+     </DashboardLayout>
     );
   }
 

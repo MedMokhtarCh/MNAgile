@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
-import { useUsers } from './useUsers';
 import { useNotification } from './useNotifications';
 import { useAuth } from '../contexts/AuthContext';
 import { validateProject } from '../utils/validators';
@@ -12,15 +11,16 @@ import {
   deleteProject,
   clearError,
 } from '../store/slices/projectsSlice';
+import { fetchUsers } from '../store/slices/usersSlice'; // Importer fetchUsers
 
 export const useProject = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { users } = useUsers('users');
   const { createNotification } = useNotification();
-  const { currentUser, isAuthenticated, logout, hasRole } = useAuth();
+  const { currentUser, isAuthenticated, logout } = useAuth();
 
   const { projects, status, error } = useSelector((state) => state.projects);
+  const { users } = useSelector((state) => state.users); // Récupérer les utilisateurs depuis le store
 
   const [projectForm, setProjectForm] = useState({
     id: '',
@@ -57,6 +57,20 @@ export const useProject = () => {
       return;
     }
 
+    // Only fetch projects and users if user has CanViewProjects
+    if (!currentUser?.claims?.includes('CanViewProjects')) {
+      setFormError("Vous n'avez pas les autorisations pour voir les projets.");
+      navigate('/no-access', { replace: true });
+      return;
+    }
+
+    dispatch(fetchUsers()).catch((err) => {
+      if (err.status === 401) {
+        logout();
+        navigate('/login', { replace: true });
+      }
+    });
+
     dispatch(fetchProjects()).catch((err) => {
       if (err.status === 401) {
         logout();
@@ -92,7 +106,7 @@ export const useProject = () => {
     let filteredProjects = [...projects];
 
     // Filter projects based on current user's involvement
-    if (currentUser?.email && !hasRole(['Admin'])) {
+    if (currentUser?.email) {
       filteredProjects = filteredProjects.filter((project) => {
         const isCreator = project.createdBy === currentUser.email;
         const isAssigned = [
@@ -129,7 +143,7 @@ export const useProject = () => {
     });
 
     return filteredProjects;
-  }, [projects, searchQuery, dateFilter, sortOrder, currentUser, hasRole]);
+  }, [projects, searchQuery, dateFilter, sortOrder, currentUser]);
 
   const navigateToProject = useCallback(
     (projectId) => {
@@ -140,8 +154,19 @@ export const useProject = () => {
 
   const handleModalOpen = useCallback(
     (editMode = false, project = null) => {
-      if (!hasRole(['Admin', 'ChefProjet'])) {
-        setFormError('Vous n\'avez pas les autorisations nécessaires.');
+      // Check CanViewProjects for all actions
+      if (!currentUser?.claims?.includes('CanViewProjects')) {
+        setFormError("Vous n'avez pas les autorisations pour voir les projets.");
+        return;
+      }
+
+      // Check specific permissions based on mode
+      if (editMode && !currentUser?.claims?.includes('CanEditProjects')) {
+        setFormError("Vous n'avez pas les autorisations pour modifier un projet.");
+        return;
+      }
+      if (!editMode && !currentUser?.claims?.includes('CanAddProjects')) {
+        setFormError("Vous n'avez pas les autorisations pour créer un projet.");
         return;
       }
 
@@ -157,7 +182,9 @@ export const useProject = () => {
           description: project.description || '',
           method: project.method || '',
           startDate: project.startDate || new Date().toISOString(),
-          endDate: project.endDate || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
+          endDate:
+            project.endDate ||
+            new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString(),
         });
 
         const getUsersByEmails = (emails) =>
@@ -188,7 +215,7 @@ export const useProject = () => {
 
       setModalOpen(true);
     },
-    [users, hasRole]
+    [users, currentUser]
   );
 
   const handleModalClose = useCallback(() => {
@@ -215,13 +242,17 @@ export const useProject = () => {
   }, [dispatch]);
 
   const handleDeleteDialogOpen = useCallback((project) => {
-    if (!hasRole(['Admin', 'ChefProjet'])) {
-      setFormError('Vous n\'avez pas les autorisations nécessaires.');
+    if (!currentUser?.claims?.includes('CanViewProjects')) {
+      setFormError("Vous n'avez pas les autorisations pour voir les projets.");
+      return;
+    }
+    if (!currentUser?.claims?.includes('CanDeleteProjects')) {
+      setFormError("Vous n'avez pas les autorisations pour supprimer un projet.");
       return;
     }
     setProjectToDelete(project);
     setDeleteDialogOpen(true);
-  }, [hasRole]);
+  }, [currentUser]);
 
   const handleDeleteDialogClose = useCallback(() => {
     setProjectToDelete(null);
@@ -323,6 +354,11 @@ export const useProject = () => {
   );
 
   const handleSaveProject = useCallback(async () => {
+    if (!currentUser?.claims?.includes('CanViewProjects')) {
+      setFormError("Vous n'avez pas les autorisations pour voir les projets.");
+      return;
+    }
+
     const team = {
       projectManagers,
       productOwners,
@@ -433,11 +469,31 @@ export const useProject = () => {
     setSelectedProject(null);
   }, []);
 
+  // Fonctions pour ProjectFormStepper
+  const getAvatarColor = useCallback((name) => {
+    const colors = ['#1976d2', '#d32f2f', '#388e3c', '#f57c00', '#7b1fa2'];
+    let hash = 0;
+    for (let i = 0; i (name?.length || 0); i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return colors[Math.abs(hash) % colors.length];
+  }, []);
+
+  const generateInitials = useCallback((name) => {
+    if (!name) return '';
+    const names = name.split(' ');
+    return names
+      .map((n) => n.charAt(0))
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+  }, []);
+
   return {
     projects,
     status,
     currentUser,
-    registeredUsers: users,
+    registeredUsers: users, // Utiliser les utilisateurs du store
     projectForm,
     setProjectForm,
     formError,
@@ -480,5 +536,7 @@ export const useProject = () => {
     handleSaveProject,
     handleMenuOpen,
     handleMenuClose,
+    getAvatarColor, 
+    generateInitials, 
   };
 };

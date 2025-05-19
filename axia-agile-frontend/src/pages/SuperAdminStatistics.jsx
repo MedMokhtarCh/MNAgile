@@ -1,5 +1,4 @@
-import React from 'react';
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Box, CircularProgress, Typography, Button } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,8 +21,14 @@ const SuperAdminStatistics = () => {
   }, [dispatch, currentUser]);
 
   const { stats, entrepriseData } = React.useMemo(() => {
+    if (!currentUser || loading || !users) {
+      console.log('[SuperAdminStatistics] Skipping stats calculation due to no currentUser, loading, or no users');
+      return { stats: null, entrepriseData: [] };
+    }
+
     console.log('[SuperAdminStatistics] Calculating stats and entrepriseData with users:', users);
-    const admins = users.filter((user) => user.roleId === 2);
+    // Filter admins by roleId === 2 and createdById === currentUser.id
+    const admins = users.filter((user) => user.roleId === 2 && user.createdById === currentUser.id);
 
     const { totalAdmins, activeAdmins, entrepriseMap } = admins.reduce(
       (acc, admin) => {
@@ -61,11 +66,19 @@ const SuperAdminStatistics = () => {
       },
       entrepriseData: entrepriseArray,
     };
-  }, [users]);
+  }, [users, loading, currentUser]);
 
   console.log('[SuperAdminStatistics] Rendering with state:', { users, loading, error, stats, entrepriseData });
 
-  if (loading) {
+  if (!currentUser) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+        <Typography color="textSecondary">Veuillez vous connecter pour voir les statistiques.</Typography>
+      </Box>
+    );
+  }
+
+  if (loading || !stats) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
         <CircularProgress size={60} />

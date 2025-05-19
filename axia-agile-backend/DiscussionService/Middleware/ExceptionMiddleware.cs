@@ -1,8 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using System;
-using System.Threading.Tasks;
-
-namespace DiscussionService.Middleware
+﻿namespace DiscussionService.Middleware
 {
     public class ExceptionMiddleware
     {

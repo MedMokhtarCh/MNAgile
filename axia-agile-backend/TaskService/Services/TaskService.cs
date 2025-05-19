@@ -1,14 +1,7 @@
-﻿using Microsoft.AspNetCore.Http;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Threading.Tasks;
 using TaskService.Data;
 using TaskService.DTOs;
-using TaskService.Models;
 using Task = TaskService.Models.Task;
 
 namespace TaskService.Services
@@ -109,6 +102,7 @@ namespace TaskService.Services
                 }
 
                 var assignedUserIds = new List<int>();
+                var validAssignedUserEmails = new List<string>();
                 if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
                 {
                     _logger.LogDebug($"Validating {request.AssignedUserEmails.Count} emails...");
@@ -120,16 +114,18 @@ namespace TaskService.Services
                         if (userIdsByEmail.ContainsKey(email))
                         {
                             assignedUserIds.Add(userIdsByEmail[email]);
+                            validAssignedUserEmails.Add(email);
                         }
                         else
                         {
                             invalidEmails.Add(email);
+                            _logger.LogWarning($"Email {email} not found in UserService; skipping assignment.");
                         }
                     }
 
                     if (invalidEmails.Any())
                     {
-                        throw new InvalidOperationException($"Les utilisateurs avec les emails suivants n'ont pas été trouvés : {string.Join(", ", invalidEmails)}.");
+                        _logger.LogInformation($"Skipped {invalidEmails.Count} invalid emails: {string.Join(", ", invalidEmails)}");
                     }
                 }
 
@@ -168,7 +164,8 @@ namespace TaskService.Services
                     Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null,
                     ProjectId = request.ProjectId,
                     Subtasks = request.Subtasks != null && request.Subtasks.Any() ? JsonSerializer.Serialize(request.Subtasks) : null,
-                    SprintId = request.SprintId
+                    SprintId = request.SprintId,
+                    DisplayOrder = (int)request.DisplayOrder
                 };
 
                 _context.Tasks.Add(task);
@@ -196,11 +193,12 @@ namespace TaskService.Services
                     EndDate = task.EndDate,
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
-                    AssignedUserEmails = request.AssignedUserEmails,
+                    AssignedUserEmails = validAssignedUserEmails,
                     ProjectId = task.ProjectId,
                     BacklogIds = request.BacklogIds,
                     Subtasks = request.Subtasks ?? new List<string>(),
-                    SprintId = task.SprintId
+                    SprintId = task.SprintId,
+                    DisplayOrder = task.DisplayOrder
                 };
 
                 _logger.LogInformation($"Task {task.Title} created for user {userId} in project {task.ProjectId}.");
@@ -273,7 +271,8 @@ namespace TaskService.Services
                     ProjectId = task.ProjectId,
                     BacklogIds = backlogIds,
                     Subtasks = subtasks,
-                    SprintId = task.SprintId
+                    SprintId = task.SprintId,
+                    DisplayOrder = task.DisplayOrder
                 };
             }
             catch (Exception ex)
@@ -361,7 +360,8 @@ namespace TaskService.Services
                         ProjectId = task.ProjectId,
                         BacklogIds = backlogIds,
                         Subtasks = subtasks,
-                        SprintId = task.SprintId
+                        SprintId = task.SprintId,
+                        DisplayOrder = task.DisplayOrder
                     });
                 }
 
@@ -425,16 +425,27 @@ namespace TaskService.Services
                 }
 
                 var assignedUserIds = new List<int>();
+                var validAssignedUserEmails = new List<string>();
                 if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
                 {
                     var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails);
+                    var invalidEmails = new List<string>();
                     foreach (var email in request.AssignedUserEmails)
                     {
-                        if (!userIdsByEmail.ContainsKey(email))
+                        if (userIdsByEmail.ContainsKey(email))
                         {
-                            throw new InvalidOperationException($"Utilisateur avec l'email {email} non trouvé.");
+                            assignedUserIds.Add(userIdsByEmail[email]);
+                            validAssignedUserEmails.Add(email);
                         }
-                        assignedUserIds.Add(userIdsByEmail[email]);
+                        else
+                        {
+                            invalidEmails.Add(email);
+                            _logger.LogWarning($"Email {email} not found in UserService; skipping assignment.");
+                        }
+                    }
+                    if (invalidEmails.Any())
+                    {
+                        _logger.LogInformation($"Skipped {invalidEmails.Count} invalid emails during update: {string.Join(", ", invalidEmails)}");
                     }
                 }
 
@@ -470,6 +481,7 @@ namespace TaskService.Services
                 task.Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null;
                 task.Subtasks = request.Subtasks != null ? JsonSerializer.Serialize(request.Subtasks) : task.Subtasks;
                 task.SprintId = request.SprintId ?? task.SprintId;
+                task.DisplayOrder = request.DisplayOrder ?? task.DisplayOrder;
 
                 // Update backlog links
                 if (request.BacklogIds != null)
@@ -509,11 +521,12 @@ namespace TaskService.Services
                     EndDate = task.EndDate,
                     Attachments = attachmentDtos,
                     AssignedUserIds = assignedUserIds,
-                    AssignedUserEmails = request.AssignedUserEmails,
+                    AssignedUserEmails = validAssignedUserEmails,
                     ProjectId = task.ProjectId,
                     BacklogIds = updatedBacklogIds,
                     Subtasks = request.Subtasks ?? JsonSerializer.Deserialize<List<string>>(task.Subtasks ?? "[]"),
-                    SprintId = task.SprintId
+                    SprintId = task.SprintId,
+                    DisplayOrder = task.DisplayOrder
                 };
             }
             catch (Exception ex)
@@ -541,6 +554,119 @@ namespace TaskService.Services
             {
                 _logger.LogError(ex, $"Error deleting task {id}");
                 throw;
+            }
+        }
+
+        public async Task<TaskDTO> UpdateTaskStatusAsync(int id, TaskStatusRequest request, int userId)
+        {
+            try
+            {
+                _logger.LogDebug($"Starting UpdateTaskStatusAsync for task {id} by user {userId}");
+
+                if (request == null)
+                {
+                    _logger.LogError("UpdateTaskStatusAsync: Request is null.");
+                    throw new ArgumentNullException(nameof(request), "La requête de mise à jour du statut est nulle.");
+                }
+
+                try
+                {
+                    request.Validate();
+                    _logger.LogDebug("Status request validated successfully.");
+                }
+                catch (ArgumentException ex)
+                {
+                    _logger.LogError(ex, "UpdateTaskStatusAsync: Validation failed.");
+                    throw new InvalidOperationException($"Erreur de validation : {ex.Message}");
+                }
+
+                var task = await _context.Tasks
+                    .Include(t => t.TaskBacklogs)
+                    .FirstOrDefaultAsync(t => t.Id == id);
+                if (task == null)
+                {
+                    _logger.LogWarning($"Task {id} not found.");
+                    return null;
+                }
+
+                // Valider le statut
+                var columns = await _kanbanColumnService.GetColumnsByProjectAsync(task.ProjectId);
+                if (!columns.Any(c => c.Name == request.Status))
+                {
+                    _logger.LogWarning($"Invalid status {request.Status} for project {task.ProjectId}.");
+                    throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
+                }
+
+                // Mettre à jour status et displayOrder
+                task.Status = request.Status;
+                task.DisplayOrder = request.DisplayOrder;
+                task.UpdatedAt = DateTime.UtcNow;
+
+                _context.Tasks.Update(task);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation($"Task {id} status updated to {task.Status} with displayOrder {task.DisplayOrder} by user {userId}");
+
+                // Préparer TaskDTO
+                var assignedUserIds = string.IsNullOrEmpty(task.AssignedUserIds)
+                    ? new List<int>()
+                    : task.AssignedUserIds.Split(',').Select(int.Parse).ToList();
+
+                var assignedUserEmails = new List<string>();
+                if (assignedUserIds.Any())
+                {
+                    try
+                    {
+                        assignedUserEmails = await _userServiceClient.GetEmailsByUserIdsAsync(assignedUserIds);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Failed to retrieve emails for task {id}");
+                        assignedUserEmails = new List<string>();
+                    }
+                }
+
+                var attachments = string.IsNullOrEmpty(task.Attachments)
+                    ? new List<AttachmentDTO>()
+                    : JsonSerializer.Deserialize<List<AttachmentDTO>>(task.Attachments);
+
+                var subtasks = string.IsNullOrEmpty(task.Subtasks)
+                    ? new List<string>()
+                    : JsonSerializer.Deserialize<List<string>>(task.Subtasks);
+
+                var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
+
+                return new TaskDTO
+                {
+                    Id = task.Id,
+                    Title = task.Title,
+                    Description = task.Description,
+                    Priority = task.Priority,
+                    Status = task.Status,
+                    CreatedByUserId = task.CreatedByUserId,
+                    CreatedAt = task.CreatedAt,
+                    UpdatedAt = task.UpdatedAt,
+                    StartDate = task.StartDate,
+                    EndDate = task.EndDate,
+                    Attachments = attachments,
+                    AssignedUserIds = assignedUserIds,
+                    AssignedUserEmails = assignedUserEmails,
+                    ProjectId = task.ProjectId,
+                    BacklogIds = backlogIds,
+                    Subtasks = subtasks,
+                    SprintId = task.SprintId,
+                    DisplayOrder = task.DisplayOrder
+                };
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, $"UpdateTaskStatusAsync: Validation error - {ex.Message}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"UpdateTaskStatusAsync: Unexpected error - {ex.Message}");
+                throw new InvalidOperationException("Erreur inattendue lors de la mise à jour du statut de la tâche.", ex);
             }
         }
 

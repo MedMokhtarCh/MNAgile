@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { Select, Card, Row, Col, Typography, Progress, Space } from 'antd';
@@ -5,7 +6,6 @@ import {
   ProjectOutlined,
   TeamOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
 } from '@ant-design/icons';
 import { Line } from 'react-chartjs-2';
 import {
@@ -19,6 +19,7 @@ import {
   Legend,
 } from 'chart.js';
 import { fetchProjects } from '../store/slices/projectsSlice';
+import { fetchSprints, fetchAllTasks, fetchBacklogs } from '../store/slices/taskSlice';
 import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -39,13 +40,16 @@ const ProjectsDashboard = () => {
   const [projectOptions, setProjectOptions] = useState([]);
 
   const dispatch = useDispatch();
-  const { projects, status, error } = useSelector((state) => state.projects);
+  const { projects, status: projectsStatus, error: projectsError } = useSelector((state) => state.projects);
+  const { sprints, tasks, backlogs, status: tasksStatus, error: tasksError } = useSelector((state) => state.tasks);
   const { currentUser } = useAuth();
 
+  // Fetch projects on mount
   useEffect(() => {
     dispatch(fetchProjects());
   }, [dispatch]);
 
+  // Filter projects based on user role and set project options
   useEffect(() => {
     if (currentUser && projects.length > 0) {
       let filteredProjects = [];
@@ -78,14 +82,27 @@ const ProjectsDashboard = () => {
       if (filteredProjects.length > 0 && !selectedProjectId) {
         setSelectedProjectId(filteredProjects[0].id);
       }
+    } else {
+      setProjectOptions([]);
+      setSelectedProjectId(null);
     }
   }, [currentUser, projects, selectedProjectId]);
+
+  // Fetch sprints, tasks, and backlogs for the selected project
+  useEffect(() => {
+    if (selectedProjectId && currentUser) {
+      console.log('[ProjectsDashboard] Fetching data for projectId:', selectedProjectId);
+      dispatch(fetchSprints({ projectId: selectedProjectId }));
+      dispatch(fetchAllTasks({ projectId: selectedProjectId }));
+      dispatch(fetchBacklogs({ projectId: selectedProjectId }));
+    }
+  }, [selectedProjectId, currentUser, dispatch]);
 
   const handleProjectChange = (projectId) => {
     setSelectedProjectId(projectId);
   };
 
-  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const selectedProject = projects.find((p) => String(p.id) === String(selectedProjectId));
 
   const getTeamMembers = () => {
     if (!selectedProject) return 0;
@@ -105,40 +122,107 @@ const ProjectsDashboard = () => {
   const getProjectData = () => {
     if (!selectedProject) {
       return {
-        tasks: 0,
-        activeTasks: 0,
+        totalTasks: 0,
+        totalBacklog: 0,
         scrumData: [],
         burndownData: {
-          labels: [],
-          remaining: [],
-          ideal: [],
+          labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
+          remaining: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          ideal: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         },
       };
     }
 
+    // Filter tasks for the selected project
+    const projectTasks = tasks.filter((task) => String(task.projectId) === String(selectedProjectId));
+    console.log('[getProjectData] selectedProjectId:', selectedProjectId);
+    console.log('[getProjectData] tasks:', tasks);
+    console.log('[getProjectData] projectTasks:', projectTasks);
+    console.log('[getProjectData] totalTasks:', projectTasks.length);
+
+    // Calculate total tasks across all sprints
+    const totalTasks = projectTasks.length;
+
+    // Calculate total backlog items
+    const totalBacklog = backlogs.length;
+
+    // Prepare scrum data for sprints
+    const scrumData = sprints.map((sprint) => ({
+      name: sprint.name,
+      totalTasks: projectTasks.filter((task) => String(task.sprintId) === String(sprint.id)).length,
+      completedTasks: projectTasks.filter((task) => String(task.sprintId) === String(sprint.id) && task.status === 'done').length,
+    }));
+
+    // Generate burndown chart data for the latest sprint
+    let burndownData = {
+      labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
+      remaining: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      ideal: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    };
+
+    if (sprints.length > 0) {
+      const latestSprint = sprints[sprints.length - 1];
+      const sprintTasks = projectTasks.filter((task) => String(task.sprintId) === String(latestSprint.id));
+      console.log('[getProjectData] latestSprint:', latestSprint);
+      console.log('[getProjectData] sprintTasks:', sprintTasks);
+
+      // Calculate sprint duration
+      let sprintDays = 10; // Default to 10 days if dates are unavailable
+      let startDate, endDate;
+      if (latestSprint.startDate && latestSprint.endDate) {
+        startDate = new Date(latestSprint.startDate);
+        endDate = new Date(latestSprint.endDate);
+        const timeDiff = endDate - startDate;
+        sprintDays = Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1; // Days including start and end
+        console.log('[getProjectData] sprintDays:', sprintDays, 'startDate:', startDate, 'endDate:', endDate);
+      } else {
+        console.warn('[getProjectData] Missing startDate or endDate, using default 10 days');
+      }
+
+      // Ensure sprintDays is at least 1
+      sprintDays = Math.max(sprintDays, 1);
+
+      // Calculate total story points
+      const totalStoryPoints = sprintTasks.reduce((sum, task) => sum + (Number(task.storyPoints) || 0), 0);
+      console.log('[getProjectData] totalStoryPoints:', totalStoryPoints);
+
+      // Generate labels for each day
+      const labels = Array.from({ length: sprintDays }, (_, i) => {
+        if (startDate) {
+          const day = new Date(startDate);
+          day.setDate(startDate.getDate() + i);
+          return day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+        }
+        return `Jour ${i + 1}`;
+      });
+
+      // Calculate remaining story points per day
+      const remaining = Array.from({ length: sprintDays }, (_, i) => {
+        const currentDate = startDate ? new Date(startDate) : new Date();
+        currentDate.setDate(currentDate.getDate() + i);
+        const tasksCompletedByDay = sprintTasks.filter(
+          (task) =>
+            task.status === 'done' &&
+            new Date(task.updatedAt) <= currentDate
+        );
+        const completedPoints = tasksCompletedByDay.reduce((sum, task) => sum + (Number(task.storyPoints) || 0), 0);
+        return totalStoryPoints - completedPoints;
+      });
+
+      // Ideal burndown line
+      const ideal = Array.from({ length: sprintDays }, (_, i) =>
+        totalStoryPoints * (1 - (i + 1) / sprintDays)
+      );
+
+      burndownData = { labels, remaining, ideal };
+      console.log('[getProjectData] burndownData:', burndownData);
+    }
+
     return {
-      tasks: 12,
-      activeTasks: 8,
-      scrumData: [
-        { name: 'Sprint 1', activeTasks: 5, totalTasks: 12 },
-        { name: 'Sprint 2', activeTasks: 8, totalTasks: 20 },
-      ],
-      burndownData: {
-        labels: [
-          'Jour 1',
-          'Jour 2',
-          'Jour 3',
-          'Jour 4',
-          'Jour 5',
-          'Jour 6',
-          'Jour 7',
-          'Jour 8',
-          'Jour 9',
-          'Jour 10',
-        ],
-        remaining: [20, 18, 15, 14, 12, 10, 8, 5, 3, 0],
-        ideal: [20, 18, 16, 14, 12, 10, 8, 6, 4, 2],
-      },
+      totalTasks,
+      totalBacklog,
+      scrumData,
+      burndownData,
     };
   };
 
@@ -205,26 +289,16 @@ const ProjectsDashboard = () => {
     },
   };
 
-  if (status === 'loading') {
+  // Combine loading and error states from projects and tasks slices
+  if (projectsStatus === 'loading' || tasksStatus === 'loading') {
     return <div style={{ padding: '24px', textAlign: 'center' }}>Chargement...</div>;
   }
 
-  if (status === 'failed') {
+  if (projectsStatus === 'failed' || tasksStatus === 'failed') {
     return (
       <div style={{ padding: '24px', textAlign: 'center' }}>
         <AntTitle level={4}>Erreur</AntTitle>
-        <Text>{error || 'Une erreur est survenue lors du chargement des projets.'}</Text>
-      </div>
-    );
-  }
-
-  if (projectOptions.length === 0) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center' }}>
-        <AntTitle level={4}>Aucun projet disponible</AntTitle>
-        <Text>
-          Vous n'avez accès à aucun projet ou aucun projet n'a été créé. Vérifiez votre rôle et vos affectations.
-        </Text>
+        <Text>{projectsError || tasksError || 'Une erreur est survenue lors du chargement des données.'}</Text>
       </div>
     );
   }
@@ -247,6 +321,7 @@ const ProjectsDashboard = () => {
               filterOption={(input, option) =>
                 (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
+              disabled={projectOptions.length === 0}
             />
           </Col>
         </Row>
@@ -259,7 +334,7 @@ const ProjectsDashboard = () => {
                 <div>
                   <Text type="secondary">Tâches Totales</Text>
                   <AntTitle level={3} style={{ margin: '8px 0 0 0', color: '#0958d9' }}>
-                    {currentProjectData.tasks}
+                    {currentProjectData.totalTasks || 'Aucune tâche'}
                   </AntTitle>
                 </div>
               </Space>
@@ -268,11 +343,11 @@ const ProjectsDashboard = () => {
           <Col span={8}>
             <Card style={statCardStyle}>
               <Space align="start">
-                <ClockCircleOutlined style={{ fontSize: '24px', color: '#0958d9' }} />
+                <ProjectOutlined style={{ fontSize: '24px', color: '#0958d9' }} />
                 <div>
-                  <Text type="secondary">Tâches Actives</Text>
+                  <Text type="secondary">Backlog Total</Text>
                   <AntTitle level={3} style={{ margin: '8px 0 0 0', color: '#0958d9' }}>
-                    {currentProjectData.activeTasks}
+                    {currentProjectData.totalBacklog || 'Aucun backlog'}
                   </AntTitle>
                 </div>
               </Space>
@@ -300,40 +375,54 @@ const ProjectsDashboard = () => {
         </Card>
 
         <Row gutter={16}>
-          {currentProjectData.scrumData.map((sprint, index) => (
-            <Col span={12} key={index}>
-              <Card
-                title={
-                  <Space>
-                    <CheckCircleOutlined style={{ color: '#0958d9' }} />
-                    {sprint.name}
+          {currentProjectData.scrumData.length > 0 ? (
+            currentProjectData.scrumData.map((sprint, index) => (
+              <Col span={12} key={index}>
+                <Card
+                  title={
+                    <Space>
+                      <CheckCircleOutlined style={{ color: '#0958d9' }} />
+                      {sprint.name}
+                    </Space>
+                  }
+                  style={cardStyle}
+                >
+                  <Space direction="vertical" style={{ width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <Text type="secondary">Progression</Text>
+                      <Text strong>
+                        {sprint.totalTasks > 0
+                          ? Math.round((sprint.completedTasks / sprint.totalTasks) * 100)
+                          : 0}%
+                      </Text>
+                    </div>
+                    <Progress
+                      percent={
+                        sprint.totalTasks > 0
+                          ? Math.round((sprint.completedTasks / sprint.totalTasks) * 100)
+                          : 0
+                      }
+                      strokeColor="#0958d9"
+                    />
+                    <Row justify="space-between">
+                      <Col>
+                        <Text type="secondary">Tâches complétées: {sprint.completedTasks}</Text>
+                      </Col>
+                      <Col>
+                        <Text type="secondary">Total: {sprint.totalTasks}</Text>
+                      </Col>
+                    </Row>
                   </Space>
-                }
-                style={cardStyle}
-              >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Text type="secondary">Progression</Text>
-                    <Text strong>
-                      {Math.round((sprint.activeTasks / sprint.totalTasks) * 100)}%
-                    </Text>
-                  </div>
-                  <Progress
-                    percent={Math.round((sprint.activeTasks / sprint.totalTasks) * 100)}
-                    strokeColor="#0958d9"
-                  />
-                  <Row justify="space-between">
-                    <Col>
-                      <Text type="secondary">Tâches actives: {sprint.activeTasks}</Text>
-                    </Col>
-                    <Col>
-                      <Text type="secondary">Total: {sprint.totalTasks}</Text>
-                    </Col>
-                  </Row>
-                </Space>
+                </Card>
+              </Col>
+            ))
+          ) : (
+            <Col span={24}>
+              <Card style={cardStyle}>
+                <Text type="secondary">Aucun sprint disponible</Text>
               </Card>
             </Col>
-          ))}
+          )}
         </Row>
       </Space>
     </div>

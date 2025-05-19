@@ -1,18 +1,15 @@
-﻿using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
 
 namespace NotificationService.Hubs
 {
+    [Authorize]
     public class NotificationHub : Hub
     {
-        public async Task JoinUserGroup(string userEmail)
+        public override Task OnConnectedAsync()
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, userEmail);
-        }
-
-        public async Task LeaveUserGroup(string userEmail)
-        {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, userEmail);
+            var userId = Context.User?.Identity?.Name; // Email de l'utilisateur
+            return base.OnConnectedAsync();
         }
     }
 }

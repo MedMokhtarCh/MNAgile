@@ -1,22 +1,14 @@
-﻿using Microsoft.EntityFrameworkCore;
-
-
-public class AppDbContext : DbContext
+﻿namespace NotificationService.Models
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
-
-    public DbSet<Notification> Notifications { get; set; }
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public class Notification
     {
-        modelBuilder.Entity<Notification>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.UserId).IsRequired();
-            entity.Property(e => e.Message).IsRequired();
-            entity.Property(e => e.Type).IsRequired();
-            entity.Property(e => e.IsRead).HasDefaultValue(false);
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("GETUTCDATE()");
-        });
+        public Guid Id { get; set; }
+        public string UserId { get; set; } = string.Empty; // Destinataire (email)
+        public string? SenderId { get; set; } // Émetteur (email, null pour système)
+        public string Type { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public Dictionary<string, string> Metadata { get; set; } = new();
     }
 }

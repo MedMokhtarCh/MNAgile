@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
 using UserService.DTOs;
@@ -9,7 +8,7 @@ namespace UserService.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-  
+
     public class RolesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -161,7 +160,7 @@ namespace UserService.Controllers
 
                     foreach (var user in associatedUsers)
                     {
-                        user.RoleId = 4; 
+                        user.RoleId = 4;
                     }
                     _context.Users.UpdateRange(associatedUsers);
                 }

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 namespace TaskService.DTOs
 {
@@ -23,6 +21,7 @@ namespace TaskService.DTOs
         public List<int>? BacklogIds { get; set; } = new List<int>();
         public List<string>? Subtasks { get; set; } = new List<string>();
         public int? SprintId { get; set; }
+        public int DisplayOrder { get; set; }
     }
 
     public class AttachmentDTO

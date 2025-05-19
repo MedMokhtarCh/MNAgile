@@ -6,20 +6,21 @@ import signalRService from '../../services/signalRService';
 const initialState = {
   channels: [],
   messages: {},
-  members: {}, // Store channel members by channelId
+  members: {},
   connectionStatus: 'disconnected',
   error: null,
   selectedChannel: null,
-  recentlyCreatedChannelIds: [], // New: Track recently created channel IDs
+  recentlyCreatedChannelIds: [],
 };
 
 // Async thunks
 export const fetchChannels = createAsyncThunk('chat/fetchChannels', async (_, { dispatch, rejectWithValue }) => {
   try {
     const response = await discussionApi.get('/discussion/channels');
-    
-    // Extract and organize members from channel data
-    const channels = response.data;
+    const channels = response.data.map(channel => ({
+      ...channel,
+      creatorId: parseInt(channel.creatorId, 10)
+    }));
     channels.forEach(channel => {
       if (channel.members && Array.isArray(channel.members)) {
         dispatch(setChannelMembers({ channelId: channel.id, members: channel.members }));
@@ -27,8 +28,7 @@ export const fetchChannels = createAsyncThunk('chat/fetchChannels', async (_, { 
         // If only memberIds are included
       }
     });
-    
-    return response.data;
+    return channels;
   } catch (error) {
     return rejectWithValue(error.response?.data?.message || 'Failed to fetch channels');
   }
@@ -48,29 +48,26 @@ export const fetchChannelMessages = createAsyncThunk(
 export const fetchChannelMembers = createAsyncThunk(
   'chat/fetchChannelMembers',
   async (channelId, { getState, rejectWithValue }) => {
-    const state = getState();
-    if (state.chat.members[channelId] && state.chat.members[channelId].length > 0) {
-      return { channelId, members: state.chat.members[channelId] };
-    }
-    
     try {
       const response = await discussionApi.get(`/discussion/channels/${channelId}/members`);
-      return { channelId, members: response.data };
+      const members = response.data;
+      return { channelId, members };
     } catch (error) {
+      const state = getState();
       const channel = state.chat.channels.find(ch => ch.id === channelId);
       if (channel && channel.memberIds && Array.isArray(channel.memberIds)) {
-        const allUsers = state.users.users;
+        const allUsers = state.users.users || [];
         const members = allUsers.filter(user => channel.memberIds.includes(user.id));
         return { channelId, members };
       }
-      
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch channel members');
     }
-});
+  }
+);
 
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ channelId, content, replyToId, files }, { rejectWithValue }) => {
+  async ({ channelId, content, replyToId, files }, { rejectWithValue, dispatch }) => {
     try {
       const formData = new FormData();
       formData.append('channelId', channelId);
@@ -84,6 +81,7 @@ export const sendMessage = createAsyncThunk(
       const response = await discussionApi.post('/discussion/messages', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
+      dispatch(playSound({ type: 'send' }));
       return response.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to send message');
@@ -95,21 +93,21 @@ export const createChannel = createAsyncThunk(
   async (channelData, { getState, dispatch, rejectWithValue }) => {
     try {
       const response = await discussionApi.post('/discussion/channels', channelData);
-      
+      const channel = {
+        ...response.data,
+        creatorId: parseInt(response.data.creatorId, 10)
+      };
       if (channelData.MemberIds && Array.isArray(channelData.MemberIds)) {
         const state = getState();
-        const allUsers = state.users.users;
+        const allUsers = state.users.users || [];
         const members = allUsers.filter(user => channelData.MemberIds.includes(user.id));
         dispatch(setChannelMembers({ 
-          channelId: response.data.id, 
+          channelId: channel.id, 
           members 
         }));
       }
-      
-      // Flag the channel as recently created
-      dispatch(setRecentlyCreatedChannel(response.data.id));
-      
-      return response.data;
+      dispatch(setRecentlyCreatedChannel(channel.id));
+      return channel;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || 'Failed to create channel');
     }
@@ -130,24 +128,42 @@ export const updateChannel = createAsyncThunk(
   'chat/updateChannel',
   async ({ channelId, channelData }, { getState, dispatch, rejectWithValue }) => {
     try {
-      const response = await discussionApi.put(`/discussion/channels/${channelId}`, channelData);
-      
-      if (channelData.MemberIdsToAdd && Array.isArray(channelData.MemberIdsToAdd)) {
-        const state = getState();
-        const allUsers = state.users.users;
-        const newMembers = allUsers.filter(user => channelData.MemberIdsToAdd.includes(user.id));
-        const existingMembers = state.chat.members[channelId] || [];
-        dispatch(setChannelMembers({ 
-          channelId, 
-          members: [...existingMembers, ...newMembers]
-        }));
-      }
-      
-      return response.data;
+      console.log('UpdateChannel payload:', {
+        channelId,
+        channelData: {
+          name: channelData.name,
+          MemberIdsToAdd: channelData.MemberIdsToAdd,
+          MemberIdsToRemove: channelData.MemberIdsToRemove
+        }
+      });
+      const response = await discussionApi.put(`/discussion/channels/${channelId}`, {
+        name: channelData.name,
+        MemberIdsToAdd: channelData.MemberIdsToAdd || [],
+        MemberIdsToRemove: channelData.MemberIdsToRemove || [],
+      });
+      const updatedChannel = {
+        ...response.data,
+        creatorId: parseInt(response.data.creatorId, 10)
+      };
+      const state = getState();
+      const allUsers = state.users.users || [];
+      const members = allUsers.filter(user => updatedChannel.memberIds.includes(user.id));
+      console.log('Updated members for channel', channelId, ':', members);
+      dispatch(setChannelMembers({ 
+        channelId, 
+        members
+      }));
+      return updatedChannel;
     } catch (error) {
+      console.error('UpdateChannel error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       return rejectWithValue(error.response?.data?.message || 'Failed to update channel');
     }
-});
+  }
+);
 
 export const initializeSignalR = createAsyncThunk(
   'chat/initializeSignalR',
@@ -167,21 +183,29 @@ const chatSlice = createSlice({
   initialState,
   reducers: {
     channelCreated(state, action) {
-      const channel = action.payload;
-      // Skip if the channel was recently created by this client
+      const channel = {
+        ...action.payload,
+        creatorId: parseInt(action.payload.creatorId, 10)
+      };
       if (state.recentlyCreatedChannelIds.includes(channel.id)) {
-        // Clear the flag for this channel
         state.recentlyCreatedChannelIds = state.recentlyCreatedChannelIds.filter(id => id !== channel.id);
         return;
       }
       const channelExists = state.channels.some((ch) => ch.id === channel.id);
       if (!channelExists) {
         state.channels.push(channel);
-      } else {
-        // Update existing channel for ChannelUpdated event
-        state.channels = state.channels.map(ch => 
-          ch.id === channel.id ? { ...ch, ...channel } : ch
-        );
+      }
+    },
+    channelUpdated(state, action) {
+      const updatedChannel = {
+        ...action.payload,
+        creatorId: parseInt(action.payload.creatorId, 10)
+      };
+      state.channels = state.channels.map(ch => 
+        ch.id === updatedChannel.id ? { ...ch, ...updatedChannel } : ch
+      );
+      if (state.selectedChannel?.id === updatedChannel.id) {
+        state.selectedChannel = updatedChannel;
       }
     },
     channelDeleted(state, action) {
@@ -198,7 +222,18 @@ const chatSlice = createSlice({
       if (!state.messages[message.channelId]) {
         state.messages[message.channelId] = [];
       }
-      state.messages[message.channelId].push(message);
+      const exists = state.messages[message.channelId].some(
+        (msg) => msg.id === message.id || 
+                 (msg.senderId === message.senderId && 
+                  msg.timestamp === message.timestamp && 
+                  msg.content === message.content)
+      );
+      if (!exists) {
+        state.messages[message.channelId].push(message);
+      }
+    },
+    playSound(state, action) {
+      // No state changes needed, just a trigger for the component to play sound
     },
     resetChatState(state) {
       state.channels = [];
@@ -225,17 +260,16 @@ const chatSlice = createSlice({
     setRecentlyCreatedChannel(state, action) {
       const channelId = action.payload;
       state.recentlyCreatedChannelIds.push(channelId);
-      // Optional: Clean up old IDs after a short delay to prevent memory buildup
       setTimeout(() => {
         state.recentlyCreatedChannelIds = state.recentlyCreatedChannelIds.filter(id => id !== channelId);
-      }, 5000); // Clear after 5 seconds
+      }, 5000);
     },
   },
   extraReducers: (builder) => {
     builder
       .addCase(fetchChannels.fulfilled, (state, action) => {
         state.channels = action.payload;
-        state.recentlyCreatedChannelIds = []; // Clear on fetch to avoid stale IDs
+        state.recentlyCreatedChannelIds = [];
         action.payload.forEach(channel => {
           if (channel.memberIds && Array.isArray(channel.memberIds) && !state.members[channel.id]) {
             state.members[channel.id] = [];
@@ -264,14 +298,21 @@ const chatSlice = createSlice({
         if (!state.messages[message.channelId]) {
           state.messages[message.channelId] = [];
         }
-        state.messages[message.channelId].push(message);
+        const exists = state.messages[message.channelId].some(
+          (msg) => msg.id === message.id || 
+                   (msg.senderId === message.senderId && 
+                    msg.timestamp === message.timestamp && 
+                    msg.content === message.content)
+        );
+        if (!exists) {
+          state.messages[message.channelId].push(message);
+        }
       })
       .addCase(sendMessage.rejected, (state, action) => {
         state.error = action.payload;
       })
       .addCase(createChannel.fulfilled, (state, action) => {
         const channel = action.payload;
-        // Only add if not already present (extra safety)
         if (!state.channels.some(ch => ch.id === channel.id)) {
           state.channels.push(channel);
         }
@@ -319,8 +360,10 @@ const chatSlice = createSlice({
 // Export actions
 export const {
   channelCreated,
+  channelUpdated,
   channelDeleted,
   messageReceived,
+  playSound,
   resetChatState,
   setSelectedChannel,
   setConnectionStatus,

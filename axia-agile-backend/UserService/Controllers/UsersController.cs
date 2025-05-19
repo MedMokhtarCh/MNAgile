@@ -1,13 +1,11 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Hosting;
+﻿using System.Security.Claims;
 using System.Text.RegularExpressions;
-using UserService.DTOs;
-using UserService.Models;
-using UserService.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
-using System.Security.Claims;
+using UserService.DTOs;
+using UserService.Services;
 
 namespace UserService.Controllers
 {
@@ -206,7 +204,7 @@ namespace UserService.Controllers
         }
 
         [HttpGet]
-        [Authorize(Policy = "CanViewUsers")]
+
         public async Task<ActionResult<List<UserDTO>>> GetAllUsers()
         {
             var users = await _userService.GetAllUsersAsync();

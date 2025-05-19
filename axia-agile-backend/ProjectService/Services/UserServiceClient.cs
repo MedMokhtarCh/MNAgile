@@ -1,8 +1,4 @@
-﻿using System.Net.Http;
-using System.Text.Json;
-using Microsoft.Extensions.Logging;
-using System.Threading.Tasks;
-using System;
+﻿using System.Text.Json;
 
 namespace ProjectService.Services
 {

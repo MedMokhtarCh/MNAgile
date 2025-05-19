@@ -16,18 +16,19 @@ import {
   FaChartBar,
   FaListAlt,
   FaCalendar,
-  FaRegCommentDots,
   FaSignOutAlt,
   FaClipboardList,
   FaPlay,
   FaArrowLeft,
 } from 'react-icons/fa';
 import FolderIcon from '@mui/icons-material/Folder';
+import { useSelector } from 'react-redux';
 import './Sidebar.css';
 
 const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
@@ -50,6 +51,11 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
     }
     return colors[sum % colors.length];
   };
+
+  // Only render sidebar for authenticated users
+  if (!isAuthenticated || !currentUser) {
+    return null;
+  }
 
   return (
     <Drawer
@@ -222,20 +228,6 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
             </Tooltip>
           </ListItemIcon>
           {!collapsed && <ListItemText primary="Calendrier" />}
-        </ListItem>
-
-        <ListItem
-          button
-          component={Link}
-          to={`/project/${projectId}/GroupDiscussion`}
-          className={`menu-item ${isActive(`/project/${projectId}/GroupDiscussion`)}`}
-        >
-          <ListItemIcon className="menu-icon">
-            <Tooltip title="Messages" placement="right">
-              <FaRegCommentDots />
-            </Tooltip>
-          </ListItemIcon>
-          {!collapsed && <ListItemText primary="Messages" />}
         </ListItem>
       </List>
     </Drawer>

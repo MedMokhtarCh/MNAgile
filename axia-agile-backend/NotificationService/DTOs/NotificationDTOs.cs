@@ -1,35 +1,22 @@
 ﻿namespace NotificationService.DTOs
 {
-    public class NotificationDTO
+    public class NotificationDto
     {
-        public int Id { get; set; }
-        public string RecipientEmail { get; set; }
-        public SenderDTO Sender { get; set; }
-        public string Message { get; set; }
-        public string Type { get; set; }
-        public bool Read { get; set; }
-        public DateTime Timestamp { get; set; }
-        public MetadataDTO Metadata { get; set; }
+        public Guid Id { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public string? SenderId { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public bool IsRead { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public Dictionary<string, string> Metadata { get; set; } = new();
     }
-
-    public class SenderDTO
+    public class CreateNotificationDto
     {
-        public string Name { get; set; }
-        public string Avatar { get; set; }
-    }
-
-    public class MetadataDTO
-    {
-        public int? ProjectId { get; set; }
-        public int? TaskId { get; set; }
-    }
-
-    public class CreateNotificationRequest
-    {
-        public string RecipientEmail { get; set; }
-        public string SenderName { get; set; }
-        public string Message { get; set; }
-        public string Type { get; set; }
-        public MetadataDTO Metadata { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public string? SenderId { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Message { get; set; } = string.Empty;
+        public Dictionary<string, string> Metadata { get; set; } = new();
     }
 }

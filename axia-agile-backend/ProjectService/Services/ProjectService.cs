@@ -1,15 +1,9 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using ProjectService.Data;
 using ProjectService.DTOs;
 using ProjectService.Models;
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace ProjectService.Services
 {
@@ -97,33 +91,43 @@ namespace ProjectService.Services
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
-            // Create default "À faire" Kanban column in TaskService
-            var createColumnRequest = new CreateKanbanColumnRequest
+            // Attempt to create default "À faire" Kanban column in TaskService
+            try
             {
-                Name = "À faire",
-                ProjectId = project.Id,
-                DisplayOrder = 1
-            };
+                var createColumnRequest = new CreateKanbanColumnRequest
+                {
+                    Name = "À faire",
+                    ProjectId = project.Id,
+                    DisplayOrder = 1
+                };
 
-            _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
+                _httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", jwtToken);
 
-            var jsonContent = new StringContent(
-                JsonSerializer.Serialize(createColumnRequest),
-                Encoding.UTF8,
-                "application/json"
-            );
+                var jsonContent = new StringContent(
+                    JsonSerializer.Serialize(createColumnRequest),
+                    Encoding.UTF8,
+                    "application/json"
+                );
 
-            _logger.LogInformation($"Sending request to TaskService: POST {_taskServiceUrl}/api/KanbanColumns with token: {jwtToken.Substring(0, 10)}...");
+                _logger.LogInformation($"Sending request to TaskService: POST {_taskServiceUrl}/api/KanbanColumns with token: {jwtToken.Substring(0, 10)}...");
 
-            var response = await _httpClient.PostAsync("api/KanbanColumns", jsonContent);
-            if (!response.IsSuccessStatusCode)
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError($"Failed to create Kanban column: {errorContent}");
-                throw new Exception($"Échec de la création de la colonne 'À faire' : {errorContent}");
+                var response = await _httpClient.PostAsync("api/KanbanColumns", jsonContent);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Failed to create Kanban column: {errorContent}");
+                    // Do not throw; log the error and continue
+                }
+                else
+                {
+                    _logger.LogInformation("Successfully created 'À faire' Kanban column for project ID: {ProjectId}", project.Id);
+                }
             }
-
-            _logger.LogInformation("Successfully created 'À faire' Kanban column for project ID: {ProjectId}", project.Id);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while creating Kanban column for project ID: {ProjectId}", project.Id);
+                // Do not throw; log the error and continue
+            }
 
             return MapToDto(project);
         }

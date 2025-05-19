@@ -12,6 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useDispatch } from 'react-redux';
 import { deleteTask } from '../../store/slices/taskSlice';
 import { KanbanContext } from '../../pages/Kanban';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Styled components
 const TaskCard = styled(Card, {
@@ -71,11 +72,15 @@ const PriorityChip = styled(Chip, {
 });
 
 function KanbanCard({ task, users, isOverlay = false, getPriorityLabel, getAvatarColor, generateInitials, handleEditTask }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id.toString() });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id.toString(),
+    data: { type: 'task', task },
+    disabled: !useAuth().currentUser?.claims?.includes('CanMoveTasks'), // Disable sortable if user lacks CanMoveTasks
+  });
   const dispatch = useDispatch();
   const { setDialogOpen, setFormValues, setCurrentColumn, setIsEditing, setEditingTask, setDialogMode } = useContext(KanbanContext);
+  const { currentUser } = useAuth();
   
-  // États pour le menu et la boîte de dialogue de confirmation
   const [menuAnchorEl, setMenuAnchorEl] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   
@@ -198,7 +203,7 @@ function KanbanCard({ task, users, isOverlay = false, getPriorityLabel, getAvata
         <CardContent sx={{ p: '8px !important' }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', width: '90%' }}>
-              {!isOverlay && (
+              {currentUser?.claims?.includes('CanMoveTasks') && (
                 <IconButton
                   size="small"
                   {...attributes}
@@ -279,24 +284,26 @@ function KanbanCard({ task, users, isOverlay = false, getPriorityLabel, getAvata
         </CardContent>
       </TaskCard>
       
-      {/* Menu d'options */}
       <Menu
         anchorEl={menuAnchorEl}
         open={menuOpen}
         onClose={handleMenuClose}
         onClick={(e) => e.stopPropagation()}
       >
-        <MenuItem onClick={handleEdit}>
-          <EditIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
-          Modifier
-        </MenuItem>
-        <MenuItem onClick={handleDeleteClick}>
-          <DeleteIcon fontSize="small" sx={{ mr: 1, color: 'error.main' }} />
-          Supprimer
-        </MenuItem>
+        {currentUser?.claims?.includes('CanUpdateTasks') && (
+          <MenuItem onClick={handleEdit}>
+            <EditIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
+            Modifier
+          </MenuItem>
+        )}
+        {currentUser?.claims?.includes('CanDeleteTasks') && (
+          <MenuItem onClick={handleDeleteClick}>
+            <DeleteIcon fontSize="small" sx={{ mr: 1, color: 'error.main' }} />
+            Supprimer
+          </MenuItem>
+        )}
       </Menu>
       
-      {/* Dialogue de confirmation de suppression */}
       <Dialog
         open={deleteConfirmOpen}
         onClose={handleDeleteCancel}

@@ -3,7 +3,8 @@ import {
   Box, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, Button, FormControl, InputLabel, Select as MuiSelect, OutlinedInput,
   useMediaQuery, useTheme, Grid, Container, Alert, CircularProgress, Autocomplete,
-  MenuItem, Chip, Avatar, List, ListItem, ListItemText, IconButton, Divider
+  MenuItem, Chip, Avatar, List, ListItem, ListItemText, IconButton, Divider,
+  Checkbox, ListItemIcon
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
@@ -12,6 +13,8 @@ import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -32,27 +35,21 @@ import PageTitle from '../components/common/PageTitle';
 export const KanbanContext = createContext();
 
 // Styled components
-const StyledButton = styled(({ button, ...otherProps }) => <Button {...otherProps} />)(({ theme, button }) => ({
+const StyledButton = styled(Button)(({ theme }) => ({
   textTransform: 'none',
   borderRadius: 8,
   padding: theme.spacing(0.8, 1.8),
   fontWeight: 500,
-  ...(button === true && {
-    ...(() => {
-      console.warn('[StyledButton] Received boolean button prop:', button);
-      return {};
-    })(),
-  }),
 }));
 
 const StyledDialog = styled(Dialog)(({ theme }) => ({
   '& .MuiDialogContent-root': {
     overflowY: 'auto',
-    scrollbarWidth: 'none', // Firefox
+    scrollbarWidth: 'none',
     '&::-webkit-scrollbar': {
-      display: 'none', // Webkit browsers
+      display: 'none',
     },
-    msOverflowStyle: 'none', // IE/Edge
+    msOverflowStyle: 'none',
   },
   '& .MuiDialog-paper': {
     borderRadius: 12,
@@ -122,6 +119,10 @@ function Kanban() {
     columnId: null,
     backlogIds: [],
   });
+  const [subtasks, setSubtasks] = useState([]);
+  const [newSubtask, setNewSubtask] = useState('');
+  const [editingSubtaskIndex, setEditingSubtaskIndex] = useState(null);
+  const [editingSubtaskText, setEditingSubtaskText] = useState('');
 
   // Drag-and-drop logic
   const { handleDragStart, handleDragEnd, getActiveTask, getActiveColumn } = useDragAndDrop({
@@ -215,6 +216,50 @@ function Kanban() {
     loadData();
   }, [loadData]);
 
+  // Handle subtasks
+  const handleAddSubtask = () => {
+    if (newSubtask.trim()) {
+      setSubtasks([...subtasks, { title: newSubtask, completed: false }]);
+      setNewSubtask('');
+    }
+  };
+
+  const handleRemoveSubtask = (index) => {
+    const updatedSubtasks = [...subtasks];
+    updatedSubtasks.splice(index, 1);
+    setSubtasks(updatedSubtasks);
+    if (editingSubtaskIndex === index) {
+      setEditingSubtaskIndex(null);
+      setEditingSubtaskText('');
+    }
+  };
+
+  const handleToggleSubtask = (index) => {
+    const updatedSubtasks = [...subtasks];
+    updatedSubtasks[index].completed = !updatedSubtasks[index].completed;
+    setSubtasks(updatedSubtasks);
+  };
+
+  const handleEditSubtask = (index) => {
+    setEditingSubtaskIndex(index);
+    setEditingSubtaskText(subtasks[index].title);
+  };
+
+  const handleSaveSubtaskEdit = (index) => {
+    if (editingSubtaskText.trim()) {
+      const updatedSubtasks = [...subtasks];
+      updatedSubtasks[index].title = editingSubtaskText.trim();
+      setSubtasks(updatedSubtasks);
+      setEditingSubtaskIndex(null);
+      setEditingSubtaskText('');
+    }
+  };
+
+  const handleCancelSubtaskEdit = () => {
+    setEditingSubtaskIndex(null);
+    setEditingSubtaskText('');
+  };
+
   // Notify users of task creation
   const createTaskNotification = (userEmail, taskTitle, taskId) => {
     createNotification({
@@ -254,6 +299,9 @@ function Kanban() {
         attachments: [],
         backlogIds: backlogFilter !== 'all' && backlogFilter !== 'none' && selectedBacklog ? [parseInt(selectedBacklog.id)] : [],
       });
+      setSubtasks([]);
+      setEditingSubtaskIndex(null);
+      setEditingSubtaskText('');
       setDialogOpen(true);
     } catch (err) {
       console.error('[handleAddTask] Error:', err);
@@ -261,7 +309,7 @@ function Kanban() {
     }
   };
 
-  // Handle edit task (triggered by edit icon in KanbanCard)
+  // Handle edit task
   const handleEditTask = (task) => {
     try {
       setCurrentColumn(task.status);
@@ -278,6 +326,9 @@ function Kanban() {
         attachments: [],
         backlogIds: task.backlogIds || [],
       });
+      setSubtasks(task.subtasks?.map(title => ({ title, completed: false })) || []);
+      setEditingSubtaskIndex(null);
+      setEditingSubtaskText('');
       setDialogOpen(true);
     } catch (err) {
       console.error('[handleEditTask] Error:', err);
@@ -293,8 +344,22 @@ function Kanban() {
   };
 
   // Handle delete column
-  const handleDeleteColumn = (columnId) => {
-    dispatch(deleteKanbanColumn({ columnId }));
+  const handleDeleteColumn = async (columnId) => {
+    try {
+    
+      const column = columns.find((col) => col.id === columnId);
+      if (column) {
+        const tasksInColumn = tasks.filter((task) => task.status === column.name);
+        for (const task of tasksInColumn) {
+          await dispatch(deleteTask(task.id)).unwrap();
+        }
+      }
+     
+      await dispatch(deleteKanbanColumn({ columnId })).unwrap();
+    } catch (err) {
+      console.error('[handleDeleteColumn] Error:', err);
+      setKanbanError('Erreur lors de la suppression de la colonne.');
+    }
   };
 
   // Handle form changes
@@ -339,125 +404,123 @@ function Kanban() {
   };
 
   // Create task
-  const handleCreateTask = async () => {
-    if (!currentColumn || !formValues.title || !projectId) {
-      setKanbanError('Le titre, la colonne et l\'ID du projet sont requis.');
-      return;
-    }
-    setIsCreatingTask(true);
-    setKanbanError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description,
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
-        priority: normalizePriority(formValues.priority),
-        startDate: parseDate(formValues.startDate),
-        endDate: parseDate(formValues.endDate),
-        status: currentColumn || 'À faire',
-        projectId: parseInt(projectId),
-        backlogIds: formValues.backlogIds || [],
-        metadata: { createdIn: 'kanban' },
-      };
-      console.log('[handleCreateTask] Task Data:', JSON.stringify(taskData, null, 2));
-      const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
-      formValues.assignedUsers.forEach((user) => {
-        if (user.email) createTaskNotification(user.email, formValues.title, result.id);
-      });
-      setFormValues({
-        title: result.title || '',
-        description: result.description || '',
-        assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
-        priority: normalizePriority(result.priority),
-        startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
-        endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
-        attachments: [],
-        backlogIds: result.backlogIds || [],
-      });
-      setEditingTask({ ...result, attachments: result.attachments || [] });
-      setDialogMode('view');
-      setIsEditing(false);
-    } catch (err) {
-      console.error('[handleCreateTask] Error:', {
-        message: err.message,
-        response: err.response ? { status: err.response.status, data: err.response.data } : null,
-      });
-      const errorMessage =
-        typeof err === 'string' ? err :
-        err.message ||
-        err.errors?.join(', ') ||
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-        'Erreur lors de la création de la tâche';
-      setKanbanError(errorMessage);
-    } finally {
-      setIsCreatingTask(false);
-    }
-  };
+// In Kanban.js, modify handleCreateTask and handleUpdateTask for clarity
+const handleCreateTask = async () => {
+  if (!currentColumn || !formValues.title || !projectId) {
+    setKanbanError('Le titre, la colonne et l\'ID du projet sont requis.');
+    return;
+  }
+  setIsCreatingTask(true);
+  setKanbanError('');
+  try {
+    const taskData = {
+      title: formValues.title,
+      description: formValues.description,
+      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [], // Explicitly optional
+      priority: normalizePriority(formValues.priority),
+      startDate: parseDate(formValues.startDate),
+      endDate: parseDate(formValues.endDate),
+      status: currentColumn || 'À faire',
+      projectId: parseInt(projectId),
+      backlogIds: formValues.backlogIds || [],
+      subtasks: subtasks.map(subtask => subtask.title),
+      metadata: { createdIn: 'kanban' },
+    };
 
-  // Update task
-  const handleUpdateTask = async () => {
-    if (!editingTask || !formValues.title || !projectId) {
-      setKanbanError('Le titre et l\'ID du projet sont requis.');
-      return;
-    }
-    setIsCreatingTask(true);
-    setKanbanError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description,
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
-        priority: normalizePriority(formValues.priority),
-        startDate: parseDate(formValues.startDate),
-        endDate: parseDate(formValues.endDate),
-        status: currentColumn || editingTask.status || 'À faire',
-        projectId: parseInt(projectId),
-        backlogIds: formValues.backlogIds || [],
-        metadata: { createdIn: 'kanban' },
-      };
-      console.log('[handleUpdateTask] Task Data:', JSON.stringify(taskData, null, 2));
-      console.log('[handleUpdateTask] Attachments:', formValues.attachments);
-      const result = await dispatch(updateTask({ taskId: editingTask.id, taskData, attachments: formValues.attachments })).unwrap();
-      formValues.assignedUsers.forEach((user) => {
-        if (user.email) updateTaskNotification(user.email, formValues.title, result.id);
-      });
-      setFormValues({
-        title: result.title || '',
-        description: result.description || '',
-        assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
-        priority: normalizePriority(result.priority),
-        startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
-        endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
-        attachments: [],
-        backlogIds: result.backlogIds || [],
-      });
-      setEditingTask({ ...result, attachments: result.attachments || [] });
-      setDialogMode('view');
-      setIsEditing(false);
-    } catch (err) {
-      console.error('[handleUpdateTask] Error:', {
-        message: err.message,
-        errors: err.errors,
-        response: err.response ? {
-          status: err.response?.status,
-          data: err.response?.data,
-        } : null,
-      });
-      const errorMessage =
-        typeof err === 'string' ? err :
-        err.message ||
-        err.errors?.join(', ') ||
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-        'Erreur lors de la mise à jour de la tâche';
-      setKanbanError(errorMessage);
-    } finally {
-      setIsCreatingTask(false);
-    }
-  };
+    const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
+
+    // Notify assigned users (if any)
+    formValues.assignedUsers.forEach((user) => {
+      if (user.email) createTaskNotification(user.email, formValues.title, result.id);
+    });
+
+    // Reset form and update state
+    setFormValues({
+      title: '',
+      description: '',
+      assignedUsers: [], // Reset to empty array
+      priority: 'MEDIUM',
+      startDate: '',
+      endDate: '',
+      attachments: [],
+      backlogIds: [],
+    });
+    setSubtasks([]);
+    setEditingTask({ ...result, attachments: result.attachments || [] });
+    setDialogMode('view');
+    setIsEditing(false);
+    setDialogOpen(false); // Close dialog after successful creation
+  } catch (err) {
+    console.error('[handleCreateTask] Error:', err);
+    const errorMessage =
+      typeof err === 'string' ? err :
+      err.message ||
+      err.response?.data?.message ||
+      err.response?.data?.title ||
+      (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
+      'Erreur lors de la création de la tâche';
+    setKanbanError(errorMessage);
+  } finally {
+    setIsCreatingTask(false);
+  }
+};
+
+const handleUpdateTask = async () => {
+  if (!editingTask || !formValues.title || !projectId) {
+    setKanbanError('Le titre et l\'ID du projet sont requis.');
+    return;
+  }
+  setIsCreatingTask(true);
+  setKanbanError('');
+  try {
+    const taskData = {
+      title: formValues.title,
+      description: formValues.description,
+      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [], // Explicitly optional
+      priority: normalizePriority(formValues.priority),
+      startDate: parseDate(formValues.startDate),
+      endDate: parseDate(formValues.endDate),
+      status: currentColumn || editingTask.status || 'À faire',
+      projectId: parseInt(projectId),
+      backlogIds: formValues.backlogIds || [],
+      subtasks: subtasks.map(subtask => subtask.title),
+      metadata: { createdIn: 'kanban' },
+    };
+
+    const result = await dispatch(updateTask({ taskId: editingTask.id, taskData, attachments: formValues.attachments })).unwrap();
+
+    formValues.assignedUsers.forEach((user) => {
+      if (user.email) updateTaskNotification(user.email, formValues.title, result.id);
+    });
+    setFormValues({
+      title: result.title || '',
+      description: result.description || '',
+      assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
+      priority: normalizePriority(result.priority),
+      startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
+      endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
+      attachments: [],
+      backlogIds: result.backlogIds || [],
+    });
+    setSubtasks(result.subtasks?.map(title => ({ title, completed: false })) || []);
+    setEditingTask({ ...result, attachments: result.attachments || [] });
+    setDialogMode('view');
+    setIsEditing(false);
+  } catch (err) {
+    console.error('[handleUpdateTask] Error:', err);
+    const errorMessage =
+      typeof err === 'string' ? err :
+      err.message ||
+      err.errors?.join(', ') ||
+      err.response?.data?.message ||
+      err.response?.data?.title ||
+      (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
+      'Erreur lors de la mise à jour de la tâche';
+    setKanbanError(errorMessage);
+  } finally {
+    setIsCreatingTask(false);
+  }
+};
 
   // Handle dialog close
   const handleDialogClose = () => {
@@ -474,6 +537,10 @@ function Kanban() {
       columnId: null,
       backlogIds: [],
     });
+    setSubtasks([]);
+    setNewSubtask('');
+    setEditingSubtaskIndex(null);
+    setEditingSubtaskText('');
     setCurrentColumn(null);
     setIsEditing(false);
     setEditingTask(null);
@@ -508,10 +575,7 @@ function Kanban() {
         await handleCreateTask();
       }
     } catch (err) {
-      console.error('[handleFormSubmit] Error:', {
-        message: err.message,
-        response: err.response ? { status: err.response.status, data: err.response.data } : null,
-      });
+      console.error('[handleFormSubmit] Error:', err);
       const errorMessage =
         typeof err === 'string' ? err :
         err.message ||
@@ -574,9 +638,9 @@ function Kanban() {
       }}>
         <Container maxWidth={false} sx={{ mt: 4, mb: 6 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <PageTitle>
+            <PageTitle>
               Tableau Kanban pour le projet {project.title}
-           </PageTitle>
+            </PageTitle>
             <StyledButton
               variant="contained"
               startIcon={<AddIcon />}
@@ -623,11 +687,9 @@ function Kanban() {
           <DndContext
             collisionDetection={closestCorners}
             onDragStart={(event) => {
-              console.log('[Kanban] Drag Start:', event.active.id);
               setActiveId(handleDragStart(event));
             }}
             onDragEnd={(event) => {
-              console.log('[Kanban] Drag End:', { active: event.active?.id, over: event.over?.id });
               handleDragEnd(event);
             }}
             sensors={sensors}
@@ -808,6 +870,23 @@ function Kanban() {
                             <Typography variant="body1">Aucun utilisateur assigné</Typography>
                           )}
                         </Box>
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="subtitle2" color="text.secondary">Sous-tâches</Typography>
+                          {editingTask?.subtasks?.length > 0 ? (
+                            <List dense>
+                              {editingTask.subtasks.map((subtask, index) => (
+                                <ListItem key={`view-subtask-${index}`}>
+                                  <ListItemIcon>
+                                    <Checkbox edge="start" checked={false} disabled />
+                                  </ListItemIcon>
+                                  <ListItemText primary={subtask} />
+                                </ListItem>
+                              ))}
+                            </List>
+                          ) : (
+                            <Typography variant="body1">Aucune sous-tâche</Typography>
+                          )}
+                        </Box>
                         <Box>
                           <Typography variant="subtitle2" color="text.secondary">Pièces jointes</Typography>
                           {editingTask?.attachments?.length > 0 ? (
@@ -926,6 +1005,96 @@ function Kanban() {
                           isOptionEqualToValue={(option, value) => option.id === value.id}
                           disabled={isCreatingTask}
                         />
+                        <Box sx={{ mt: 2 }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1 }}>Sous-tâches</Typography>
+                          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              value={newSubtask}
+                              onChange={(e) => setNewSubtask(e.target.value)}
+                              placeholder="Ajouter une sous-tâche"
+                              disabled={isCreatingTask}
+                            />
+                            <Button
+                              variant="outlined"
+                              onClick={handleAddSubtask}
+                              disabled={!newSubtask.trim() || isCreatingTask}
+                            >
+                              Ajouter
+                            </Button>
+                          </Box>
+                          <List dense>
+                            {subtasks.map((subtask, index) => (
+                              <ListItem
+                                key={`subtask-${index}`}
+                                secondaryAction={
+                                  <Box>
+                                    {editingSubtaskIndex === index ? (
+                                      <>
+                                        <IconButton
+                                          edge="end"
+                                          onClick={() => handleSaveSubtaskEdit(index)}
+                                          disabled={!editingSubtaskText.trim() || isCreatingTask}
+                                        >
+                                          <CheckIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                          edge="end"
+                                          onClick={handleCancelSubtaskEdit}
+                                          disabled={isCreatingTask}
+                                        >
+                                          <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <IconButton
+                                          edge="end"
+                                          onClick={() => handleEditSubtask(index)}
+                                          disabled={isCreatingTask}
+                                        >
+                                          <EditIcon fontSize="small" />
+                                        </IconButton>
+                                        <IconButton
+                                          edge="end"
+                                          onClick={() => handleRemoveSubtask(index)}
+                                          disabled={isCreatingTask}
+                                        >
+                                          <DeleteIcon fontSize="small" />
+                                        </IconButton>
+                                      </>
+                                    )}
+                                  </Box>
+                                }
+                              >
+                                <ListItemIcon>
+                                  <Checkbox
+                                    edge="start"
+                                    checked={subtask.completed}
+                                    onChange={() => handleToggleSubtask(index)}
+                                    disabled={isCreatingTask || editingSubtaskIndex === index}
+                                  />
+                                </ListItemIcon>
+                                {editingSubtaskIndex === index ? (
+                                  <TextField
+                                    size="small"
+                                    value={editingSubtaskText}
+                                    onChange={(e) => setEditingSubtaskText(e.target.value)}
+                                    autoFocus
+                                    fullWidth
+                                    disabled={isCreatingTask}
+                                  />
+                                ) : (
+                                  <ListItemText
+                                    primary={subtask.title}
+                                    sx={{ textDecoration: subtask.completed ? 'line-through' : 'none' }}
+                                  />
+                                )}
+                              </ListItem>
+                            ))}
+                          </List>
+                        </Box>
                       </Box>
                     </Grid>
                     <Grid item xs={12} md={6}>

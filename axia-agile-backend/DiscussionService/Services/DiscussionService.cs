@@ -1,18 +1,11 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DiscussionService.Data;
 using DiscussionService.DTOs;
 using DiscussionService.Hubs;
 using DiscussionService.Models;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace DiscussionService.Services
 {
@@ -84,6 +77,10 @@ namespace DiscussionService.Services
                 throw new KeyNotFoundException($"User {userId} returned null from UserService.");
             }
             _userCache[userId] = user;
+            if (_userCache.Count > 1000)
+            {
+                _userCache.Clear();
+            }
             _logger.LogInformation("Fetched user {UserId} from UserService.", userId);
             return user;
         }
@@ -246,7 +243,6 @@ namespace DiscussionService.Services
 
                 await _context.SaveChangesAsync();
 
-                // Set the channel name for the DTO
                 string channelName = channel.Name;
                 if (channel.Type == "dm")
                 {
@@ -492,7 +488,6 @@ namespace DiscussionService.Services
                 await _context.SaveChangesAsync();
             }
 
-            await _hubContext.Groups.AddToGroupAsync(_httpContextAccessor.HttpContext.Connection.Id, $"channel_{channelId}");
             _logger.LogInformation("Retrieved {MessageCount} messages for channel {ChannelId} for user {UserId}.", messages.Count, channelId, userId);
             return messages;
         }
@@ -512,6 +507,7 @@ namespace DiscussionService.Services
 
             if (channel.CreatorId != userId)
             {
+                _logger.LogWarning("User {UserId} is not the creator of channel {ChannelId} (CreatorId: {CreatorId})", userId, channelId, channel.CreatorId);
                 throw new UnauthorizedAccessException("Seul le créateur du canal peut le supprimer.");
             }
 
@@ -558,8 +554,11 @@ namespace DiscussionService.Services
                 throw new InvalidOperationException("Canal non trouvé.");
             }
 
+            _logger.LogInformation("Channel {ChannelId} has CreatorId: {CreatorId}", channelId, channel.CreatorId);
+
             if (channel.CreatorId != userId)
             {
+                _logger.LogWarning("User {UserId} is not the creator of channel {ChannelId} (CreatorId: {CreatorId})", userId, channelId, channel.CreatorId);
                 throw new UnauthorizedAccessException("Seul le créateur du canal peut le modifier.");
             }
 
@@ -574,6 +573,7 @@ namespace DiscussionService.Services
                 channel.Name = request.Name;
                 var existingMemberIds = channel.Members.Select(m => m.UserId).ToList();
 
+                // Add new members
                 foreach (var memberId in request.MemberIdsToAdd?.Distinct() ?? new List<int>())
                 {
                     if (memberId <= 0)
@@ -592,11 +592,33 @@ namespace DiscussionService.Services
                                 UserId = memberId,
                                 UnreadCount = 0
                             });
+                            _logger.LogInformation("Added user {MemberId} to channel {ChannelId}.", memberId, channel.Id);
                         }
                         catch (KeyNotFoundException)
                         {
                             _logger.LogWarning("User {MemberId} not found, skipping for channel {ChannelId}.", memberId, channel.Id);
                         }
+                    }
+                }
+
+                // Remove members
+                foreach (var memberId in request.MemberIdsToRemove?.Distinct() ?? new List<int>())
+                {
+                    if (memberId <= 0)
+                    {
+                        _logger.LogWarning("Skipping invalid member ID {MemberId} for channel {ChannelId}.", memberId, channel.Id);
+                        continue;
+                    }
+                    if (memberId == userId)
+                    {
+                        _logger.LogWarning("Cannot remove creator {UserId} from channel {ChannelId}.", memberId, channel.Id);
+                        continue;
+                    }
+                    var memberToRemove = channel.Members.FirstOrDefault(m => m.UserId == memberId);
+                    if (memberToRemove != null)
+                    {
+                        channel.Members.Remove(memberToRemove);
+                        _logger.LogInformation("Removed user {MemberId} from channel {ChannelId}.", memberId, channel.Id);
                     }
                 }
 
@@ -630,7 +652,6 @@ namespace DiscussionService.Services
                 throw;
             }
         }
-
         private string SanitizeFileName(string fileName)
         {
             var invalidChars = Path.GetInvalidFileNameChars();

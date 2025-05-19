@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 namespace TaskService.DTOs
 {
@@ -12,11 +10,12 @@ namespace TaskService.DTOs
         public string Status { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public List<string?> AssignedUserEmails { get; set; } = new List<string>();
+        public List<string?> AssignedUserEmails { get; set; } = new List<string>(); // Already optional by default
         public int ProjectId { get; set; }
         public List<int>? BacklogIds { get; set; } = new List<int>();
         public List<string>? Subtasks { get; set; } = new List<string>();
         public int? SprintId { get; set; }
+        public int? DisplayOrder { get; set; } = 0;
 
         public void Validate()
         {
@@ -24,10 +23,14 @@ namespace TaskService.DTOs
                 throw new ArgumentException("Le titre est requis.");
             if (ProjectId <= 0)
                 throw new ArgumentException("Un ID de projet valide est requis.");
-            if (AssignedUserEmails != null && AssignedUserEmails.Any(email => string.IsNullOrEmpty(email) || !IsValidEmail(email)))
+            // Filter out null or empty emails before validation
+            var validEmails = AssignedUserEmails?.Where(email => !string.IsNullOrEmpty(email)).ToList() ?? new List<string>();
+            if (validEmails.Any(email => !IsValidEmail(email)))
                 throw new ArgumentException("Tous les emails fournis doivent être valides.");
             if (Subtasks != null && Subtasks.Any(s => string.IsNullOrWhiteSpace(s)))
                 throw new ArgumentException("Les sous-tâches ne peuvent pas être vides.");
+            if (DisplayOrder < 0)
+                throw new ArgumentException("L'ordre d'affichage ne peut pas être négatif.");
         }
 
         private bool IsValidEmail(string email)

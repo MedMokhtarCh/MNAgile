@@ -1,7 +1,4 @@
 ﻿// TaskService/DTOs/BacklogDTO.cs
-using System;
-using System.Collections.Generic;
-
 namespace TaskService.DTOs
 {
     public class BacklogDTO

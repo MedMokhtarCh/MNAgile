@@ -14,6 +14,7 @@ import {
   InputAdornment,
   Box,
   IconButton,
+  CircularProgress, // Add CircularProgress for loading state
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -53,6 +54,7 @@ const UserForm = ({
   disabledFields = [],
   requiredFields = ['email', 'firstName', 'lastName'],
   showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
+  loading = false, // Add loading prop
 }) => {
   console.log('UserForm - Open:', open, 'User:', user);
   const [errors, setErrors] = useState({});
@@ -74,7 +76,7 @@ const UserForm = ({
     setUser({ ...user, claimIds });
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     console.log('UserForm - Submitting user:', user);
     const newErrors = {};
 
@@ -99,7 +101,11 @@ const UserForm = ({
       return;
     }
 
-    onSave();
+    try {
+      await onSave(); // Await the onSave to ensure creation is complete
+    } catch (error) {
+      console.error('UserForm - Error during submission:', error);
+    }
   };
 
   return (
@@ -311,10 +317,15 @@ const UserForm = ({
         </Grid>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined">
+        <Button onClick={onClose} variant="outlined" disabled={loading}>
           Annuler
         </Button>
-        <Button variant="contained" onClick={handleSubmit}>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+        >
           {isEditMode ? 'Enregistrer' : 'Créer'}
         </Button>
       </DialogActions>

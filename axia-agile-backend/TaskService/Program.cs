@@ -1,11 +1,10 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.Text;
 using TaskService.Data;
 using TaskService.Services;
 
@@ -41,6 +40,7 @@ builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<KanbanColumnService>();
 builder.Services.AddScoped<BacklogService>();
 builder.Services.AddScoped<SprintService>();
+
 
 // --------------------- JWT Auth + Cookie ---------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -124,6 +124,18 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanCreateTasks", policy => policy.RequireClaim("CanCreateTasks", "true"));
     options.AddPolicy("CanUpdateTasks", policy => policy.RequireClaim("CanUpdateTasks", "true"));
     options.AddPolicy("CanDeleteTasks", policy => policy.RequireClaim("CanDeleteTasks", "true"));
+    options.AddPolicy("CanMoveTasks", policy => policy.RequireClaim("CanMoveTasks"));
+    // Backlog Policies
+    options.AddPolicy("CanViewBacklogs", policy => policy.RequireClaim("CanViewBacklogs", "true"));
+    options.AddPolicy("CanCreateBacklogs", policy => policy.RequireClaim("CanCreateBacklogs", "true"));
+    options.AddPolicy("CanUpdateBacklogs", policy => policy.RequireClaim("CanUpdateBacklogs", "true"));
+    options.AddPolicy("CanDeleteBacklogs", policy => policy.RequireClaim("CanDeleteBacklogs", "true"));
+
+    // Sprint Policies
+    options.AddPolicy("CanViewSprints", policy => policy.RequireClaim("CanViewSprints", "true"));
+    options.AddPolicy("CanCreateSprints", policy => policy.RequireClaim("CanCreateSprints", "true"));
+    options.AddPolicy("CanUpdateSprints", policy => policy.RequireClaim("CanUpdateSprints", "true"));
+    options.AddPolicy("CanDeleteSprints", policy => policy.RequireClaim("CanDeleteSprints", "true"));
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
@@ -166,6 +178,7 @@ builder.Services.AddLogging(logging =>
     logging.AddDebug();
     logging.SetMinimumLevel(LogLevel.Debug);
 });
+
 
 // --------------------- App ---------------------
 var app = builder.Build();

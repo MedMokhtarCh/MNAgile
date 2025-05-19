@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace DiscussionService.Models
 {
@@ -10,7 +8,7 @@ namespace DiscussionService.Models
         [Required]
         public string Name { get; set; }
         public string Type { get; set; } // "channel" or "dm"
-        public int? CreatorId { get; set; }
+        public int CreatorId { get; set; } // Changed to non-nullable
         public DateTime CreatedAt { get; set; }
         public ICollection<ChannelMember> Members { get; set; }
         public ICollection<Message> Messages { get; set; }

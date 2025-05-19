@@ -100,21 +100,9 @@ export const createProject = createAsyncThunk(
         endDate: project.endDate,
         methodology: project.methodology,
         createdBy: project.createdBy,
-        projectManagers: validateUsers(
-          project.projectManager ? [project.projectManager] : [],
-          allUsers,
-          'projectManagers'
-        ),
-        productOwners: validateUsers(
-          project.productOwner ? [project.productOwner] : [],
-          allUsers,
-          'productOwners'
-        ),
-        scrumMasters: validateUsers(
-          project.scrumMaster ? [project.scrumMaster] : [],
-          allUsers,
-          'scrumMasters'
-        ),
+        projectManagers: validateUsers(project.projectManagers || [], allUsers, 'projectManagers'),
+        productOwners: validateUsers(project.productOwners || [], allUsers, 'productOwners'),
+        scrumMasters: validateUsers(project.scrumMasters || [], allUsers, 'scrumMasters'),
         developers: validateUsers(project.developers || [], allUsers, 'developers'),
         testers: validateUsers(project.testers || [], allUsers, 'testers'),
         observers: validateUsers(project.observers || [], allUsers, 'observers'),
@@ -162,16 +150,18 @@ export const updateProject = createAsyncThunk(
       if (project.startDate) payload.startDate = project.startDate;
       if (project.endDate) payload.endDate = project.endDate;
       if (project.methodology) payload.methodology = project.methodology;
-      if (project.projectManager)
-        payload.projectManagers = validateUsers([project.projectManager], allUsers, 'projectManagers');
-      if (project.productOwner)
-        payload.productOwners = validateUsers([project.productOwner], allUsers, 'productOwners');
-      if (project.scrumMaster)
-        payload.scrumMasters = validateUsers([project.scrumMaster], allUsers, 'scrumMasters');
-      if (project.developers)
-        payload.developers = validateUsers(project.developers, allUsers, 'developers');
-      if (project.testers) payload.testers = validateUsers(project.testers, allUsers, 'testers');
-      if (project.observers) payload.observers = validateUsers(project.observers, allUsers, 'observers');
+      if (project.projectManagers !== undefined)
+        payload.projectManagers = validateUsers(project.projectManagers || [], allUsers, 'projectManagers');
+      if (project.productOwners !== undefined)
+        payload.productOwners = validateUsers(project.productOwners || [], allUsers, 'productOwners');
+      if (project.scrumMasters !== undefined)
+        payload.scrumMasters = validateUsers(project.scrumMasters || [], allUsers, 'scrumMasters');
+      if (project.developers !== undefined)
+        payload.developers = validateUsers(project.developers || [], allUsers, 'developers');
+      if (project.testers !== undefined)
+        payload.testers = validateUsers(project.testers || [], allUsers, 'testers');
+      if (project.observers !== undefined)
+        payload.observers = validateUsers(project.observers || [], allUsers, 'observers');
       console.log('Update Project Payload:', payload);
       const response = await projectApi.put(`/Projects/${projectId}`, payload);
       return normalizeProject(response.data);
@@ -193,7 +183,6 @@ export const updateProject = createAsyncThunk(
     }
   }
 );
-
 // Delete a project
 export const deleteProject = createAsyncThunk(
   'projects/deleteProject',

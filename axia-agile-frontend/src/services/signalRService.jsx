@@ -1,13 +1,13 @@
 import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr';
 
 let connection = null;
-let dispatch = null;
+let messageCallbacks = [];
 
 const signalRService = {
+  connection: null,
   initialize: async (storeDispatch) => {
     if (connection) return;
 
-    dispatch = storeDispatch;
     try {
       connection = new HubConnectionBuilder()
         .withUrl('https://localhost:7270/hubs/chat', {
@@ -18,27 +18,31 @@ const signalRService = {
         .withAutomaticReconnect()
         .build();
 
+      signalRService.connection = connection;
+
       connection.on('ChannelCreated', (channel) => {
-        dispatch({ type: 'chat/channelCreated', payload: channel });
+        storeDispatch({ type: 'chat/channelCreated', payload: channel });
       });
 
       connection.on('ChannelUpdated', (channel) => {
-        dispatch({ type: 'chat/channelCreated', payload: channel });
+        storeDispatch({ type: 'chat/channelUpdated', payload: channel });
       });
 
       connection.on('ChannelDeleted', (channelId) => {
-        dispatch({ type: 'chat/channelDeleted', payload: channelId });
+        storeDispatch({ type: 'chat/channelDeleted', payload: channelId });
       });
 
       connection.on('ReceiveMessage', (message) => {
-        dispatch({ type: 'chat/messageReceived', payload: message });
+        storeDispatch({ type: 'chat/messageReceived', payload: message });
+        messageCallbacks.forEach(callback => callback(message));
       });
 
       await connection.start();
-      dispatch({ type: 'chat/setConnectionStatus', payload: 'connected' });
+      storeDispatch({ type: 'chat/setConnectionStatus', payload: 'connected' });
     } catch (error) {
-      dispatch({ type: 'chat/setConnectionStatus', payload: 'disconnected' });
-      dispatch({ type: 'chat/setError', payload: error.message || 'Failed to initialize SignalR' });
+      storeDispatch({ type: 'chat/setConnectionStatus', payload: 'disconnected' });
+      storeDispatch({ type: 'chat/setError', payload: error.message || 'Failed to initialize SignalR' });
+      throw error;
     }
   },
 
@@ -46,11 +50,22 @@ const signalRService = {
     if (connection) {
       await connection.stop();
       connection = null;
-      dispatch({ type: 'chat/setConnectionStatus', payload: 'disconnected' });
+      signalRService.connection = null;
+      messageCallbacks = []; // Clear callbacks to prevent memory leaks
+      if (storeDispatch) {
+        storeDispatch({ type: 'chat/setConnectionStatus', payload: 'disconnected' });
+      }
     }
   },
 
   isConnected: () => connection && connection.state === 'Connected',
+
+  onMessageReceived: (callback) => {
+    messageCallbacks.push(callback);
+    return () => {
+      messageCallbacks = messageCallbacks.filter(cb => cb !== callback);
+    };
+  },
 };
 
 export default signalRService;

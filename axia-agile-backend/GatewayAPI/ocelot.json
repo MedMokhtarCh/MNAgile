@@ -37,8 +37,26 @@
                 "Content-Type": "application/json"
             },
             "DangerousAcceptAnyServerCertificateValidator": true
+        },
+        {
+            "DownstreamPathTemplate": "/swagger/v1/swagger.json",
+            "DownstreamScheme": "http",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "localhost",
+                    "Port": 5064
+                }
+            ],
+            "UpstreamPathTemplate": "/swagger/tasks/v1/swagger.json",
+            "UpstreamHttpMethod": [ "GET" ],
+            "UpstreamHeaderTransform": {
+                "Accept": "application/json"
+            },
+            "DownstreamHeaderTransform": {
+                "Content-Type": "application/json"
+            },
+            "DangerousAcceptAnyServerCertificateValidator": true
         }
-
     ],
     "GlobalConfiguration": {
         "BaseUrl": "https://localhost:5000"

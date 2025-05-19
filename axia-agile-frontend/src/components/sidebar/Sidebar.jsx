@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -13,12 +13,12 @@ import {
   Divider,
   Avatar,
 } from '@mui/material';
-import { FaChartBar, FaProjectDiagram, FaSignOutAlt, FaCalendarAlt } from 'react-icons/fa';
+import { FaChartBar, FaProjectDiagram, FaSignOutAlt, FaCalendarAlt, FaRegCommentDots } from 'react-icons/fa';
 import FolderIcon from '@mui/icons-material/Folder';
+import PeopleIcon from '@mui/icons-material/People';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import logo from '../../assets/logo.png';
-
 import { useProject } from '../../hooks/useProjects';
 import './Sidebar.css';
 
@@ -26,12 +26,8 @@ const Sidebar = ({ collapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
-  // Get currentUser and isAuthenticated from Redux store
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
   const { status } = useSelector((state) => state.projects);
-
-  // Use the useProject hook to get filtered projects
   const { getFilteredProjects } = useProject();
 
   // Map backend roleId to frontend role string
@@ -42,6 +38,23 @@ const Sidebar = ({ collapsed }) => {
       ? 'user'
       : null
     : null;
+
+  // Claims for user management access
+  const userManagementClaims = [
+    'CanViewUsers',
+    'CanCreateUsers',
+    'CanUpdateUsers',
+    'CanDeleteUsers',
+  ];
+  const hasUserManagementClaims = currentUser?.claims?.some((claim) =>
+    userManagementClaims.includes(claim)
+  );
+
+  // Claims for discussion access
+  const discussionClaims = ['CanCommunicate', 'CanCreateChannel'];
+  const hasDiscussionClaims = currentUser?.claims?.some((claim) =>
+    discussionClaims.includes(claim)
+  );
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
@@ -79,13 +92,6 @@ const Sidebar = ({ collapsed }) => {
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 3);
-
-  // Redirect to /login if not authenticated
-  useEffect(() => {
-    if (!isAuthenticated || !currentUser) {
-      navigate('/login', { replace: true });
-    }
-  }, [isAuthenticated, currentUser, navigate]);
 
   // If not authenticated or no valid role, don't render the sidebar
   if (!isAuthenticated || !role) {
@@ -173,6 +179,50 @@ const Sidebar = ({ collapsed }) => {
             {!collapsed && (
               <ListItemText
                 primary="Réunions"
+                primaryTypographyProps={{ component: 'span' }}
+              />
+            )}
+          </ListItem>
+        )}
+
+        {/* Messages menu item for users with discussion claims */}
+        {hasDiscussionClaims && (
+          <ListItem
+            button
+            component={Link}
+            to="/messages"
+            className={`menu-item ${isActive('/messages')}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Messages" placement="right">
+                <FaRegCommentDots />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && (
+              <ListItemText
+                primary="Messages"
+                primaryTypographyProps={{ component: 'span' }}
+              />
+            )}
+          </ListItem>
+        )}
+
+        {/* User Management menu item for users with required claims */}
+        {hasUserManagementClaims && (
+          <ListItem
+            button
+            component={Link}
+            to="/UserManagement"
+            className={`menu-item ${isActive('/UserManagement')}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Gestion des Utilisateurs" placement="right">
+                <PeopleIcon />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && (
+              <ListItemText
+                primary="Utilisateurs"
                 primaryTypographyProps={{ component: 'span' }}
               />
             )}

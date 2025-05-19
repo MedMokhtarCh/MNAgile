@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace TaskService.DTOs
+﻿namespace TaskService.DTOs
 {
     public class SprintDTO
     {

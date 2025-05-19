@@ -1,13 +1,6 @@
-﻿
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using TaskService.DTOs;
-using TaskService.Services;
-using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Http;
 
 namespace TaskService.Controllers
 {
@@ -144,6 +137,52 @@ namespace TaskService.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"UpdateTask: Internal error - {ex.Message}");
+                return StatusCode(500, "An internal error occurred.");
+            }
+        }
+
+        [HttpPatch("{id}/status")]
+        [Authorize(Policy = "CanMoveTasks")]
+        [ProducesResponseType(typeof(TaskDTO), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+        public async Task<ActionResult<TaskDTO>> UpdateTaskStatus(int id, [FromBody] TaskStatusRequest request)
+        {
+            if (request == null)
+            {
+                _logger.LogWarning("UpdateTaskStatus: Request data missing");
+                return BadRequest("Status request data is required.");
+            }
+
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out var userId))
+            {
+                _logger.LogWarning("UpdateTaskStatus: Invalid or missing user ID in JWT claims");
+                return Unauthorized("Invalid user authentication.");
+            }
+
+            try
+            {
+                var task = await _taskService.UpdateTaskStatusAsync(id, request, userId);
+                if (task == null)
+                {
+                    _logger.LogWarning($"UpdateTaskStatus: Task {id} not found");
+                    return NotFound("Task not found.");
+                }
+                _logger.LogInformation($"Task {id} status updated to {task.Status} with displayOrder {task.DisplayOrder} by user {userId}");
+                return Ok(task);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, $"UpdateTaskStatus: Validation error - {ex.Message}");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"UpdateTaskStatus: Internal error - {ex.Message}");
                 return StatusCode(500, "An internal error occurred.");
             }
         }

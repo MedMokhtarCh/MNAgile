@@ -10,17 +10,29 @@ const PermissionForm = ({ claims, selectedPermissions, onPermissionChange, userR
   const safeClaims = Array.isArray(claims) ? claims : [];
   const safeSelectedPermissions = Array.isArray(selectedPermissions) ? selectedPermissions : [];
 
-  // Organize claims by category using ‚label‘ field
-  const taskClaims = safeClaims.filter(claim => claim && typeof claim.label === 'string' && claim.label.includes('Tasks'));
-  const projectClaims = safeClaims.filter(claim => claim && typeof claim.label === 'string' && claim.label.includes('Projects'));
-  const userClaims = safeClaims.filter(claim => claim && typeof claim.label === 'string' && claim.label.includes('Users'));
+  // Organize claims by category using 'label' or 'name' field
+  const taskClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('Tasks'));
+  const projectClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('Projects'));
+  const userClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('Users'));
+  const backlogClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('Backlogs'));
+  const sprintClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('Sprints'));
+  const kanbanClaims = safeClaims.filter(claim => claim && typeof (claim.label || claim.name) === 'string' && (claim.label || claim.name).includes('KanbanColumns'));
+  const messagingClaims = safeClaims.filter(
+    claim => claim && typeof (claim.label || claim.name) === 'string' && 
+    ((claim.label || claim.name).includes('Channel') || (claim.label || claim.name).includes('Communicate'))
+  );
   const extraClaims = safeClaims.filter(
     claim =>
       claim &&
-      typeof claim.label === 'string' &&
-      !claim.label.includes('Tasks') &&
-      !claim.label.includes('Projects') &&
-      !claim.label.includes('Users')
+      typeof (claim.label || claim.name) === 'string' &&
+      !(claim.label || claim.name).includes('Tasks') &&
+      !(claim.label || claim.name).includes('Projects') &&
+      !(claim.label || claim.name).includes('Users') &&
+      !(claim.label || claim.name).includes('Backlogs') &&
+      !(claim.label || claim.name).includes('Sprints') &&
+      !(claim.label || claim.name).includes('KanbanColumns') &&
+      !(claim.label || claim.name).includes('Channel') &&
+      !(claim.label || claim.name).includes('Communicate')
   );
 
   // Define groups with titles and claims
@@ -28,6 +40,10 @@ const PermissionForm = ({ claims, selectedPermissions, onPermissionChange, userR
     { title: 'Gestion des Tâches', claims: taskClaims },
     { title: 'Gestion des Projets', claims: projectClaims },
     { title: 'Gestion des Utilisateurs', claims: userClaims },
+    { title: 'Gestion des Backlogs', claims: backlogClaims },
+    { title: 'Gestion des Sprints', claims: sprintClaims },
+    { title: 'Gestion des Colonnes Kanban', claims: kanbanClaims },
+    { title: 'Gestion des Canaux et Messagerie', claims: messagingClaims },
     { title: 'Extra', claims: extraClaims },
   ].filter(group => group.claims.length > 0); // Exclude empty groups
 
@@ -114,7 +130,7 @@ const PermissionForm = ({ claims, selectedPermissions, onPermissionChange, userR
                   }
                   label={
                     <Box>
-                      <Typography variant="body1">{claim.label || 'Permission sans nom'}</Typography>
+                      <Typography variant="body1">{claim.label || claim.name || 'Permission sans nom'}</Typography>
                       <Typography variant="body2" color="textSecondary">
                         {claim.description || 'Aucune description'}
                       </Typography>

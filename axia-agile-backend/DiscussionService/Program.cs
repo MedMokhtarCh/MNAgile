@@ -1,12 +1,11 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using DiscussionService.Data;
-using DiscussionService.Services;
 using DiscussionService.Hubs;
-using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -95,6 +94,16 @@ builder.Services.AddAuthorization(options =>
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
+
+    // Policy for communication (sending messages or accessing channels)
+    options.AddPolicy("CanCommunicate", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireClaim("CanCommunicate"));
+
+    // Policy for creating channels
+    options.AddPolicy("CanCreateChannel", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireClaim("CanCreateChannel"));
 });
 
 // Add CSRF protection

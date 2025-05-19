@@ -1,7 +1,6 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
-using System.Security.Claims;
 
 namespace DiscussionService.Hubs
 {
@@ -23,6 +22,13 @@ namespace DiscussionService.Hubs
         public async Task LeaveChannel(int channelId)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"channel_{channelId}");
+        }
+
+        public override async Task OnDisconnectedAsync(Exception exception)
+        {
+            var userId = int.Parse(Context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"user_{userId}");
+            await base.OnDisconnectedAsync(exception);
         }
     }
 }

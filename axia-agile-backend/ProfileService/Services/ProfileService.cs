@@ -1,8 +1,8 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
 using ProfileService.Data;
 using ProfileService.DTOs;
 using ProfileService.Models;
-using System.Text.RegularExpressions;
 
 namespace ProfileService.Services
 {

@@ -1,14 +1,11 @@
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using ProjectService.Data;
 using ProjectService.Services;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Text;
-using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -41,6 +38,7 @@ builder.Services.AddHttpClient<UserServiceClient>(client =>
 
 // Add services
 builder.Services.AddScoped<ProjectService.Services.ProjectService>();
+builder.Services.AddHttpClient<NotificationServiceClient>();
 builder.Services.AddControllers();
 builder.Services.AddHttpContextAccessor(); // Added to support accessing HTTP context (e.g., for user claims)
 

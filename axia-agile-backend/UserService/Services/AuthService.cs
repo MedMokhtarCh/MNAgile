@@ -1,11 +1,10 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
+﻿using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using UserService.Data;
-using UserService.Models;
 using Claim = System.Security.Claims.Claim;
 
 namespace UserService.Services
@@ -33,7 +32,7 @@ namespace UserService.Services
             {
                 return null;
             }
-            
+
             // Vérifiez si l'utilisateur est actif
             if (!user.IsActive)
             {

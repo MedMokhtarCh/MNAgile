@@ -1,3 +1,4 @@
+// TableClaims.jsx
 import React from 'react';
 import {
   Paper,
@@ -8,15 +9,12 @@ import {
   TableCell,
   TableBody,
   CircularProgress,
-  Button,
   Box,
   Typography,
-  IconButton,
-  Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, VerifiedUser as VerifiedUserIcon } from '@mui/icons-material';
+import { VerifiedUser as VerifiedUserIcon } from '@mui/icons-material';
 
-const TableClaims = ({ claims, loading, onEdit, onDelete, setOpenModal }) => {
+const TableClaims = ({ claims, loading }) => {
   const columns = [
     {
       id: 'name',
@@ -39,39 +37,11 @@ const TableClaims = ({ claims, loading, onEdit, onDelete, setOpenModal }) => {
         </Typography>
       ),
     },
-    {
-      id: 'actions',
-      label: 'Actions',
-      align: 'right',
-      render: (claim) => (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Tooltip title="Modifier">
-            <IconButton
-              size="small"
-              sx={{ mr: 1 }}
-              onClick={() => onEdit(claim)}
-              color="primary"
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Supprimer">
-            <IconButton
-              size="small"
-              color="error"
-              onClick={() => onDelete(claim.id)}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      ),
-    },
   ];
 
   const renderCell = (column, claim) => {
     if (typeof column.render === 'function') {
-      return column.render(claim, { onEdit, onDelete });
+      return column.render(claim);
     }
     return claim[column.id];
   };
@@ -103,14 +73,6 @@ const TableClaims = ({ claims, loading, onEdit, onDelete, setOpenModal }) => {
               <TableRow>
                 <TableCell colSpan={columns.length} align="center" sx={{ py: 5 }}>
                   <Typography variant="body1">Aucun claim trouvé</Typography>
-                  <Button
-                    variant="outlined"
-                    startIcon={<AddIcon />}
-                    onClick={() => setOpenModal(true)}
-                    sx={{ mt: 2 }}
-                  >
-                    Ajouter un claim
-                  </Button>
                 </TableCell>
               </TableRow>
             ) : (

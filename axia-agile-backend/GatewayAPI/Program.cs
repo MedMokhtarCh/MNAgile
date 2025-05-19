@@ -22,6 +22,9 @@ app.UseSwaggerUI(c =>
 
     c.SwaggerEndpoint("/swagger/users/v1/swagger.json", "UserService v1");
     c.SwaggerEndpoint("/swagger/projects/v1/swagger.json", "ProjectService v1");
+    c.SwaggerEndpoint("/swagger/tasks/v1/swagger.json", "TaskService v1");
+
+
 });
 
 

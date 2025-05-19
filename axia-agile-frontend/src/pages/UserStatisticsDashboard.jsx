@@ -58,13 +58,16 @@ const UserStatisticsDashboard = () => {
   }, [dispatch, currentUser]);
 
   const userStats = useMemo(() => {
-    if (loading || !users) {
-      console.log('[UserStatisticsDashboard] Skipping userStats calculation due to loading or no users');
+    if (loading || !users || !currentUser) {
+      console.log('[UserStatisticsDashboard] Skipping userStats calculation due to loading, no users, or no currentUser');
       return null;
     }
 
     console.log('[UserStatisticsDashboard] Calculating userStats with users:', users);
-    const relevantUsers = users.filter((user) => user.roleId === 3 || user.roleId === 4);
+    // Filter users by roleId (3 or 4) AND createdById matching currentUser.id
+    const relevantUsers = users.filter(
+      (user) => (user.roleId === 3 || user.roleId === 4) && user.createdById === currentUser.id
+    );
     const totalUsers = relevantUsers.length;
     const activeUsers = relevantUsers.filter((user) => user.isActive).length;
     const inactiveUsers = totalUsers - activeUsers;
@@ -228,7 +231,7 @@ const UserStatisticsDashboard = () => {
       userCreationTrend,
       userActivityStats,
     };
-  }, [users, loading]);
+  }, [users, loading, currentUser]);
 
   console.log('[UserStatisticsDashboard] Rendering with state:', { users, loading, error, userStats });
 
@@ -266,7 +269,7 @@ const UserStatisticsDashboard = () => {
   return (
     <Box sx={{ p: 4 }}>
       <PageTitle>Tableau de Bord Admin</PageTitle>
-      
+
       {/* Section des cartes de résumé */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12}>
@@ -284,9 +287,9 @@ const UserStatisticsDashboard = () => {
         {/* Première ligne - Graphiques circulaires */}
         <Grid item xs={12} md={6}>
           <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <RolePieChart 
-              usersByRole={userStats.usersByRole} 
-              sx={{ flex: 1, minHeight: '300px' }} 
+            <RolePieChart
+              usersByRole={userStats.usersByRole}
+              sx={{ flex: 1, minHeight: '300px' }}
             />
           </Box>
         </Grid>
@@ -303,59 +306,65 @@ const UserStatisticsDashboard = () => {
         {/* Deuxième ligne - Graphiques de tendances */}
         <Grid item xs={12} md={6}>
           <Box sx={{ height: '400px' }}>
-            <CreationTrendChart 
-              data={userStats.userCreationTrend} 
-              sx={{ height: '100%' }} 
+            <CreationTrendChart
+              data={userStats.userCreationTrend}
+              sx={{ height: '100%' }}
             />
           </Box>
         </Grid>
         <Grid item xs={12} md={6}>
           <Box sx={{ height: '400px' }}>
-            <ActivityTrendChart 
-              data={userStats.userActivityStats} 
-              sx={{ height: '100%' }} 
+            <ActivityTrendChart
+              data={userStats.userActivityStats}
+              sx={{ height: '100%' }}
             />
           </Box>
         </Grid>
       </Grid>
 
       {/* Section des graphiques secondaires */}
-  
-<Box sx={{ 
-  mt: 6,  // Espacement au-dessus
-  mb: 8,  // Espacement en dessous
-  position: 'relative',
-  top: '20px' // Décalage vers le bas supplémentaire
-}}>
-  <Grid container spacing={3}>
-    <Grid item xs={12} lg={8}>
-      <Box sx={{ 
-        height: '400px',
-        bgcolor: 'background.paper',
-        borderRadius: 2,
-        p: 2,
-     
+      <Box sx={{
+        mt: 6,
+        mb: 8,
+        position: 'relative',
+        top: '20px'
       }}>
-        <JobTitleDistribution
-          usersByJobTitle={userStats.usersByJobTitle}
-          totalUsers={userStats.totalUsers}
-        />
+        <Grid container spacing={3}>
+          <Grid item xs={12} lg={8}>
+            <Box sx={{
+              height: '500px',
+               width:'1000px',
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              p: 2,
+            }}>
+         
+              <JobTitleDistribution
+                usersByJobTitle={userStats.usersByJobTitle}
+                totalUsers={userStats.totalUsers}
+              />
+            </Box>
+               <Box sx={{
+        mt: 6,
+        mb: 8,
+        position: 'relative',
+        top: '20px'
+      }}></Box>
+          </Grid>
+          <Grid item xs={12} lg={6}>
+            <Box sx={{
+              height: '600px',
+              width:'1000px',
+              bgcolor: 'background.paper',
+              borderRadius: 2,
+              p: 2,
+            }}>
+              <RecentUsersList recentUsers={userStats.recentUsers} />
+            </Box>
+          </Grid>
+        </Grid>
       </Box>
-    </Grid>
-    <Grid item xs={12} lg={4}>
-      <Box sx={{ 
-        height: '400px',
-        bgcolor: 'background.paper',
-        borderRadius: 2,
-        p: 2,
-    
-      }}>
-        <RecentUsersList recentUsers={userStats.recentUsers} />
-      </Box>
-    </Grid>
-  </Grid>
-</Box>
-</Box>
+    </Box>
   );
 };
 

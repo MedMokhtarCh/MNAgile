@@ -1,5 +1,5 @@
-import React from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
   List,
@@ -8,39 +8,49 @@ import {
   ListItemText,
   IconButton,
   Tooltip,
-} from "@mui/material";
-import { FaChartBar, FaUsers, FaSignOutAlt, FaShieldAlt, FaKey } from "react-icons/fa";
-import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../store/slices/authSlice";
-import logo from "../../assets/logo.png";
-import "./Sidebar.css";
+} from '@mui/material';
+import { FaChartBar, FaUsers, FaSignOutAlt, FaShieldAlt, FaKey, FaProjectDiagram, FaRegCommentDots } from 'react-icons/fa';
+import { useDispatch, useSelector } from 'react-redux';
+import { logout } from '../../store/slices/authSlice';
+import logo from '../../assets/logo.png';
+import './Sidebar.css';
+import { mapRoleIdToRole } from '../../routes/ProtectedRoute';
 
 const AdminSidebar = ({ collapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
-  // Get currentUser and isAuthenticated from Redux store
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
   // Map backend roleId to frontend role string
-  const role = currentUser
-    ? currentUser.roleId === 1
-      ? "superadmin"
-      : currentUser.roleId === 2
-      ? "admin"
-      : null
-    : null;
+  const role = currentUser ? mapRoleIdToRole(currentUser.roleId) : null;
 
-  const isActive = (path) => (location.pathname === path ? "active" : "");
+  // Claims for project access
+  const projectClaims = [
+    'CanViewProjects',
+    'CanAddProjects',
+    'CanEditProjects',
+    'CanDeleteProjects',
+  ];
+  const hasProjectClaims = currentUser?.claims?.some((claim) =>
+    projectClaims.includes(claim)
+  );
+
+  // Claims for discussion access
+  const discussionClaims = ['CanCommunicate', 'CanCreateChannel'];
+  const hasDiscussionClaims = currentUser?.claims?.some((claim) =>
+    discussionClaims.includes(claim)
+  );
+
+  const isActive = (path) => (location.pathname === path ? 'active' : '');
 
   const handleLogout = () => {
-    dispatch(logout()); // Dispatch Redux logout action
-    navigate("/login"); // Use lowercase /login
+    dispatch(logout());
+    navigate('/login', { replace: true });
   };
 
-  // If not authenticated, no currentUser, or no valid role, don't render the sidebar
-  if (!isAuthenticated || !currentUser || !["superadmin", "admin"].includes(role)) {
+  // Only render sidebar for authenticated users
+  if (!isAuthenticated || !currentUser) {
     return null;
   }
 
@@ -49,11 +59,11 @@ const AdminSidebar = ({ collapsed }) => {
       variant="permanent"
       sx={{
         width: collapsed ? 80 : 240,
-        transition: "width 0.3s ease-in-out",
-        "& .MuiDrawer-paper": {
+        transition: 'width 0.3s ease-in-out',
+        '& .MuiDrawer-paper': {
           width: collapsed ? 80 : 240,
-          transition: "width 0.3s ease-in-out",
-          backgroundColor: "#fff",
+          transition: 'width 0.3s ease-in-out',
+          backgroundColor: '#fff',
           paddingTop: 2,
           paddingBottom: 2,
         },
@@ -63,18 +73,18 @@ const AdminSidebar = ({ collapsed }) => {
         <img
           src={logo}
           alt="Axia Agile"
-          className={`logo ${collapsed ? "collapsed-logo" : ""}`}
+          className={`logo ${collapsed ? 'collapsed-logo' : ''}`}
         />
       </div>
 
       <List>
-        {role === "superadmin" && (
+        {role === 'superadmin' && (
           <>
             <ListItem
               button
               component={Link}
               to="/SuperAdminStatistics"
-              className={`menu-item ${isActive("/SuperAdminStatistics")}`}
+              className={`menu-item ${isActive('/SuperAdminStatistics')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Tableau de bord" placement="right">
@@ -83,12 +93,11 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Tableau de bord" />}
             </ListItem>
-
             <ListItem
               button
               component={Link}
               to="/AdminManagement"
-              className={`menu-item ${isActive("/AdminManagement")}`}
+              className={`menu-item ${isActive('/AdminManagement')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Utilisateurs" placement="right">
@@ -97,12 +106,11 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
             </ListItem>
-
             <ListItem
               button
               component={Link}
               to="/RoleManagement"
-              className={`menu-item ${isActive("/RoleManagement")}`}
+              className={`menu-item ${isActive('/RoleManagement')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Rôles" placement="right">
@@ -111,12 +119,11 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Rôles" />}
             </ListItem>
-
             <ListItem
               button
               component={Link}
               to="/ClaimManagement"
-              className={`menu-item ${isActive("/ClaimManagement")}`}
+              className={`menu-item ${isActive('/ClaimManagement')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Droits d'accès" placement="right">
@@ -125,16 +132,32 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Droits d'accès" />}
             </ListItem>
+            {/* Messages menu item for superadmin with discussion claims */}
+            {hasDiscussionClaims && (
+              <ListItem
+                button
+                component={Link}
+                to="/messages"
+                className={`menu-item ${isActive('/messages')}`}
+              >
+                <ListItemIcon className="menu-icon">
+                  <Tooltip title="Messages" placement="right">
+                    <FaRegCommentDots />
+                  </Tooltip>
+                </ListItemIcon>
+                {!collapsed && <ListItemText primary="Messages" />}
+              </ListItem>
+            )}
           </>
         )}
 
-        {role === "admin" && (
+        {role === 'admin' && (
           <>
             <ListItem
               button
               component={Link}
               to="/UserStatisticsDashboard"
-              className={`menu-item ${isActive("/UserStatisticsDashboard")}`}
+              className={`menu-item ${isActive('/UserStatisticsDashboard')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Tableau de bord" placement="right">
@@ -143,12 +166,11 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Tableau de bord" />}
             </ListItem>
-
             <ListItem
               button
               component={Link}
               to="/UserManagement"
-              className={`menu-item ${isActive("/UserManagement")}`}
+              className={`menu-item ${isActive('/UserManagement')}`}
             >
               <ListItemIcon className="menu-icon">
                 <Tooltip title="Utilisateurs" placement="right">
@@ -157,7 +179,56 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
             </ListItem>
+            {/* Messages menu item for admin with discussion claims */}
+            {hasDiscussionClaims && (
+              <ListItem
+                button
+                component={Link}
+                to="/messages"
+                className={`menu-item ${isActive('/messages')}`}
+              >
+                <ListItemIcon className="menu-icon">
+                  <Tooltip title="Messages" placement="right">
+                    <FaRegCommentDots />
+                  </Tooltip>
+                </ListItemIcon>
+                {!collapsed && <ListItemText primary="Messages" />}
+              </ListItem>
+            )}
           </>
+        )}
+
+        {/* Projects menu item for users with project claims */}
+        {(role === 'chef_projet' || role === 'user' || hasProjectClaims) && (
+          <ListItem
+            button
+            component={Link}
+            to="/projects"
+            className={`menu-item ${isActive('/projects')}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Projets" placement="right">
+                <FaProjectDiagram />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Projets" />}
+          </ListItem>
+        )}
+        {/* Messages menu item for chef_projet or user with discussion claims */}
+        {(role === 'chef_projet' || role === 'user') && hasDiscussionClaims && (
+          <ListItem
+            button
+            component={Link}
+            to="/messages"
+            className={`menu-item ${isActive('/messages')}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Messages" placement="right">
+                <FaRegCommentDots />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Messages" />}
+          </ListItem>
         )}
       </List>
 
@@ -165,10 +236,10 @@ const AdminSidebar = ({ collapsed }) => {
         <IconButton
           onClick={handleLogout}
           sx={{
-            position: "absolute",
+            position: 'absolute',
             bottom: 20,
-            left: "50%",
-            transform: "translateX(-50%)",
+            left: '50%',
+            transform: 'translateX(-50%)',
           }}
         >
           <Tooltip title="Déconnexion" placement="right">
