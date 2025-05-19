@@ -46,6 +46,7 @@
         public string Content { get; set; }
         public int? ReplyToId { get; set; }
         public int? RecipientId { get; set; }
+
     }
 
     public class UserDTO

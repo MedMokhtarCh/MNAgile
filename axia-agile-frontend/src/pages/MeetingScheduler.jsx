@@ -100,9 +100,9 @@ export default function GoogleCalendarForm() {
   const [isEditing, setIsEditing] = useState(false);
   const [organizerEmail, setOrganizerEmail] = useState('');
 
-  const CLIENT_ID = '999869743702-77tk46o4aet1v1m5lu875o5v8nqjcq67.apps.googleusercontent.com'; // Add your Google Client ID here
+  const apiClientId = import.meta.env.VITE_CLIENT_ID
   const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email';
-  const API_KEY = ''; // Optional: Add your API key if needed
+   // Optional: Add your API key if needed
   let tokenClient;
 
   useEffect(() => {
@@ -113,7 +113,7 @@ export default function GoogleCalendarForm() {
     gisScript.async = true;
     gisScript.onload = () => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
+        client_id: apiClientId,
         scope: SCOPES,
         callback: async (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {

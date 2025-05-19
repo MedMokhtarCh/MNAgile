@@ -59,6 +59,7 @@ namespace DiscussionService.Controllers
         }
 
         [HttpPost("messages")]
+       
         [Authorize(Policy = "CanCommunicate")]
         public async Task<ActionResult<MessageDTO>> SendMessage([FromForm] SendMessageRequest request, List<IFormFile> files)
         {

@@ -54,8 +54,6 @@
   background-color: #e5f1fc !important;
 }
 
-
-
 .footer-sidebar {
   position: absolute;
   bottom: 10px;
@@ -103,10 +101,31 @@
 .MuiListItemText-root:hover {
   color: #1890ff;
 }
+
 .menu-item:hover .menu-icon {
-  color: blue; 
+  color: blue;
 }
 
 .scrum-toggle-icon:hover {
-  color: #808080; 
+  color: #808080;
+}
+
+/* Added styles for toggle button */
+.toggle-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.toggle-button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.toggle-icon {
+  color: #555;
 }

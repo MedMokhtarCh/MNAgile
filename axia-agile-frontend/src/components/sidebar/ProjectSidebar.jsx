@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -16,19 +16,50 @@ import {
   FaChartBar,
   FaListAlt,
   FaCalendar,
-  FaSignOutAlt,
   FaClipboardList,
   FaPlay,
   FaArrowLeft,
 } from 'react-icons/fa';
+import { AiOutlineMenuFold, AiOutlineMenuUnfold } from 'react-icons/ai';
 import FolderIcon from '@mui/icons-material/Folder';
 import { useSelector } from 'react-redux';
 import './Sidebar.css';
 
-const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
+const ProjectSidebar = ({ projectId, projectTitle }) => {
+  const [collapsed, setCollapsed] = useState(false); // Local state for collapsed
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
+
+  // Toggle sidebar collapsed state
+  const toggleSidebar = () => {
+    setCollapsed((prev) => !prev);
+  };
+
+  // Claims for task-related access (Backlog, Kanban)
+  const taskRelatedClaims = [
+    'CanViewTasks',
+    'CanCreateTasks',
+    'CanUpdateTasks',
+    'CanDeleteTasks',
+    'CanViewBacklogs',
+    'CanCreateBacklogs',
+    'CanUpdateBacklogs',
+    'CanDeleteBacklogs',
+    'CanViewSprints',
+    'CanCreateSprints',
+    'CanUpdateSprints',
+    'CanDeleteSprints',
+  ];
+  const hasTaskRelatedClaims = currentUser?.claims?.some((claim) =>
+    taskRelatedClaims.includes(claim)
+  );
+
+  // Claims specifically for Calendar and Sprint visibility
+  const viewClaims = ['CanViewTasks', 'CanViewBacklogs', 'CanViewSprints'];
+  const hasViewClaims = currentUser?.claims?.some((claim) =>
+    viewClaims.includes(claim)
+  );
 
   const isActive = (path) => (location.pathname === path ? 'active' : '');
 
@@ -72,38 +103,45 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
         },
       }}
     >
+      {/* Toggle Button and Project Title */}
       <Box
         sx={{
           display: 'flex',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          alignItems: collapsed ? 'center' : 'flex-start',
+          justifyContent: collapsed ? 'center' : 'space-between',
+          alignItems: 'center',
           px: collapsed ? 1 : 2,
           py: 1,
           mb: 1,
         }}
       >
         {collapsed ? (
-          <Tooltip title={projectTitle} placement="right">
-            <Avatar
-              sx={{
-                bgcolor: getProjectColor(projectTitle),
-                width: 45,
-                height: 45,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              }}
-            >
-              <FolderIcon />
-            </Avatar>
-          </Tooltip>
+          <>
+            <Tooltip title={projectTitle} placement="right">
+              <Avatar
+                sx={{
+                  bgcolor: getProjectColor(projectTitle),
+                  width: 45,
+                  height: 45,
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                <FolderIcon />
+              </Avatar>
+            </Tooltip>
+            <div className="toggle-button" onClick={toggleSidebar}>
+              <AiOutlineMenuUnfold size={22} className="toggle-icon" />
+            </div>
+          </>
         ) : (
           <Box
             display="flex"
             sx={{
               width: '100%',
-              flexDirection: 'column',
+              justifyContent: 'space-between',
+              alignItems: 'center',
             }}
           >
-            <Box display="flex" alignItems="center" sx={{ mb: 1 }}>
+            <Box display="flex" alignItems="center">
               <Avatar
                 sx={{
                   bgcolor: getProjectColor(projectTitle),
@@ -135,6 +173,9 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
                 {projectTitle}
               </Typography>
             </Box>
+            <div className="toggle-button" onClick={toggleSidebar}>
+              <AiOutlineMenuFold size={22} className="toggle-icon" />
+            </div>
           </Box>
         )}
       </Box>
@@ -174,61 +215,73 @@ const ProjectSidebar = ({ collapsed, projectId, projectTitle }) => {
           {!collapsed && <ListItemText primary="Vue d'Ensemble" />}
         </ListItem>
 
-        <ListItem
-          button
-          component={Link}
-          to={`/project/${projectId}/backlog`}
-          className={`menu-item ${isActive(`/project/${projectId}/backlog`)}`}
-        >
-          <ListItemIcon className="menu-icon">
-            <Tooltip title="Backlog" placement="right">
-              <FaClipboardList />
-            </Tooltip>
-          </ListItemIcon>
-          {!collapsed && <ListItemText primary="Backlog" />}
-        </ListItem>
+        {/* Conditionally render Backlog menu item based on claims */}
+        {hasTaskRelatedClaims && (
+          <ListItem
+            button
+            component={Link}
+            to={`/project/${projectId}/backlog`}
+            className={`menu-item ${isActive(`/project/${projectId}/backlog`)}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Backlog" placement="right">
+                <FaClipboardList />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Backlog" />}
+          </ListItem>
+        )}
 
-        <ListItem
-          button
-          component={Link}
-          to={`/project/${projectId}/kanban`}
-          className={`menu-item ${isActive(`/project/${projectId}/kanban`)}`}
-        >
-          <ListItemIcon className="menu-icon">
-            <Tooltip title="Kanban" placement="right">
-              <FaListAlt />
-            </Tooltip>
-          </ListItemIcon>
-          {!collapsed && <ListItemText primary="Kanban" />}
-        </ListItem>
+        {/* Conditionally render Kanban menu item based on claims */}
+        {hasTaskRelatedClaims && (
+          <ListItem
+            button
+            component={Link}
+            to={`/project/${projectId}/kanban`}
+            className={`menu-item ${isActive(`/project/${projectId}/kanban`)}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Kanban" placement="right">
+                <FaListAlt />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Kanban" />}
+          </ListItem>
+        )}
 
-        <ListItem
-          button
-          component={Link}
-          to={`/project/${projectId}/ActiveSprintPage`}
-          className={`menu-item ${isActive(`/project/${projectId}/ActiveSprintPage`)}`}
-        >
-          <ListItemIcon className="menu-icon">
-            <Tooltip title="Sprint" placement="right">
-              <FaPlay />
-            </Tooltip>
-          </ListItemIcon>
-          {!collapsed && <ListItemText primary="Sprint" />}
-        </ListItem>
+        {/* Conditionally render Sprint menu item based on claims */}
+        {hasViewClaims && (
+          <ListItem
+            button
+            component={Link}
+            to={`/project/${projectId}/ActiveSprintPage`}
+            className={`menu-item ${isActive(`/project/${projectId}/ActiveSprintPage`)}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Sprint" placement="right">
+                <FaPlay />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Sprint" />}
+          </ListItem>
+        )}
 
-        <ListItem
-          button
-          component={Link}
-          to={`/project/${projectId}/calendar`}
-          className={`menu-item ${isActive(`/project/${projectId}/calendar`)}`}
-        >
-          <ListItemIcon className="menu-icon">
-            <Tooltip title="Calendrier" placement="right">
-              <FaCalendar />
-            </Tooltip>
-          </ListItemIcon>
-          {!collapsed && <ListItemText primary="Calendrier" />}
-        </ListItem>
+        {/* Conditionally render Calendar menu item based on claims */}
+        {hasViewClaims && (
+          <ListItem
+            button
+            component={Link}
+            to={`/project/${projectId}/calendar`}
+            className={`menu-item ${isActive(`/project/${projectId}/calendar`)}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Calendrier" placement="right">
+                <FaCalendar />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Calendrier" />}
+          </ListItem>
+        )}
       </List>
     </Drawer>
   );
