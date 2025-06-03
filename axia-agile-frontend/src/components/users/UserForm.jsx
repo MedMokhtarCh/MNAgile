@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,7 +14,9 @@ import {
   InputAdornment,
   Box,
   IconButton,
-  CircularProgress, // Add CircularProgress for loading state
+  CircularProgress,
+  Typography,
+  Alert,
 } from '@mui/material';
 import {
   Email as EmailIcon,
@@ -28,6 +30,140 @@ import {
   Close as CloseIcon,
 } from '@mui/icons-material';
 import PermissionForm from '../permissions/PermissionForm';
+import { styled, keyframes } from '@mui/system';
+
+// Animation keyframes
+const slideInFromTop = keyframes`
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+`;
+
+const pulse = keyframes`
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+`;
+
+const shimmer = keyframes`
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: 200px 0;
+  }
+`;
+
+const StyledTextField = styled(TextField)({
+  marginBottom: 16,
+  '& .MuiOutlinedInput-root': {
+    borderRadius: 8,
+    '&:hover': {
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#5B9BD5' },
+    },
+  },
+  '& .MuiOutlinedInput-notchedOutline': { borderWidth: '1.5px' },
+  '& .MuiInputLabel-root': { color: '#2c4b6f' },
+  '& .MuiInputBase-input': { padding: '12px' },
+});
+
+const StyledButton = styled(Button)({
+  padding: '12px 0',
+  borderRadius: 8,
+  textTransform: 'none',
+  fontWeight: 600,
+  boxShadow: '0px 3px 6px rgba(0, 0, 0, 0.1)',
+  transition: 'all 0.2s ease-in-out',
+  '&:hover': { transform: 'translateY(-2px)', boxShadow: '0px 4px 8px rgba(0, 0, 0, 0.15)' },
+});
+
+const PlanSelector = styled(Box)({
+  display: 'flex',
+  justifyContent: 'space-between',
+  marginBottom: '16px',
+  gap: '12px',
+
+});
+
+const PlanOption = styled(Box)(({ selected }) => ({
+  flex: 1,
+  padding: '9px',
+  border: '2px solid',
+  borderColor: selected ? '#1A237E' : '#e0e0e0',
+  borderRadius: '8px',
+  backgroundColor: selected ? 'rgba(26, 35, 126, 0.05)' : 'transparent',
+  cursor: 'pointer',
+  transition: 'all 0.2s ease-in-out',
+   
+  '&:hover': {
+    borderColor: '#5B9BD5',
+    transform: 'translateY(-2px)',
+  },
+}));
+
+const EnhancedAlert = styled(Alert)(({ severity }) => ({
+  marginBottom: '16px',
+  borderRadius: '12px',
+  border: 'none',
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+  animation: `${slideInFromTop} 0.5s ease-out, ${pulse} 2s infinite`,
+  position: 'relative',
+  overflow: 'hidden',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: '-200px',
+    width: '200px',
+    height: '100%',
+    background:
+      severity === 'success'
+        ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)'
+        : severity === 'error'
+        ? 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)'
+        : 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+    animation: `${shimmer} 2s infinite`,
+  },
+  ...(severity === 'success' && {
+    background: 'linear-gradient(135deg, #4CAF50 0%, #45a049 100%)',
+    color: 'white',
+    '& .MuiAlert-icon': { color: 'white', fontSize: '24px' },
+  }),
+  ...(severity === 'error' && {
+    background: 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)',
+    color: 'white',
+    '& .MuiAlert-icon': { color: 'white', fontSize: '24px' },
+  }),
+}));
+
+const AlertContent = styled(Box)({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '4px',
+});
+
+const AlertTitle = styled(Typography)({
+  fontWeight: 700,
+  fontSize: '1rem',
+  marginBottom: '2px',
+});
+
+const AlertMessage = styled(Typography)({
+  fontSize: '0.9rem',
+  opacity: 0.95,
+  lineHeight: 1.4,
+});
 
 const getIconComponent = (iconName) => {
   switch (iconName) {
@@ -42,6 +178,51 @@ const getIconComponent = (iconName) => {
   }
 };
 
+const getPlanLabel = (plan) => {
+  switch (plan) {
+    case 'monthly':
+      return 'Mensuel';
+    case 'quarterly':
+      return 'Trimestriel';
+    case 'semiannual':
+      return 'Semestriel';
+    case 'annual':
+      return 'Annuel';
+    default:
+      return 'Non défini';
+  }
+};
+
+const getPlanBilling = (plan) => {
+  switch (plan) {
+    case 'monthly':
+      return 'Facturation mensuelle';
+    case 'quarterly':
+      return 'Facturation trimestrielle';
+    case 'semiannual':
+      return 'Facturation semestrielle';
+    case 'annual':
+      return 'Facturation annuelle';
+    default:
+      return '';
+  }
+};
+
+const getPlanFeature = (plan) => {
+  switch (plan) {
+    case 'monthly':
+      return 'Sans engagement';
+    case 'quarterly':
+      return 'Option équilibrée';
+    case 'semiannual':
+      return 'Engagement moyen';
+    case 'annual':
+      return 'Économie maximale';
+    default:
+      return '';
+  }
+};
+
 const UserForm = ({
   open,
   onClose,
@@ -53,11 +234,80 @@ const UserForm = ({
   claims,
   disabledFields = [],
   requiredFields = ['email', 'firstName', 'lastName'],
-  showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'role', 'permissions'],
-  loading = false, // Add loading prop
+  showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'jobTitle', 'entreprise', 'role', 'permissions', 'subscription'],
+  loading = false,
+  setLocalAlert,
 }) => {
-  console.log('UserForm - Open:', open, 'User:', user);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = React.useState({});
+
+  useEffect(() => {
+    if (!user.subscription || !['monthly', 'quarterly', 'semiannual', 'annual'].includes(user.subscription.plan)) {
+      console.log('UserForm - Initializing subscription object');
+      setUser({
+        ...user,
+        subscription: {
+          plan: 'annual',
+          status: 'Pending',
+          startDate: new Date().toISOString(),
+          endDate: '',
+        },
+      });
+    }
+  }, [user, setUser]);
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (requiredFields.includes('email') && !user.email) {
+      newErrors.email = 'L’adresse email est requise.';
+    } else if (user.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) {
+      newErrors.email = 'L’adresse email saisie n’est pas valide.';
+    }
+
+    if (requiredFields.includes('password') && !isEditMode && !user.password) {
+      newErrors.password = 'Le mot de passe est requis.';
+    } else if (
+      user.password &&
+      (user.password.length < 12 ||
+        !/[A-Z]/.test(user.password) ||
+        !/[a-z]/.test(user.password) ||
+        !/[0-9]/.test(user.password) ||
+        !/[!@#$%^&*]/.test(user.password))
+    ) {
+      newErrors.password =
+        'Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial (!@#$%^&*).';
+    }
+
+    if (requiredFields.includes('firstName') && !user.firstName) {
+      newErrors.firstName = 'Le prénom est requis.';
+    }
+
+    if (requiredFields.includes('lastName') && !user.lastName) {
+      newErrors.lastName = 'Le nom est requis.';
+    }
+
+    if (requiredFields.includes('phoneNumber') && !user.phoneNumber) {
+      newErrors.phoneNumber = 'Le numéro de téléphone est requis.';
+    } else if (user.phoneNumber && !/^\+?[1-9]\d{1,14}$/.test(user.phoneNumber)) {
+      newErrors.phoneNumber = 'Le numéro de téléphone doit être au format international (+33123456789).';
+    }
+
+    if (requiredFields.includes('jobTitle') && [3, 4].includes(user.roleId) && !user.jobTitle) {
+      newErrors.jobTitle = 'Le titre de poste est requis pour les chefs de projet ou utilisateurs.';
+    }
+
+    if (requiredFields.includes('entreprise') && user.roleId === 2 && !user.entreprise) {
+      newErrors.entreprise = 'L’entreprise est requise pour les administrateurs.';
+    }
+
+    if (requiredFields.includes('subscription.plan') && user.roleId === 2) {
+      if (!user.subscription || !['monthly', 'quarterly', 'semiannual', 'annual'].includes(user.subscription.plan)) {
+        newErrors['subscription.plan'] = 'Le plan d’abonnement est requis.';
+      }
+    }
+
+    return newErrors;
+  };
 
   const handleChange = (field, value) => {
     console.log(`UserForm - Changing ${field}:`, value);
@@ -67,44 +317,63 @@ const UserForm = ({
     }
   };
 
+  const handleSubscriptionPlanChange = (plan) => {
+    console.log('UserForm - Changing subscription plan:', plan);
+    setUser((prevUser) => ({
+      ...prevUser,
+      subscription: {
+        ...prevUser.subscription,
+        plan,
+      },
+    }));
+    if (errors['subscription.plan']) {
+      setErrors((prevErrors) => ({ ...prevErrors, 'subscription.plan': null }));
+    }
+  };
+
   const handlePermissionChange = (permissionId) => {
     console.log('UserForm - Toggling permission:', permissionId);
     const claimIds = user.claimIds.includes(permissionId)
       ? user.claimIds.filter((id) => id !== permissionId)
       : [...user.claimIds, permissionId];
-    console.log('UserForm - Updated claimIds:', claimIds);
     setUser({ ...user, claimIds });
   };
 
   const handleSubmit = async () => {
     console.log('UserForm - Submitting user:', user);
-    const newErrors = {};
-
-    requiredFields.forEach((field) => {
-      if (!user[field] && !(field === 'password' && isEditMode)) {
-        newErrors[field] = 'Ce champ est requis';
-      }
-    });
-
-    if (user.roleId === 2 && !user.entreprise) {
-      newErrors.entreprise = "L'entreprise est requise pour les administrateurs";
-    }
-
-    if ([3, 4].includes(user.roleId) && !user.jobTitle) {
-      newErrors.jobTitle = 'Le titre de poste est requis pour les chefs de projet';
-    }
-
-    console.log('UserForm - Validation errors:', newErrors);
+    const newErrors = validateForm();
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      const firstError = Object.values(newErrors)[0];
+      setLocalAlert({
+        open: true,
+        message: firstError,
+        severity: 'error',
+        title: '🚨 Erreur de validation',
+      });
+      setTimeout(() => setLocalAlert({ open: false, message: '', severity: 'info', title: '' }), 5000);
       return;
     }
 
     try {
-      await onSave(); // Await the onSave to ensure creation is complete
+      await onSave();
+      setLocalAlert({
+        open: true,
+        message: isEditMode ? 'Administrateur modifié avec succès.' : 'Administrateur créé avec succès.',
+        severity: 'success',
+        title: isEditMode ? '✅ Modification réussie' : '✅ Création réussie',
+      });
+      setTimeout(() => setLocalAlert({ open: false, message: '', severity: 'info', title: '' }), 3000);
     } catch (error) {
       console.error('UserForm - Error during submission:', error);
+      setLocalAlert({
+        open: true,
+        message: error.message || 'Erreur lors de la soumission.',
+        severity: 'error',
+        title: '🚨 Erreur',
+      });
+      setTimeout(() => setLocalAlert({ open: false, message: '', severity: 'info', title: '' }), 5000);
     }
   };
 
@@ -122,9 +391,93 @@ const UserForm = ({
         <Grid container spacing={2}>
           <Grid item xs={12} md={user.roleId === 1 ? 12 : 6}>
             <Grid container spacing={2}>
+              {showFields.includes('subscription') && user.roleId === 2 && (
+  <Grid item xs={12}>
+    <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>
+      Plan d'abonnement
+    </Typography>
+    <PlanSelector>
+      {['monthly', 'quarterly', 'semiannual', 'annual'].map((plan) => (
+        <PlanOption
+          key={plan}
+          selected={user.subscription?.plan === plan}
+          onClick={() => !disabledFields.includes('subscription.plan') && handleSubscriptionPlanChange(plan)}
+          sx={{
+            cursor: disabledFields.includes('subscription.plan') ? 'not-allowed' : 'pointer',
+            opacity: disabledFields.includes('subscription.plan') ? 0.7 : 1,
+            pointerEvents: disabledFields.includes('subscription.plan') ? 'none' : 'auto'
+          }}
+        >
+          <Typography variant="subtitle2" fontWeight={600} color="#1A237e">
+            {getPlanLabel(plan)}
+          </Typography>
+          <Typography variant="body2" color="#5c7999" sx={{ my: 0.5 }}>
+            {getPlanBilling(plan)}
+          </Typography>
+          <Typography variant="caption" color="#4CAF50" fontWeight={500} sx={{ mt: 0.5, display: 'block' }}>
+            {getPlanFeature(plan)}
+          </Typography>
+          {disabledFields.includes('subscription.plan') && user.subscription?.plan === plan && (
+            <Typography variant="caption" color="textSecondary">
+            
+            </Typography>
+          )}
+        </PlanOption>
+      ))}
+    </PlanSelector>
+    {errors['subscription.plan'] && (
+      <Typography color="error" variant="caption">
+        {errors['subscription.plan']}
+      </Typography>
+    )}
+  </Grid>
+)}
+              {showFields.includes('email') && (
+                <Grid item xs={12}>
+                  <StyledTextField
+                    label="Email"
+                    fullWidth
+                    value={user.email || ''}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    required={requiredFields.includes('email')}
+                    disabled={disabledFields.includes('email')}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <EmailIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    error={!!errors.email}
+                    helperText={errors.email}
+                  />
+                </Grid>
+              )}
+              {showFields.includes('password') && (
+                <Grid item xs={12}>
+                  <StyledTextField
+                    label={isEditMode ? 'Nouveau mot de passe (facultatif)' : 'Mot de passe'}
+                    type="password"
+                    fullWidth
+                    value={user.password || ''}
+                    onChange={(e) => handleChange('password', e.target.value)}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon />
+                        </InputAdornment>
+                      ),
+                    }}
+                    required={requiredFields.includes('password') && !isEditMode}
+                    disabled={disabledFields.includes('password')}
+                    error={!!errors.password}
+                    helperText={errors.password}
+                  />
+                </Grid>
+              )}
               {showFields.includes('firstName') && (
                 <Grid item xs={12} sm={6}>
-                  <TextField
+                  <StyledTextField
                     label="Prénom"
                     fullWidth
                     value={user.firstName || ''}
@@ -145,7 +498,7 @@ const UserForm = ({
               )}
               {showFields.includes('lastName') && (
                 <Grid item xs={12} sm={6}>
-                  <TextField
+                  <StyledTextField
                     label="Nom"
                     fullWidth
                     value={user.lastName || ''}
@@ -164,52 +517,9 @@ const UserForm = ({
                   />
                 </Grid>
               )}
-              {showFields.includes('email') && (
-                <Grid item xs={12}>
-                  <TextField
-                    label="Email"
-                    fullWidth
-                    value={user.email || ''}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <EmailIcon />
-                        </InputAdornment>
-                      ),
-                    }}
-                    required={requiredFields.includes('email')}
-                    disabled={disabledFields.includes('email')}
-                    error={!!errors.email}
-                    helperText={errors.email}
-                  />
-                </Grid>
-              )}
-              {showFields.includes('password') && (
-                <Grid item xs={12}>
-                  <TextField
-                    label={isEditMode ? 'Nouveau mot de passe (facultatif)' : 'Mot de passe'}
-                    type="password"
-                    fullWidth
-                    value={user.password || ''}
-                    onChange={(e) => handleChange('password', e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <LockIcon />
-                        </InputAdornment>
-                      ),
-                    }}
-                    required={requiredFields.includes('password') && !isEditMode}
-                    disabled={disabledFields.includes('password')}
-                    error={!!errors.password}
-                    helperText={errors.password}
-                  />
-                </Grid>
-              )}
               {showFields.includes('phoneNumber') && (
                 <Grid item xs={12}>
-                  <TextField
+                  <StyledTextField
                     label="Téléphone"
                     fullWidth
                     value={user.phoneNumber || ''}
@@ -230,7 +540,7 @@ const UserForm = ({
               )}
               {showFields.includes('jobTitle') && [3, 4].includes(user.roleId) && (
                 <Grid item xs={12}>
-                  <TextField
+                  <StyledTextField
                     label="Titre de poste"
                     fullWidth
                     value={user.jobTitle || ''}
@@ -251,7 +561,7 @@ const UserForm = ({
               )}
               {showFields.includes('entreprise') && user.roleId === 2 && (
                 <Grid item xs={12}>
-                  <TextField
+                  <StyledTextField
                     label="Entreprise"
                     fullWidth
                     value={user.entreprise || ''}
@@ -317,17 +627,17 @@ const UserForm = ({
         </Grid>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined" disabled={loading}>
+        <StyledButton onClick={onClose} variant="outlined" disabled={loading}>
           Annuler
-        </Button>
-        <Button
+        </StyledButton>
+        <StyledButton
           variant="contained"
           onClick={handleSubmit}
           disabled={loading}
           startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
         >
           {isEditMode ? 'Enregistrer' : 'Créer'}
-        </Button>
+        </StyledButton>
       </DialogActions>
     </Dialog>
   );

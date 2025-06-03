@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -20,23 +20,16 @@ import {
   FaPlay,
   FaArrowLeft,
 } from 'react-icons/fa';
-import { AiOutlineMenuFold, AiOutlineMenuUnfold } from 'react-icons/ai';
 import FolderIcon from '@mui/icons-material/Folder';
 import { useSelector } from 'react-redux';
 import './Sidebar.css';
 
-const ProjectSidebar = ({ projectId, projectTitle }) => {
-  const [collapsed, setCollapsed] = useState(false); // Local state for collapsed
+const ProjectSidebar = ({ projectId, projectTitle, collapsed }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
-  // Toggle sidebar collapsed state
-  const toggleSidebar = () => {
-    setCollapsed((prev) => !prev);
-  };
-
-  // Claims for task-related access (Backlog, Kanban)
+  // Claims for task and backlog-related access (Backlog, Kanban)
   const taskRelatedClaims = [
     'CanViewTasks',
     'CanCreateTasks',
@@ -50,13 +43,36 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
     'CanCreateSprints',
     'CanUpdateSprints',
     'CanDeleteSprints',
+    'CanCreateKanbanColumns',
+    'CanUpdateKanbanColumns',
+    'CanDeleteKanbanColumns',
   ];
+
+  // Specific claims for Backlog visibility
+  const backlogRelatedClaims = [
+    'CanViewBacklogs',
+    'CanCreateBacklogs',
+    'CanUpdateBacklogs',
+    'CanDeleteBacklogs',
+    'CanViewSprints',
+    'CanCreateSprints',
+    'CanUpdateSprints',
+    'CanDeleteSprints',
+  ];
+
   const hasTaskRelatedClaims = currentUser?.claims?.some((claim) =>
     taskRelatedClaims.includes(claim)
   );
 
-  // Claims specifically for Calendar and Sprint visibility
-  const viewClaims = ['CanViewTasks', 'CanViewBacklogs', 'CanViewSprints'];
+  const hasBacklogRelatedClaims = currentUser?.claims?.some((claim) =>
+    backlogRelatedClaims.includes(claim)
+  );
+
+  // Specific claim for Active Sprint visibility
+  const hasSprintViewClaim = currentUser?.claims?.includes('CanViewSprints');
+
+  // Claims specifically for Calendar visibility
+  const viewClaims = ['CanViewTasks'];
   const hasViewClaims = currentUser?.claims?.some((claim) =>
     viewClaims.includes(claim)
   );
@@ -103,11 +119,11 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
         },
       }}
     >
-      {/* Toggle Button and Project Title */}
+      {/* Project Title and Avatar */}
       <Box
         sx={{
           display: 'flex',
-          justifyContent: collapsed ? 'center' : 'space-between',
+          justifyContent: collapsed ? 'center' : 'flex-start',
           alignItems: 'center',
           px: collapsed ? 1 : 2,
           py: 1,
@@ -115,67 +131,50 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
         }}
       >
         {collapsed ? (
-          <>
-            <Tooltip title={projectTitle} placement="right">
-              <Avatar
-                sx={{
-                  bgcolor: getProjectColor(projectTitle),
-                  width: 45,
-                  height: 45,
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                }}
-              >
-                <FolderIcon />
-              </Avatar>
-            </Tooltip>
-            <div className="toggle-button" onClick={toggleSidebar}>
-              <AiOutlineMenuUnfold size={22} className="toggle-icon" />
-            </div>
-          </>
+          <Tooltip title={projectTitle} placement="right">
+            <Avatar
+              sx={{
+                bgcolor: getProjectColor(projectTitle),
+                width: 45,
+                height: 45,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              }}
+            >
+              <FolderIcon />
+            </Avatar>
+          </Tooltip>
         ) : (
-          <Box
-            display="flex"
-            sx={{
-              width: '100%',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <Box display="flex" alignItems="center">
-              <Avatar
-                sx={{
-                  bgcolor: getProjectColor(projectTitle),
-                  width: 38,
-                  height: 38,
-                  mr: 1.5,
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                }}
-              >
-                <FolderIcon />
-              </Avatar>
-              <Typography
-                variant="subtitle1"
-                fontWeight="bold"
-                color="primary"
-                sx={{
-                  fontSize: '15px',
-                  background: 'linear-gradient(45deg, #3a8ef6, #6f42c1)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  letterSpacing: '0.01em',
-                  wordBreak: 'break-word',
-                  hyphens: 'auto',
-                  lineHeight: 1.3,
-                  whiteSpace: 'normal',
-                  display: 'block',
-                }}
-              >
-                {projectTitle}
-              </Typography>
-            </Box>
-            <div className="toggle-button" onClick={toggleSidebar}>
-              <AiOutlineMenuFold size={22} className="toggle-icon" />
-            </div>
+          <Box display="flex" alignItems="center">
+            <Avatar
+              sx={{
+                bgcolor: getProjectColor(projectTitle),
+                width: 38,
+                height: 38,
+                mr: 1.5,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              }}
+            >
+              <FolderIcon />
+            </Avatar>
+            <Typography
+              variant="subtitle1"
+              fontWeight="bold"
+              color="primary"
+              sx={{
+                fontSize: '15px',
+                background: 'linear-gradient(45deg, #3a8ef6, #6f42c1)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                letterSpacing: '0.01em',
+                wordBreak: 'break-word',
+                hyphens: 'auto',
+                lineHeight: 1.3,
+                whiteSpace: 'normal',
+                display: 'block',
+              }}
+            >
+              {projectTitle}
+            </Typography>
           </Box>
         )}
       </Box>
@@ -215,8 +214,7 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
           {!collapsed && <ListItemText primary="Vue d'Ensemble" />}
         </ListItem>
 
-        {/* Conditionally render Backlog menu item based on claims */}
-        {hasTaskRelatedClaims && (
+        {hasBacklogRelatedClaims && (
           <ListItem
             button
             component={Link}
@@ -232,7 +230,6 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
           </ListItem>
         )}
 
-        {/* Conditionally render Kanban menu item based on claims */}
         {hasTaskRelatedClaims && (
           <ListItem
             button
@@ -249,8 +246,7 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
           </ListItem>
         )}
 
-        {/* Conditionally render Sprint menu item based on claims */}
-        {hasViewClaims && (
+        {hasSprintViewClaim && (
           <ListItem
             button
             component={Link}
@@ -266,7 +262,6 @@ const ProjectSidebar = ({ projectId, projectTitle }) => {
           </ListItem>
         )}
 
-        {/* Conditionally render Calendar menu item based on claims */}
         {hasViewClaims && (
           <ListItem
             button

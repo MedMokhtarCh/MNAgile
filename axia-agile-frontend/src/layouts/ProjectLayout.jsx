@@ -3,8 +3,10 @@ import { Box, CircularProgress } from '@mui/material';
 import { Outlet, useParams } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import ProjectSidebar from '../components/sidebar/ProjectSidebar';
+import HeaderDashboard from '../components/header/HeaderDashboard';
 import { projectApi } from '../services/api';
 import { normalizeProject } from '../store/slices/projectsSlice';
+import './ProjectLayout.css';
 
 const ProjectLayout = () => {
   const { projectId } = useParams();
@@ -12,24 +14,26 @@ const ProjectLayout = () => {
   const { projects } = useSelector((state) => state.projects);
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+
+  const toggleSidebar = () => {
+    setCollapsed(!collapsed);
+  };
 
   useEffect(() => {
     const loadProject = async () => {
       setLoading(true);
       try {
-        // Vérifier d'abord dans le store Redux
         let foundProject = projects.find((p) => p.id === projectId);
         if (!foundProject) {
-          // Si non trouvé, faire une requête API
           const response = await projectApi.get(`/Projects/${projectId}`);
           foundProject = normalizeProject(response.data);
-          // Optionnel : Mettre à jour le store Redux si nécessaire
           dispatch({ type: 'projects/addProject', payload: foundProject });
         }
         setProject(foundProject);
       } catch (err) {
         console.error('Erreur lors du chargement du projet:', err);
-        setProject(null); // S'assurer que project est null en cas d'erreur
+        setProject(null);
       } finally {
         setLoading(false);
       }
@@ -52,25 +56,19 @@ const ProjectLayout = () => {
   }
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', overflowX: 'auto' }}>
+    <div className="project-layout">
       <ProjectSidebar
-        collapsed={false}
+        collapsed={collapsed}
         projectId={projectId}
         projectTitle={project?.title || 'Projet inconnu'}
       />
-      <Box
-        sx={{
-          flexGrow: 1,
-          p: 3,
-          bgcolor: 'background.default',
-          overflowX: 'visible', 
-          overflowY: 'auto', 
-        }}
-        className="main-content content" 
-      >
-        <Outlet context={{ project, projectId }} />
-      </Box>
-    </Box>
+      <div className="main-content">
+        <HeaderDashboard collapsed={collapsed} toggleSidebar={toggleSidebar} />
+        <div className="content">
+          <Outlet context={{ project, projectId }} />
+        </div>
+      </div>
+    </div>
   );
 };
 

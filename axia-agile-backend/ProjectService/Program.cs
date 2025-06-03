@@ -16,7 +16,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // Frontend URL
+        policy.WithOrigins("http://localhost:5173") 
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -36,11 +36,11 @@ builder.Services.AddHttpClient<UserServiceClient>(client =>
     ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
 });
 
-// Add services
+//  services
 builder.Services.AddScoped<ProjectService.Services.ProjectService>();
-builder.Services.AddHttpClient<NotificationServiceClient>();
+
 builder.Services.AddControllers();
-builder.Services.AddHttpContextAccessor(); // Added to support accessing HTTP context (e.g., for user claims)
+builder.Services.AddHttpContextAccessor(); 
 
 // Configure JWT authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -69,7 +69,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
-    // Add logic to check for token in AuthToken cookie
+    //check AuthToken cookie
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>

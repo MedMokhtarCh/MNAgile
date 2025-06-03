@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Box,
   Typography,
@@ -9,11 +9,26 @@ import {
   Divider,
   CircularProgress,
   Button,
+  Card,
+  CardContent,
+  Fade,
+  Zoom,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import DescriptionIcon from '@mui/icons-material/Description';
 import PeopleIcon from '@mui/icons-material/People';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import SettingsIcon from '@mui/icons-material/Settings';
+import GetAppIcon from '@mui/icons-material/GetApp';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import ArticleIcon from '@mui/icons-material/Article';
+import CloseIcon from '@mui/icons-material/Close';
 import { styled } from '@mui/material/styles';
 import { projectApi } from '../services/api';
 import { useAvatar } from '../hooks/useAvatar';
@@ -21,7 +36,10 @@ import { useUsers } from '../hooks/useUsers';
 import UserRoleSection from '../components/common/UserRoleSection';
 import PageTitle from '../components/common/PageTitle';
 import { normalizeProject } from '../store/slices/projectsSlice';
+import { generateCahierContent, resetCahier } from '../store/slices/cahierDesChargesSlice';
+import { parseCahierContentToHTML, downloadCahierDesCharges } from '../utils/cahierUtils';
 
+// Styled components remain unchanged
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(3),
   borderRadius: 12,
@@ -45,77 +63,220 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   },
 }));
 
-const CahierContainer = styled(Box)(({ theme }) => ({
+const GenerateButton = styled(Button)(({ theme }) => ({
+  background: 'linear-gradient(45deg, #1976d2 30%, #42a5f5 90%)',
+  borderRadius: 25,
+  border: 0,
+  color: 'white',
+  height: 56,
+  padding: '0 30px',
+  boxShadow: '0 6px 20px rgba(25, 118, 210, 0.3)',
+  fontSize: '16px',
+  fontWeight: 600,
+  textTransform: 'none',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    background: 'linear-gradient(45deg, #1565c0 30%, #1976d2 90%)',
+    boxShadow: '0 8px 25px rgba(25, 118, 210, 0.4)',
+    transform: 'translateY(-2px)',
+  },
+  '&:disabled': {
+    background: 'linear-gradient(45deg, #ccc 30%, #ddd 90%)',
+    boxShadow: 'none',
+    transform: 'none',
+  },
+}));
+
+const DownloadButton = styled(Button)(({ theme }) => ({
+  background: 'linear-gradient(45deg, #4caf50 30%, #66bb6a 90%)',
+  borderRadius: 25,
+  border: 0,
+  color: 'white',
+  height: 48,
+  padding: '0 25px',
+  boxShadow: '0 4px 15px rgba(76, 175, 80, 0.3)',
+  fontSize: '14px',
+  fontWeight: 600,
+  textTransform: 'none',
+  transition: 'all 0.3s ease',
+  '&:hover': {
+    background: 'linear-gradient(45deg, #388e3c 30%, #4caf50 90%)',
+    boxShadow: '0 6px 20px rgba(76, 175, 80, 0.4)',
+    transform: 'translateY(-1px)',
+  },
+}));
+
+const CahierContainer = styled(Card)(({ theme }) => ({
   marginTop: theme.spacing(3),
-  padding: theme.spacing(3),
-  border: '1px solid #ddd',
-  borderRadius: 8,
-  backgroundColor: '#fff',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+  borderRadius: 16,
+  boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+  border: '1px solid #e3f2fd',
+  overflow: 'hidden',
+  background: 'linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%)',
+}));
+
+const CahierContent = styled(CardContent)(({ theme }) => ({
+  padding: theme.spacing(4),
+  fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
+  lineHeight: 1.7,
+  color: '#333',
   '& h1': {
     textAlign: 'center',
-    color: '#1976d2',
-    fontSize: '28px',
+    background: 'linear-gradient(135deg, #1976d2, #42a5f5)',
+    backgroundClip: 'text',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    fontSize: '32px',
+    fontWeight: 700,
     marginBottom: theme.spacing(1),
-  },
-  '& h2': {
-    fontSize: '20px',
-    color: '#1976d2',
-    borderBottom: '2px solid #1976d2',
-    paddingBottom: theme.spacing(0.5),
-    marginBottom: theme.spacing(1),
-  },
-  '& h3': {
-    fontSize: '16px',
-    color: '#1976d2',
-    marginBottom: theme.spacing(0.5),
-  },
-  '& p': {
-    marginBottom: theme.spacing(1),
-  },
-  '& ul': {
-    paddingLeft: theme.spacing(3),
-    marginBottom: theme.spacing(1),
+    textShadow: 'none',
   },
   '& .subtitle': {
     textAlign: 'center',
     fontStyle: 'italic',
-    color: '#555',
+    color: '#666',
+    fontSize: '18px',
+    marginBottom: theme.spacing(4),
+    padding: theme.spacing(2),
+    background: 'rgba(25, 118, 210, 0.05)',
+    borderRadius: 12,
+    border: '1px solid rgba(25, 118, 210, 0.1)',
+  },
+  '& .section': {
+    marginBottom: theme.spacing(4),
+    padding: theme.spacing(3),
+    background: '#fff',
+    borderRadius: 12,
+    border: '1px solid #e8eaf6',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+    transition: 'all 0.3s ease',
+    '&:hover': {
+      boxShadow: '0 4px 16px rgba(0,0,0,0.08)',
+      transform: 'translateY(-1px)',
+    },
+  },
+  '& .section-title, & h2': {
+    fontSize: '22px',
+    fontWeight: 600,
+    color: '#1976d2',
     marginBottom: theme.spacing(2),
+    paddingBottom: theme.spacing(1),
+    borderBottom: '3px solid #e3f2fd',
+    position: 'relative',
+    '&::after': {
+      content: '""',
+      position: 'absolute',
+      bottom: -3,
+      left: 0,
+      width: '60px',
+      height: '3px',
+      background: 'linear-gradient(90deg, #1976d2, #42a5f5)',
+      borderRadius: '2px',
+    },
+  },
+  '& h3': {
+    fontSize: '18px',
+    fontWeight: 600,
+    color: '#1565c0',
+    marginBottom: theme.spacing(1),
+    marginTop: theme.spacing(2),
+  },
+  '& p': {
+    marginBottom: theme.spacing(2),
+    fontSize: '15px',
+    lineHeight: 1.8,
+    color: '#444',
+    textAlign: 'justify',
+  },
+  '& ul': {
+    paddingLeft: theme.spacing(3),
+    marginBottom: theme.spacing(2),
+    '& li': {
+      marginBottom: theme.spacing(0.5),
+      fontSize: '15px',
+      lineHeight: 1.6,
+      color: '#555',
+      position: 'relative',
+      '&::marker': {
+        color: '#1976d2',
+        fontWeight: 'bold',
+      },
+    },
   },
   '& .footer': {
     textAlign: 'center',
-    marginTop: theme.spacing(4),
-    fontSize: '12px',
-    color: '#777',
+    marginTop: theme.spacing(6),
+    padding: theme.spacing(3),
+    background: 'linear-gradient(135deg, #f5f5f5, #e8eaf6)',
+    borderRadius: 12,
+    fontSize: '14px',
+    color: '#666',
+    fontStyle: 'italic',
+    border: '1px solid #e0e0e0',
+  },
+  '& .warning': {
+    color: '#d32f2f',
+    fontStyle: 'italic',
+    marginTop: theme.spacing(2),
+    padding: theme.spacing(2),
+    background: 'rgba(211, 47, 47, 0.1)',
+    borderRadius: 8,
+    border: '1px solid rgba(211, 47, 47, 0.2)',
+  },
+  '& table': {
+    width: '100%',
+    borderCollapse: 'collapse',
+    margin: '20px 0',
+  },
+  '& th, & td': {
+    border: '1px solid #ddd',
+    padding: '8px',
+    textAlign: 'left',
+  },
+  '& th': {
+    backgroundColor: '#f2f2f2',
+    fontWeight: 'bold',
+  },
+}));
+
+const CahierHeader = styled(Box)(({ theme }) => ({
+  background: 'linear-gradient(135deg, #1976d2 0%, #42a5f5 100%)',
+  color: 'white',
+  padding: theme.spacing(3),
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  '& .title': {
+    display: 'flex',
+    alignItems: 'center',
+    fontSize: '24px',
+    fontWeight: 600,
+    '& svg': {
+      marginRight: theme.spacing(1),
+      fontSize: '28px',
+    },
   },
 }));
 
 const ProjectOverview = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [cahierContent, setCahierContent] = useState(null);
-  const [generating, setGenerating] = useState(false);
+  const [projectError, setProjectError] = useState(null); // Renamed for clarity
+  const [cahierError, setCahierError] = useState(null); // Separate error for cahier generation
+  const [openModal, setOpenModal] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'error' });
   const { generateInitials, getAvatarColor } = useAvatar();
   const { users } = useUsers('users');
-
-  // Configuration Axios pour Hugging Face Inference API
-  const huggingFaceApi = axios.create({
-    baseURL: 'https://api-inference.huggingface.co/models/mixtralai/Mixtral-8x7B-Instruct-v0.1',
-    headers: {
-      'Content-Type': 'application/json',
-  
-    },
-  });
+  const { content: cahierContent, isGenerating, error: reduxCahierError, isTruncated } = useSelector((state) => state.cahierDesCharges);
 
   useEffect(() => {
     const fetchProject = async () => {
       try {
         setLoading(true);
-        setError(null);
+        setProjectError(null);
         const response = await projectApi.get(`/Projects/${projectId}`);
         const normalizedProject = normalizeProject(response.data);
         setProject(normalizedProject);
@@ -123,12 +284,12 @@ const ProjectOverview = () => {
         if (err.response?.status === 401) {
           navigate('/login', { replace: true });
         } else if (err.response?.status === 404) {
-          setError(`Le projet avec l'ID ${projectId} n'existe pas.`);
+          setProjectError(`Le projet avec l'ID ${projectId} n'existe pas.`);
         } else {
-          setError(
+          setProjectError(
             err.response?.data?.message ||
-              err.response?.data?.detail ||
-              'Échec de la récupération des détails du projet.'
+            err.response?.data?.detail ||
+            'Échec de la récupération des détails du projet.'
           );
         }
       } finally {
@@ -139,7 +300,7 @@ const ProjectOverview = () => {
     if (projectId) {
       fetchProject();
     } else {
-      setError('ID du projet manquant.');
+      setProjectError('ID du projet manquant.');
       setLoading(false);
     }
   }, [projectId, navigate]);
@@ -158,326 +319,42 @@ const ProjectOverview = () => {
       : email || 'Utilisateur';
   };
 
-  // Fonction pour générer le contenu du cahier des charges avec Mixtral
-  const generateCahierContent = async () => {
-    if (!project) return null;
-    try {
-      // Construire la liste des membres de l'équipe dynamiquement
-      const teamDetails = `
-- Chefs de projet : ${
-        project.projectManagers?.length
-          ? project.projectManagers.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (supervision et planification)'
-      }
-- Product Owners : ${
-        project.productOwners?.length
-          ? project.productOwners.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (définition des besoins)'
-      }
-- Scrum Masters : ${
-        project.scrumMasters?.length
-          ? project.scrumMasters.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (facilitation méthodologique)'
-      }
-- Développeurs : ${
-        project.users?.length
-          ? project.users.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (développement)'
-      }
-- Testeurs : ${
-        project.testers?.length
-          ? project.testers.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (tests)'
-      }
-- Observateurs : ${
-        project.observers?.length
-          ? project.observers.map((email) => getUserDisplayName(email)).join(', ')
-          : 'Non assigné (suivi)'
-      }
-      `;
-
-      const methodology = project.methodology
-        ? project.methodology.charAt(0).toUpperCase() + project.methodology.slice(1)
-        : 'Scrum';
-
-      // Déduire le contexte métier et les fonctionnalités selon la description
-      const isInventoryApp = project.description?.toLowerCase().includes('stock') || project.title?.toLowerCase().includes('stock');
-      const businessContext = isInventoryApp
-        ? "L'application répond aux besoins de l'industrie alimentaire, notamment la gestion des dates de péremption, la traçabilité des produits et la conformité aux normes sanitaires."
-        : "L'application répond aux besoins de gestion de projets, en facilitant la coordination des tâches, la gestion des ressources et le suivi des progrès.";
-      const functionalSpecs = isInventoryApp
-        ? `
-     - Gestion des stocks : ajout/retrait via barcode scanning, suivi multi-entrepôts, mises à jour en temps réel, gestion des dates de péremption.
-     - Gestion des utilisateurs : rôles (admin, manager, employé), authentification MFA.
-     - Rapports : tableaux de bord pour stocks, rotation et péremption, exports PDF/Excel.
-     - Alertes : notifications email/SMS pour stocks bas ou péremption imminente, seuils personnalisables.
-     - Intégrations : ERP (e.g., SAP, Odoo), API logistique (e.g., FedEx).
-        `
-        : `
-     - Gestion des tâches : création, assignation et suivi des tâches avec statuts (à faire, en cours, terminé).
-     - Gestion des utilisateurs : rôles (admin, chef de projet, membre), authentification MFA.
-     - Rapports : tableaux de bord pour l'avancement des projets, exports PDF/Excel.
-     - Alertes : notifications email/SMS pour les échéances ou retards.
-     - Intégrations : outils de collaboration (e.g., Slack, Microsoft Teams).
-        `;
-
-      const prompt = `
-Vous êtes un rédacteur professionnel spécialisé dans les cahiers des charges de projets informatiques. Générez un cahier des charges complet, détaillé et professionnel en français pour un projet spécifique, en utilisant les informations suivantes :
-
-- **Titre** : ${project.title || 'Projet sans titre'}
-- **Description** : ${project.description || 'Aucune description disponible.'}
-- **Méthodologie** : ${methodology} (fournissez des détails adaptés à la méthodologie indiquée, ou Scrum si non spécifié).
-- **Date de création** : ${project.createdAt ? new Date(project.createdAt).toLocaleDateString('fr-FR') : '13/05/2025'}
-- **Date de début** : ${project.startDate ? new Date(project.startDate).toLocaleDateString('fr-FR') : '13/05/2025'}
-- **Date de fin** : ${project.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : '13/05/2026'}
-- **Équipe** :
-  ${teamDetails}
-
-Structurez le document avec les sections suivantes, en fournissant des informations détaillées et spécifiques, sans placeholders génériques :
-
-1. **Introduction**
-   - Présentation du projet, contexte, et objectifs principaux (adaptez selon la description, e.g., optimiser la gestion pour ${project.title}).
-2. **Description du projet**
-   - Informations générales (titre, description, dates, méthodologie).
-   - Contexte métier : ${businessContext}
-3. **Organisation de l'équipe**
-   - Rôles et responsabilités détaillés pour chaque membre (utilisez les noms fournis, proposez des responsabilités réalistes pour les rôles non assignés).
-4. **Méthodologie**
-   - Détaillez l'approche ${methodology} : durée des sprints (e.g., 2 semaines pour Scrum), cérémonies (stand-ups, revues, rétrospectives), outils (e.g., Jira, Trello), et livrables attendus.
-5. **Spécifications fonctionnelles**
-   - Liste détaillée des fonctionnalités :
-     ${functionalSpecs}
-6. **Spécifications non fonctionnelles**
-   - Performance : <1s pour les requêtes principales, support de 1,000 utilisateurs simultanés.
-   - Sécurité : OAuth 2.0, chiffrement AES-256, conformité GDPR.
-   - Évolutivité : support de 10,000+ entités (articles ou tâches), mise à l'échelle cloud.
-   - Utilisabilité : responsive, multilingue (français, anglais), accessibilité WCAG 2.1.
-   - Fiabilité : 99.9% uptime, sauvegardes automatiques.
-7. **Contraintes et hypothèses**
-   - Contraintes : budget limité, compatibilité navigateurs (Chrome, Firefox), délai de livraison.
-   - Hypothèses : connexion internet stable, personnel formé, systèmes tiers disponibles.
-8. **Gestion des risques**
-   - Risques : failles de sécurité, indisponibilité API, faible adoption.
-   - Mitigation : chiffrement, serveurs de secours, formations.
-9. **Architecture technique**
-   - Pile technologique : React, Node.js, PostgreSQL, hébergement cloud (e.g., AWS).
-   - Intégrations : ${isInventoryApp ? 'scanners de codes-barres, ERP' : 'outils de collaboration'}.
-10. **Calendrier et jalons**
-    - Phases : collecte des besoins, développement, tests, déploiement.
-    - Jalons : prototype (3 mois après le début), bêta (6 mois avant la fin), lancement final (${project.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : 'mai 2026'}).
-
-Utilisez un ton formel, un style clair, et un vocabulaire technique adapté à un document officiel. Fournissez le contenu textuel structuré avec des titres de sections (e.g., "1. Introduction") sans balises HTML. Évitez les placeholders comme "[À préciser]". Proposez des hypothèses réalistes pour les informations manquantes.
-`;
-
-      const response = await huggingFaceApi.post('', {
-        inputs: prompt,
-        parameters: {
-          max_length: 3000, // Augmenté pour contenu dynamique
-          temperature: 0.7,
-          top_p: 0.9,
-        },
-      });
-
-      if (response.data && response.data[0]?.generated_text) {
-        return response.data[0].generated_text.trim();
-      }
-      return null;
-    } catch (err) {
-      console.error('Erreur avec l\'API Hugging Face:', err);
-      return null;
-    }
-  };
-
-  // Fonction pour parser le contenu généré en HTML structuré
-  const parseCahierContentToHTML = (content) => {
-    if (!content || !project) {
-      // Contenu de secours si l'API échoue
-      const isInventoryApp = project?.description?.toLowerCase().includes('stock') || project?.title?.toLowerCase().includes('stock');
-      const businessContext = isInventoryApp
-        ? 'gestion des stocks alimentaires, traçabilité et conformité sanitaire'
-        : 'gestion de projets, coordination et suivi';
-      const functionalSpecs = isInventoryApp
-        ? `
-            <li><strong>Gestion des stocks</strong> : Ajout/retrait via barcode scanning, suivi multi-entrepôts, gestion des dates de péremption.</li>
-            <li><strong>Gestion des utilisateurs</strong> : Rôles admin, manager, employé, authentification MFA.</li>
-            <li><strong>Rapports</strong> : Tableaux de bord pour stocks et péremption, exports PDF/Excel.</li>
-            <li><strong>Alertes</strong> : Notifications email/SMS pour stocks bas.</li>
-            <li><strong>Intégrations</strong> : ERP (SAP, Odoo), API logistique (FedEx).</li>
-          `
-        : `
-            <li><strong>Gestion des tâches</strong> : Création, assignation, suivi des tâches.</li>
-            <li><strong>Gestion des utilisateurs</strong> : Rôles admin, chef de projet, membre, authentification MFA.</li>
-            <li><strong>Rapports</strong> : Tableaux de bord pour l'avancement, exports PDF/Excel.</li>
-            <li><strong>Alertes</strong> : Notifications pour échéances.</li>
-            <li><strong>Intégrations</strong> : Slack, Microsoft Teams.</li>
-          `;
-      return `
-        <h1>Cahier des Charges</h1>
-        <div class="subtitle">Projet : ${project?.title || 'Projet sans titre'}</div>
-        <div class="section">
-          <h2 class="section-title">1. Introduction</h2>
-          <p>Ce document constitue le cahier des charges du projet <strong>${project?.title || 'Projet sans titre'}</strong>. Il définit les objectifs, besoins, contraintes et organisation.</p>
-          <h3>1.1 Objectifs du projet</h3>
-          <p>Optimiser la ${businessContext} pour améliorer l'efficacité.</p>
-          <h3>1.2 Portée du document</h3>
-          <ul>
-            <li>Informations générales.</li>
-            <li>Rôles et responsabilités.</li>
-            <li>Méthodologie.</li>
-            <li>Spécifications fonctionnelles et non fonctionnelles.</li>
-            <li>Contraintes, risques, architecture, calendrier.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">2. Description du projet</h2>
-          <h3>2.1 Informations générales</h3>
-          <p><strong>Titre :</strong> ${project?.title || 'Projet sans titre'}</p>
-          <p><strong>Description :</strong> ${project?.description || 'Aucune description.'}</p>
-          <p><strong>Méthodologie :</strong> ${project?.methodology || 'Scrum'}</p>
-          <p><strong>Date de création :</strong> ${project?.createdAt ? new Date(project.createdAt).toLocaleDateString('fr-FR') : '13/05/2025'}</p>
-          <p><strong>Date de début :</strong> ${project?.startDate ? new Date(project.startDate).toLocaleDateString('fr-FR') : '13/05/2025'}</p>
-          <p><strong>Date de fin :</strong> ${project?.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : '13/05/2026'}</p>
-          <h3>2.2 Contexte métier</h3>
-          <p>L'application répond aux besoins de ${businessContext}.</p>
-        </div>
-        <div class="section">
-          <h2 class="section-title">3. Organisation de l'équipe</h2>
-          <h3>3.1 Rôles et responsabilités</h3>
-          <ul>
-            <li><strong>Chef de projet</strong> : ${project?.projectManagers?.length ? project.projectManagers.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (supervision).'}</li>
-            <li><strong>Product Owner</strong> : ${project?.productOwners?.length ? project.productOwners.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (besoins).'}</li>
-            <li><strong>Scrum Master</strong> : ${project?.scrumMasters?.length ? project.scrumMasters.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (facilitation).'}</li>
-            <li><strong>Développeur</strong> : ${project?.users?.length ? project.users.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (développement).'}</li>
-            <li><strong>Testeur</strong> : ${project?.testers?.length ? project.testers.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (tests).'}</li>
-            <li><strong>Observateur</strong> : ${project?.observers?.length ? project.observers.map((email) => getUserDisplayName(email)).join(', ') : 'Non assigné (suivi).'}</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">4. Méthodologie</h2>
-          <p>Le projet suit une méthodologie <strong>${project?.methodology || 'Scrum'}</strong> :</p>
-          <ul>
-            <li>Sprints de 2 semaines avec livrables.</li>
-            <li>Stand-ups quotidiens.</li>
-            <li>Backlog via Jira.</li>
-            <li>Revues et rétrospectives.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">5. Spécifications fonctionnelles</h2>
-          <ul>
-            ${functionalSpecs}
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">6. Spécifications non fonctionnelles</h2>
-          <ul>
-            <li><strong>Performance</strong> : Réponse <1s, 1,000 utilisateurs.</li>
-            <li><strong>Sécurité</strong> : MFA, AES-256, GDPR.</li>
-            <li><strong>Évolutivité</strong> : 10,000+ entités, cloud.</li>
-            <li><strong>Utilisabilité</strong> : Responsive, multilingue, WCAG 2.1.</li>
-            <li><strong>Fiabilité</strong> : 99.9% uptime, sauvegardes.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">7. Contraintes et hypothèses</h2>
-          <h3>7.1 Contraintes</h3>
-          <ul>
-            <li>Budget à définir.</li>
-            <li>Compatibilité Chrome, Firefox.</li>
-            <li>Délai avant ${project?.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : 'mai 2026'}.</li>
-          </ul>
-          <h3>7.2 Hypothèses</h3>
-          <ul>
-            <li>Connexion stable.</li>
-            <li>Personnel formé.</li>
-            <li>Systèmes tiers disponibles.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">8. Gestion des risques</h2>
-          <ul>
-            <li><strong>Risque</strong> : Sécurité. <strong>Mitigation</strong> : Chiffrement, audits.</li>
-            <li><strong>Risque</strong> : API indisponible. <strong>Mitigation</strong> : Serveurs de secours.</li>
-            <li><strong>Risque</strong> : Adoption. <strong>Mitigation</strong> : Formations.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">9. Architecture technique</h2>
-          <ul>
-            <li><strong>Pile</strong> : React, Node.js, PostgreSQL, AWS.</li>
-            <li><strong>Intégrations</strong> : ${isInventoryApp ? 'Scanners, ERP' : 'Outils de collaboration'}.</li>
-            <li><strong>Infrastructure</strong> : API REST, microservices.</li>
-          </ul>
-        </div>
-        <div class="section">
-          <h2 class="section-title">10. Calendrier et jalons</h2>
-          <ul>
-            <li><strong>Besoins</strong> : ${project?.startDate ? new Date(new Date(project.startDate).setMonth(new Date(project.startDate).getMonth() + 2)).toLocaleDateString('fr-FR') : 'Juin-Juillet 2025'}.</li>
-            <li><strong>Prototype</strong> : ${project?.startDate ? new Date(new Date(project.startDate).setMonth(new Date(project.startDate).getMonth() + 4)).toLocaleDateString('fr-FR') : 'Septembre 2025'}.</li>
-            <li><strong>Bêta</strong> : ${project?.endDate ? new Date(new Date(project.endDate).setMonth(new Date(project.endDate).getMonth() - 4)).toLocaleDateString('fr-FR') : 'Janvier 2026'}.</li>
-            <li><strong>Lancement</strong> : ${project?.endDate ? new Date(project.endDate).toLocaleDateString('fr-FR') : 'Mai 2026'}.</li>
-          </ul>
-        </div>
-        <div class="footer">
-          Généré le ${new Date().toLocaleDateString('fr-FR')} | Version 1.0
-        </div>
-      `;
-    }
-
-    // Parser le contenu généré par Mixtral
-    const sections = content.split(/\n(?=\d+\.\s)/);
-    let htmlContent = `
-      <h1>Cahier des Charges</h1>
-      <div class="subtitle">Projet : ${project.title || 'Projet sans titre'}</div>
-    `;
-
-    sections.forEach((section) => {
-      const lines = section.split('\n');
-      const titleMatch = lines[0].match(/^(\d+\.\s.*)$/);
-      if (titleMatch) {
-        htmlContent += `<div class="section"><h2 class="section-title">${titleMatch[1]}</h2>`;
-        lines.slice(1).forEach((line) => {
-          if (line.match(/^\d+\.\d+\.\s/)) {
-            htmlContent += `<h3>${line}</h3>`;
-          } else if (line.match(/^- /)) {
-            if (!htmlContent.includes('<ul>')) htmlContent += '<ul>';
-            htmlContent += `<li>${line.replace(/^- /, '')}</li>`;
-          } else if (line.match(/^\s*$/)) {
-            if (htmlContent.includes('<ul>')) htmlContent += '</ul>';
-          } else {
-            if (htmlContent.includes('<ul>')) htmlContent += '</ul>';
-            htmlContent += `<p>${line}</p>`;
-          }
-        });
-        if (htmlContent.includes('<ul>')) htmlContent += '</ul>';
-        htmlContent += '</div>';
-      }
-    });
-
-    htmlContent += `
-      <div class="footer">
-        Généré le ${new Date().toLocaleDateString('fr-FR')} | Version 1.0
-      </div>
-    `;
-
-    return htmlContent || content;
-  };
-
-  // Fonction pour générer et afficher le cahier des charges
   const handleGenerateCahierDesCharges = async () => {
-    setGenerating(true);
-    setError(null);
     try {
-      const content = await generateCahierContent();
-      const htmlContent = parseCahierContentToHTML(content);
-      setCahierContent(htmlContent);
+      await dispatch(generateCahierContent({ project, users, getUserDisplayName })).unwrap();
+      setOpenModal(true); // Open modal only on success
+      setCahierError(null);
     } catch (err) {
-      console.error('Erreur lors de la génération du cahier des charges:', err);
-      setError('Échec de la génération du cahier des charges.');
-      setCahierContent(parseCahierContentToHTML(null));
-    } finally {
-      setGenerating(false);
+      setCahierError(reduxCahierError || 'Échec de la génération du cahier des charges.');
+      setSnackbar({
+        open: true,
+        message: reduxCahierError || 'Échec de la génération du cahier des charges.',
+        severity: 'error',
+      });
     }
+  };
+
+  const handleDownloadCahier = () => {
+    try {
+      downloadCahierDesCharges(cahierContent, project);
+    } catch (err) {
+      setCahierError('Échec du téléchargement du cahier des charges.');
+      setSnackbar({
+        open: true,
+        message: 'Échec du téléchargement du cahier des charges.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const handleCloseModal = () => {
+    setOpenModal(false);
+    setCahierError(null); // Reset cahier-specific error
+    dispatch(resetCahier());
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   if (loading) {
@@ -489,11 +366,11 @@ Utilisez un ton formel, un style clair, et un vocabulaire technique adapté à u
     );
   }
 
-  if (error && !cahierContent) {
+  if (projectError && !project) {
     return (
       <Box sx={{ p: 3 }}>
-        <Typography color="error">Erreur : {error}</Typography>
-        {error.includes("n'existe pas") && (
+        <Typography color="error">Erreur : {projectError}</Typography>
+        {projectError.includes("n'existe pas") && (
           <Typography>
             Le projet avec l'ID ${projectId} n'existe pas ou vous n'y avez pas accès.
           </Typography>
@@ -502,195 +379,264 @@ Utilisez un ton formel, un style clair, et un vocabulaire technique adapté à u
     );
   }
 
-  if (!project) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Typography color="error">Projet non trouvé.</Typography>
-        <Typography>
-          Le projet avec l'ID ${projectId} n'existe pas ou vous n'y avez pas accès.
-        </Typography>
-      </Box>
-    );
-  }
+  const parsedCahierContent = parseCahierContentToHTML(cahierContent, project, isTruncated);
 
   return (
     <Box sx={{ p: 3 }}>
       <PageTitle>Aperçu du projet</PageTitle>
 
-      {/* Bouton unique pour générer le cahier des charges */}
-      <Box sx={{ mb: 3 }}>
-        <Button
-          variant="contained"
-          color="primary"
+      {/* Snackbar for cahier generation errors */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+
+      <Box sx={{ mb: 4, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+        <GenerateButton
           onClick={handleGenerateCahierDesCharges}
-          disabled={generating}
+          disabled={isGenerating || !project}
+          startIcon={isGenerating ? <CircularProgress size={20} color="inherit" /> : <AutoAwesomeIcon />}
         >
-          Générer Cahier des Charges
-        </Button>
+          {isGenerating ? 'Génération en cours...' : 'Générer Cahier des Charges'}
+        </GenerateButton>
+        
+        {cahierContent && !isGenerating && (
+          <Zoom in={true}>
+            <DownloadButton
+              onClick={handleDownloadCahier}
+              startIcon={<GetAppIcon />}
+            >
+              Télécharger
+            </DownloadButton>
+          </Zoom>
+        )}
       </Box>
 
-      {/* Afficher le loader pendant la génération */}
-      {generating && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
-          <CircularProgress />
-          <Typography sx={{ ml: 2 }}>Génération du cahier des charges...</Typography>
-        </Box>
+      {isGenerating && (
+        <Fade in={isGenerating}>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            alignItems: 'center', 
+            my: 4,
+            p: 4,
+            background: 'linear-gradient(135deg, #e3f2fd, #f3e5f5)',
+            borderRadius: 3,
+            border: '1px solid #e1f5fe'
+          }}>
+            <CircularProgress size={50} thickness={4} sx={{ mb: 2 }} />
+            <Typography variant="h6" sx={{ fontWeight: 600, color: '#1976d2' }}>
+              Génération du cahier des charges...
+            </Typography>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Analyse du projet et création du document professionnel
+            </Typography>
+          </Box>
+        </Fade>
       )}
 
-      {/* Afficher le contenu généré */}
-      {cahierContent && !generating && (
-        <CahierContainer>
-          <div dangerouslySetInnerHTML={{ __html: cahierContent }} />
-        </CahierContainer>
+      <Dialog
+        open={openModal}
+        onClose={handleCloseModal}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+          },
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', bgcolor: '#1976d2', color: 'white' }}>
+          <Box display="flex" alignItems="center">
+            <ArticleIcon sx={{ mr: 1 }} />
+            Cahier des Charges - {project?.title || 'Projet sans titre'}
+          </Box>
+          <IconButton onClick={handleCloseModal} sx={{ color: 'white' }}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 4 }}>
+          <CahierContent>
+            <div dangerouslySetInnerHTML={{ __html: parsedCahierContent || '<p>Aucun contenu disponible.</p>' }} />
+            {cahierError && (
+              <Typography className="warning">
+                Erreur lors de la génération : {cahierError}
+              </Typography>
+            )}
+          </CahierContent>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <DownloadButton
+            onClick={handleDownloadCahier}
+            startIcon={<GetAppIcon />}
+            disabled={!cahierContent}
+          >
+            Télécharger
+          </DownloadButton>
+          <Button onClick={handleCloseModal} variant="outlined" color="primary">
+            Fermer
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {project && (
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={6}>
+            <StyledPaper>
+              <SectionTitle variant="h6">
+                <Box display="flex" alignItems="center">
+                  <DescriptionIcon color="primary" sx={{ mr: 1 }} />
+                  Informations du projet
+                </Box>
+              </SectionTitle>
+
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Titre
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                >
+                  {project.title}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="body2" color="textSecondary">
+                  Description
+                </Typography>
+                <Typography
+                  sx={{
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
+                >
+                  {project.description || 'Aucune description disponible.'}
+                </Typography>
+              </Box>
+
+              <Box sx={{ mb: 3 }}>
+                <Typography
+                  variant="body2"
+                  color="textSecondary"
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                  <SettingsIcon fontSize="small" sx={{ mr: 1 }} />
+                  Méthode Agile
+                </Typography>
+                <Typography>
+                  {project.methodology
+                    ? project.methodology.charAt(0).toUpperCase() +
+                      project.methodology.slice(1)
+                    : 'Non spécifié'}
+                </Typography>
+              </Box>
+
+              <Box>
+                <Typography
+                  variant="body2"
+                  color="textSecondary"
+                  sx={{ display: 'flex', alignItems: 'center' }}
+                >
+                  <CalendarTodayIcon fontSize="small" sx={{ mr: 1 }} />
+                  Créé le
+                </Typography>
+                <Typography>
+                  {new Date(project.createdAt).toLocaleDateString('fr-FR')}
+                </Typography>
+              </Box>
+            </StyledPaper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <StyledPaper>
+              <SectionTitle variant="h6">
+                <Box display="flex" alignItems="center">
+                  <PeopleIcon color="primary" sx={{ mr: 1 }} />
+                  Équipe du projet
+                </Box>
+              </SectionTitle>
+
+              <UserRoleSection
+                title="Chefs de projet"
+                users={project.projectManagers || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <UserRoleSection
+                title="Product Owners"
+                users={project.productOwners || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <UserRoleSection
+                title="Scrum Masters"
+                users={project.scrumMasters || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <UserRoleSection
+                title="Développeurs"
+                users={project.users || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <UserRoleSection
+                title="Testeurs"
+                users={project.testers || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+
+              <Divider sx={{ my: 2 }} />
+
+              <UserRoleSection
+                title="Observateurs"
+                users={project.observers || []}
+                getUserDisplayName={getUserDisplayName}
+                getAvatarName={getAvatarName}
+                getAvatarColor={getAvatarColor}
+                generateInitials={generateInitials}
+              />
+            </StyledPaper>
+          </Grid>
+        </Grid>
       )}
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <StyledPaper>
-            <SectionTitle variant="h6">
-              <Box display="flex" alignItems="center">
-                <DescriptionIcon color="primary" sx={{ mr: 1 }} />
-                Informations du projet
-              </Box>
-            </SectionTitle>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="body2" color="textSecondary">
-                Titre
-              </Typography>
-              <Typography
-                variant="h6"
-                sx={{
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                }}
-              >
-                {project.title}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="body2" color="textSecondary">
-                Description
-              </Typography>
-              <Typography
-                sx={{
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                }}
-              >
-                {project.description || 'Aucune description disponible.'}
-              </Typography>
-            </Box>
-
-            <Box sx={{ mb: 3 }}>
-              <Typography
-                variant="body2"
-                color="textSecondary"
-                sx={{ display: 'flex', alignItems: 'center' }}
-              >
-                <SettingsIcon fontSize="small" sx={{ mr: 1 }} />
-                Méthode Agile
-              </Typography>
-              <Typography>
-                {project.methodology
-                  ? project.methodology.charAt(0).toUpperCase() +
-                    project.methodology.slice(1)
-                  : 'Non spécifié'}
-              </Typography>
-            </Box>
-
-            <Box>
-              <Typography
-                variant="body2"
-                color="textSecondary"
-                sx={{ display: 'flex', alignItems: 'center' }}
-              >
-                <CalendarTodayIcon fontSize="small" sx={{ mr: 1 }} />
-                Créé le
-              </Typography>
-              <Typography>
-                {new Date(project.createdAt).toLocaleDateString('fr-FR')}
-              </Typography>
-            </Box>
-          </StyledPaper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <StyledPaper>
-            <SectionTitle variant="h6">
-              <Box display="flex" alignItems="center">
-                <PeopleIcon color="primary" sx={{ mr: 1 }} />
-                Équipe du projet
-              </Box>
-            </SectionTitle>
-
-            <UserRoleSection
-              title="Chefs de projet"
-              users={project.projectManagers || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <UserRoleSection
-              title="Product Owners"
-              users={project.productOwners || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <UserRoleSection
-              title="Scrum Masters"
-              users={project.scrumMasters || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <UserRoleSection
-              title="Développeurs"
-              users={project.users || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <UserRoleSection
-              title="Testeurs"
-              users={project.testers || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-
-            <Divider sx={{ my: 2 }} />
-
-            <UserRoleSection
-              title="Observateurs"
-              users={project.observers || []}
-              getUserDisplayName={getUserDisplayName}
-              getAvatarName={getAvatarName}
-              getAvatarColor={getAvatarColor}
-              generateInitials={generateInitials}
-            />
-          </StyledPaper>
-        </Grid>
-      </Grid>
     </Box>
   );
 };

@@ -93,7 +93,7 @@ function KanbanColumn({
   });
 
   const theme = useTheme();
-  const { currentUser } = useAuth(); // Access currentUser and claims
+  const { currentUser } = useAuth();
   const [anchorEl, setAnchorEl] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const open = Boolean(anchorEl);
@@ -137,6 +137,9 @@ function KanbanColumn({
     zIndex: isDragging ? 1000 : 'auto',
   };
 
+  // Check if user has permissions to show the menu (either CanUpdateKanbanColumns or CanDeleteKanbanColumns)
+  const showMenu = currentUser?.claims?.includes('CanUpdateKanbanColumns') || currentUser?.claims?.includes('CanDeleteKanbanColumns');
+
   return (
     <>
       <StyledKanbanColumn ref={setNodeRef} style={style} id={column.id}>
@@ -169,30 +172,38 @@ function KanbanColumn({
                 </IconButton>
               </Tooltip>
             )}
-            <Tooltip title={`Options pour ${column.name}`} TransitionComponent={Fade} arrow>
-              <IconButton size="small" onClick={handleMenuOpen}>
-                <MoreVertIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Menu
-              anchorEl={anchorEl}
-              open={open}
-              onClose={handleMenuClose}
-              PaperProps={{
-                sx: { borderRadius: 2, boxShadow: theme.shadows[3] },
-              }}
-              transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-              anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-            >
-              <MenuItem onClick={handleEdit} sx={{ fontSize: '0.875rem', gap: 1 }}>
-                <EditIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} />
-                Modifier
-              </MenuItem>
-              <MenuItem onClick={handleDeleteClick} sx={{ fontSize: '0.875rem', gap: 1, color: theme.palette.error.main }}>
-                <DeleteIcon fontSize="small" />
-                Supprimer
-              </MenuItem>
-            </Menu>
+            {showMenu && (
+              <Tooltip title={`Options pour ${column.name}`} TransitionComponent={Fade} arrow>
+                <IconButton size="small" onClick={handleMenuOpen}>
+                  <MoreVertIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {showMenu && (
+              <Menu
+                anchorEl={anchorEl}
+                open={open}
+                onClose={handleMenuClose}
+                PaperProps={{
+                  sx: { borderRadius: 2, boxShadow: theme.shadows[3] },
+                }}
+                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+              >
+                {currentUser?.claims?.includes('CanUpdateKanbanColumns') && (
+                  <MenuItem onClick={handleEdit} sx={{ fontSize: '0.875rem', gap: 1 }}>
+                    <EditIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+                    Modifier
+                  </MenuItem>
+                )}
+                {currentUser?.claims?.includes('CanDeleteKanbanColumns') && (
+                  <MenuItem onClick={handleDeleteClick} sx={{ fontSize: '0.875rem', gap: 1, color: theme.palette.error.main }}>
+                    <DeleteIcon fontSize="small" />
+                    Supprimer
+                  </MenuItem>
+                )}
+              </Menu>
+            )}
           </Box>
         </ColumnHeader>
         <Box sx={{ flexGrow: 1, p: 1 }}>

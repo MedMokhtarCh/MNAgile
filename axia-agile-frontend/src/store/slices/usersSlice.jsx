@@ -2,9 +2,9 @@ import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { userApi } from '../../services/api';
 import { logout } from './authSlice';
 
+// Normalize user data 
 const normalizeUser = (user) => {
   if (!user) return null;
-
   return {
     id: user.id ?? user.Id,
     email: user.email ?? user.Email,
@@ -19,12 +19,14 @@ const normalizeUser = (user) => {
     dateCreated: user.dateCreated ?? user.DateCreated ?? new Date().toISOString(),
     lastLogin: user.lastLogin ?? user.LastLogin ?? null,
     createdById: user.createdById ?? user.CreatedById ?? null,
+    rootAdminId: user.rootAdminId ?? user.RootAdminId ?? null, // Added rootAdminId
+    subscription: user.Subscription ? normalizeSubscription(user.Subscription) : null,
   };
 };
 
+// Normalize role data
 const normalizeRole = (role) => {
   if (!role) return null;
-
   return {
     id: role.id ?? role.Id,
     name: role.name ?? role.Name,
@@ -35,13 +37,33 @@ const normalizeRole = (role) => {
   };
 };
 
+// Normalize claim data
 const normalizeClaim = (claim) => {
   if (!claim) return null;
-
   return {
     id: claim.id ?? claim.Id,
     name: claim.name ?? claim.Name,
     description: claim.description ?? claim.Description ?? '',
+  };
+};
+
+// Normalize subscription data
+const normalizeSubscription = (sub) => {
+  if (!sub) return null;
+  return {
+    id: sub.id ?? sub.Id,
+    userId: sub.userId ?? sub.UserId,
+    plan: sub.plan ?? sub.Plan ?? 'annual',
+    status: sub.status ?? sub.Status ?? 'Pending',
+    startDate: sub.startDate ?? sub.StartDate ?? new Date().toISOString(),
+    endDate: sub.endDate ?? sub.EndDate ?? '',
+    user: sub.User ? {
+      id: sub.User.id ?? sub.User.Id,
+      email: sub.User.email ?? sub.User.Email,
+      firstName: sub.User.firstName ?? sub.User.FirstName,
+      lastName: sub.User.lastName ?? sub.User.LastName,
+      entreprise: sub.User.entreprise ?? sub.User.Entreprise,
+    } : null, // Include user info for pending subscriptions
   };
 };
 
@@ -57,6 +79,122 @@ const withRetry = async (fn, retries = 3, delay = 1000) => {
   }
 };
 
+// Fetch pending subscriptions
+export const fetchPendingSubscriptions = createAsyncThunk(
+  'users/fetchPendingSubscriptions',
+  async (_, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await withRetry(() => userApi.get('/Subscriptions/pending'));
+      return response.data.map(normalizeSubscription);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(
+        error.response?.data?.message || 'Erreur lors de la récupération des abonnements.'
+      );
+    }
+  }
+);
+
+// Fetch subscription by ID
+export const fetchSubscriptionById = createAsyncThunk(
+  'users/fetchSubscriptionById',
+  async (subscriptionId, { rejectWithValue, dispatch }) => {
+    try {
+      const response = await withRetry(() => userApi.get(`/Subscriptions/${subscriptionId}`));
+      return normalizeSubscription(response.data);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(
+        error.response?.data?.message || 'Erreur lors de la récupération des détails de l\'abonnement.'
+      );
+    }
+  }
+);
+
+// Validate subscription
+export const validateSubscription = createAsyncThunk(
+  'users/validateSubscription',
+  async (subscriptionId, { rejectWithValue, dispatch, getState }) => {
+    try {
+      const response = await withRetry(() => userApi.post(`/Subscriptions/${subscriptionId}/validate`));
+      const updatedSubscription = normalizeSubscription(response.data);
+      // Fetch updated user to reflect RootAdminId and IsActive changes
+      const userResponse = await userApi.get(`/Users/${updatedSubscription.userId}`);
+      const updatedUser = normalizeUser(userResponse.data);
+      return { subscriptionId, updatedSubscription, updatedUser };
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(
+        error.response?.data?.message || "Échec de la validation de l'abonnement."
+      );
+    }
+  }
+);
+
+// Signup user
+export const signup = createAsyncThunk(
+  'users/signup',
+  async (userData, { rejectWithValue, getState, dispatch }) => {
+    try {
+      const { users } = getState().users;
+      if (users.some((user) => user.email.toLowerCase() === userData.email.toLowerCase())) {
+        return rejectWithValue('Cet email existe déjà.');
+      }
+
+      const requiredFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'entreprise', 'plan'];
+      const missingFields = requiredFields.filter((field) => !userData[field]);
+      if (missingFields.length > 0) {
+        return rejectWithValue(`Champs requis manquants: ${missingFields.join(', ')}`);
+      }
+
+      const validPlans = ['monthly', 'quarterly', 'semiannual', 'annual'];
+      if (!validPlans.includes(userData.plan)) {
+        return rejectWithValue('Plan d\'abonnement invalide.');
+      }
+
+      const response = await withRetry(() => userApi.post('/Subscriptions/signup', {
+        Email: userData.email,
+        Password: userData.password,
+        FirstName: userData.firstName,
+        LastName: userData.lastName,
+        PhoneNumber: userData.phoneNumber,
+        Entreprise: userData.entreprise,
+        Plan: userData.plan,
+      }), 3, 1000);
+
+      return {
+        user: normalizeUser({
+          ...response.data,
+          RoleId: 2, // Admin role
+          IsActive: false, // Inactive until validated
+          ClaimIds: [1, 2,3,4], // Default claims: CanViewUsers, CanCreateUsers
+          RootAdminId: null, // Will be set on validation
+        }),
+        subscriptionId: response.data.subscriptionId,
+      };
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      if (error.response?.status === 400) {
+        return rejectWithValue(error.response?.data?.message || 'Données d\'inscription invalides');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Échec de l\'inscription');
+    }
+  }
+);
+
+// Fetch roles
 export const fetchRoles = createAsyncThunk(
   'users/fetchRoles',
   async (_, { rejectWithValue, dispatch }) => {
@@ -80,6 +218,7 @@ export const fetchRoles = createAsyncThunk(
   }
 );
 
+// Create role
 export const createRole = createAsyncThunk(
   'users/createRole',
   async (roleData, { rejectWithValue, dispatch }) => {
@@ -98,6 +237,7 @@ export const createRole = createAsyncThunk(
   }
 );
 
+// Update role
 export const updateRole = createAsyncThunk(
   'users/updateRole',
   async ({ id, name }, { rejectWithValue, dispatch }) => {
@@ -116,6 +256,7 @@ export const updateRole = createAsyncThunk(
   }
 );
 
+// Delete role
 export const deleteRole = createAsyncThunk(
   'users/deleteRole',
   async (id, { rejectWithValue, dispatch }) => {
@@ -132,6 +273,7 @@ export const deleteRole = createAsyncThunk(
   }
 );
 
+// Fetch claims
 export const fetchClaims = createAsyncThunk(
   'users/fetchClaims',
   async (_, { rejectWithValue, dispatch }) => {
@@ -152,6 +294,7 @@ export const fetchClaims = createAsyncThunk(
   }
 );
 
+// Fetch claim by ID
 export const fetchClaimById = createAsyncThunk(
   'users/fetchClaimById',
   async (id, { rejectWithValue, dispatch }) => {
@@ -168,6 +311,7 @@ export const fetchClaimById = createAsyncThunk(
   }
 );
 
+// Create claim
 export const createClaim = createAsyncThunk(
   'users/createClaim',
   async (claimData, { rejectWithValue, dispatch }) => {
@@ -187,6 +331,7 @@ export const createClaim = createAsyncThunk(
   }
 );
 
+// Update claim
 export const updateClaim = createAsyncThunk(
   'users/updateClaim',
   async ({ id, name, description }, { rejectWithValue, dispatch }) => {
@@ -206,44 +351,34 @@ export const updateClaim = createAsyncThunk(
   }
 );
 
-export const deleteClaim = createAsyncThunk(
-  'users/deleteClaim',
-  async (id, { rejectWithValue, dispatch }) => {
+// Fetch users
+export const fetchUsers = createAsyncThunk(
+  'users/fetchUsers',
+  async (_, { rejectWithValue, dispatch }) => {
     try {
-      await userApi.delete(`/Claims/${id}`);
-      return id;
+      const response = await userApi.get('/Users');
+      return response.data.map(user => ({
+        ...normalizeUser(user),
+        subscription: normalizeSubscription(user.subscription)
+      }));
     } catch (error) {
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
-      return rejectWithValue(error.response?.data?.message || 'Échec de suppression du claim');
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la récupération des utilisateurs');
     }
   }
 );
 
-export const fetchUsers = createAsyncThunk(
-  'users/fetchUsers',
-  async (_, { dispatch }) => {
-    try {
-      const response = await userApi.get('/Users');
-      return response.data.map(normalizeUser).filter((user) => user.email);
-    } catch (error) {
-      if (error.response?.status === 401) {
-        dispatch(logout());
-      }
-      return [];
-    }
-  }
-);
-
+// Fetch users by createdById
 export const fetchUsersByCreatedById = createAsyncThunk(
   'users/fetchUsersByCreatedById',
   async (createdById, { dispatch }) => {
     try {
       const response = await userApi.get(`/Users/created-by/${createdById}`);
       return response.data
-        .filter((user) => user && (user.id || user.Id) && user.email) // Ensure id and email exist
+        .filter((user) => user && (user.id || user.Id) && user.email)
         .map(normalizeUser);
     } catch (error) {
       if (error.response?.status === 401) {
@@ -254,12 +389,13 @@ export const fetchUsersByCreatedById = createAsyncThunk(
   }
 );
 
+// Check if user exists
 export const checkUserExists = createAsyncThunk(
   'users/checkUserExists',
   async (email, { rejectWithValue, dispatch }) => {
     try {
       const response = await userApi.get('/Users/exists', { params: { email } });
-      return { email, exists: response.data };
+      return { email, exists: response.data.exists, userId: response.data.userId };
     } catch (error) {
       if (error.response?.status === 401) {
         dispatch(logout());
@@ -270,15 +406,15 @@ export const checkUserExists = createAsyncThunk(
   }
 );
 
+// Create user
 export const createUser = createAsyncThunk(
   'users/createUser',
   async (userData, { rejectWithValue, getState, dispatch }) => {
     const tempId = `temp-${Date.now()}`;
-    
     try {
       const { users } = getState().users;
       if (users.some((user) => user.email.toLowerCase() === userData.email.toLowerCase())) {
-        return rejectWithValue('Cet email est déjà utilisé');
+        return rejectWithValue('Cet email existe déjà.');
       }
 
       const requiredFields = ['email', 'firstName', 'lastName', 'password'];
@@ -287,7 +423,6 @@ export const createUser = createAsyncThunk(
         return rejectWithValue(`Champs requis manquants: ${missingFields.join(', ')}`);
       }
 
-      // Optimistic update
       const optimisticUser = {
         ...userData,
         id: tempId,
@@ -295,6 +430,7 @@ export const createUser = createAsyncThunk(
         dateCreated: new Date().toISOString(),
         claimIds: userData.claimIds || [],
         createdById: userData.createdById || null,
+        rootAdminId: userData.rootAdminId || null, // Include rootAdminId
       };
       dispatch(optimisticCreateUser(normalizeUser(optimisticUser)));
 
@@ -319,11 +455,12 @@ export const createUser = createAsyncThunk(
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
-      return rejectWithValue(error.response?.data?.message || 'ce email existe déja');
+      return rejectWithValue(error.response?.data?.message || 'Cet email existe déjà.');
     }
   }
 );
 
+// Update user
 export const updateUser = createAsyncThunk(
   'users/updateUser',
   async ({ id, userData }, { rejectWithValue, getState, dispatch }) => {
@@ -340,7 +477,7 @@ export const updateUser = createAsyncThunk(
         userData.email.toLowerCase() !== existingUser.email.toLowerCase() &&
         users.some((user) => user.email.toLowerCase() === userData.email.toLowerCase() && user.id !== id)
       ) {
-        return rejectWithValue('Cet email est déjà utilisé par un autre utilisateur');
+        return rejectWithValue('Cet email existe déjà.');
       }
 
       const payload = {
@@ -354,7 +491,7 @@ export const updateUser = createAsyncThunk(
       };
 
       const targetRoleId = userData.roleId ?? existingUser.roleId;
-      payload.JobTitle = [3, 4].includes(targetRoleId) 
+      payload.JobTitle = [3, 4].includes(targetRoleId)
         ? (userData.jobTitle ?? existingUser.jobTitle ?? 'Non défini')
         : existingUser.jobTitle;
 
@@ -378,6 +515,7 @@ export const updateUser = createAsyncThunk(
   }
 );
 
+// Update user claims
 export const updateUserClaims = createAsyncThunk(
   'users/updateUserClaims',
   async ({ id, claimIds }, { rejectWithValue, dispatch }) => {
@@ -390,7 +528,7 @@ export const updateUserClaims = createAsyncThunk(
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
       if (error.response?.status === 403) {
-        return rejectWithValue('Vous n\'avez pas l\'autorisation de modifier les claims de cet utilisateur.');
+        return rejectWithValue("Vous n'avez pas l'autorisation de modifier les claims de cet utilisateur.");
       }
       if (error.response?.status === 404) {
         return rejectWithValue('Utilisateur non trouvé.');
@@ -403,28 +541,26 @@ export const updateUserClaims = createAsyncThunk(
   }
 );
 
+// Delete user
 export const deleteUser = createAsyncThunk(
   'users/deleteUser',
   async (id, { rejectWithValue, dispatch, getState }) => {
     try {
-      // Optimistic update
       dispatch(removeUserOptimistically(id));
-      
       await userApi.delete(`/Users/${id}`);
       return id;
     } catch (error) {
-      // Revert optimistic update
       dispatch(fetchUsersByCreatedById(getState().auth.currentUser?.id));
-      
       if (error.response?.status === 401) {
         dispatch(logout());
         return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
       }
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete user');
+      return rejectWithValue(error.response?.data?.message || 'Échec de la suppression de l\'utilisateur');
     }
   }
 );
 
+// Toggle user active status
 export const toggleUserActive = createAsyncThunk(
   'users/toggleUserActive',
   async ({ id, isActive }, { rejectWithValue, dispatch }) => {
@@ -441,6 +577,78 @@ export const toggleUserActive = createAsyncThunk(
   }
 );
 
+// Check and deactivate expired subscriptions
+export const checkExpiredSubscriptions = createAsyncThunk(
+  'users/checkExpiredSubscriptions',
+  async (_, { rejectWithValue, dispatch }) => {
+    try {
+      // Note: This assumes the backend handles the deactivation logic in SubscriptionExpiryService
+      // We can trigger a fetch of users to reflect any changes made by the background service
+      const response = await userApi.get('/Users');
+      return response.data.map(user => ({
+        ...normalizeUser(user),
+        subscription: normalizeSubscription(user.subscription)
+      }));
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(error.response?.data?.message || 'Erreur lors de la vérification des abonnements expirés');
+    }
+  }
+);
+// Renew subscription
+export const renewSubscription = createAsyncThunk(
+  'users/renewSubscription',
+  async ({ subscriptionId, plan }, { rejectWithValue, dispatch }) => {
+    try {
+      const validPlans = ['monthly', 'quarterly', 'semiannual', 'annual'];
+      if (!validPlans.includes(plan)) {
+        return rejectWithValue('Plan d\'abonnement invalide.');
+      }
+
+      const response = await withRetry(() =>
+        userApi.post(`/Subscriptions/${subscriptionId}/renew`, { Plan: plan })
+      );
+      const updatedSubscription = normalizeSubscription({
+        ...response.data,
+        id: subscriptionId,
+        plan,
+        status: 'Pending',
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + GetSubscriptionDuration(plan)).toISOString(),
+      });
+
+      return { subscriptionId, updatedSubscription };
+    } catch (error) {
+      if (error.response?.status === 401) {
+        dispatch(logout());
+        return rejectWithValue('Session expirée. Veuillez vous reconnecter.');
+      }
+      return rejectWithValue(
+        error.response?.data?.message || 'Échec du renouvellement de l\'abonnement.'
+      );
+    }
+  }
+);
+
+// Utility to calculate subscription duration 
+const GetSubscriptionDuration = (plan) => {
+  switch (plan.toLowerCase()) {
+    case 'monthly':
+      return 30 * 24 * 60 * 60 * 1000; // 30 days
+    case 'quarterly':
+      return 90 * 24 * 60 * 60 * 1000; // 90 days
+    case 'semiannual':
+      return 180 * 24 * 60 * 60 * 1000; // 180 days
+    case 'annual':
+      return 365 * 24 * 60 * 60 * 1000; // 365 days
+    default:
+      throw new Error('Invalid subscription plan.');
+  }
+};
+
 const usersSlice = createSlice({
   name: 'users',
   initialState: {
@@ -449,6 +657,8 @@ const usersSlice = createSlice({
     claims: [],
     selectedRole: null,
     selectedClaim: null,
+    pendingSubscriptions: [],
+    selectedSubscription: null,
     usersLoading: false,
     error: null,
     snackbar: { open: false, message: '', severity: 'success' },
@@ -472,6 +682,9 @@ const usersSlice = createSlice({
     clearSelectedClaim: (state) => {
       state.selectedClaim = null;
     },
+    clearSelectedSubscription: (state) => {
+      state.selectedSubscription = null;
+    },
     optimisticCreateUser: (state, action) => {
       state.users.push(action.payload);
       state.usersLoading = true;
@@ -490,6 +703,106 @@ const usersSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(fetchPendingSubscriptions.pending, (state) => {
+        state.usersLoading = true;
+      })
+      .addCase(fetchPendingSubscriptions.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        state.pendingSubscriptions = action.payload;
+      })
+      .addCase(fetchPendingSubscriptions.rejected, (state, action) => {
+        state.usersLoading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload || 'Erreur lors de la récupération des abonnements.',
+          severity: 'error',
+        };
+      })
+      .addCase(fetchSubscriptionById.pending, (state) => {
+        state.usersLoading = true;
+      })
+      .addCase(fetchSubscriptionById.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        state.selectedSubscription = action.payload;
+      })
+      .addCase(fetchSubscriptionById.rejected, (state, action) => {
+        state.usersLoading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload || 'Erreur lors de la récupération des détails de l\'abonnement.',
+          severity: 'error',
+        };
+      })
+      .addCase(validateSubscription.pending, (state) => {
+        state.usersLoading = true;
+      })
+      .addCase(validateSubscription.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        const { subscriptionId, updatedSubscription, updatedUser } = action.payload;
+        // Update pending subscriptions
+        state.pendingSubscriptions = state.pendingSubscriptions.filter(
+          (sub) => sub.id !== subscriptionId
+        );
+        // Update selected subscription
+        state.selectedSubscription = updatedSubscription;
+        // Update user in users array
+        const userIndex = state.users.findIndex((u) => u.id === updatedUser.id);
+        if (userIndex !== -1) {
+          state.users[userIndex] = { ...state.users[userIndex], ...updatedUser };
+        } else {
+          state.users.push(updatedUser);
+        }
+        state.snackbar = {
+          open: true,
+          message: 'Abonnement validé avec succès.',
+          severity: 'success',
+        };
+      })
+      .addCase(validateSubscription.rejected, (state, action) => {
+        state.usersLoading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload || "Échec de la validation de l'abonnement.",
+          severity: 'error',
+        };
+      })
+      .addCase(signup.pending, (state) => {
+        state.usersLoading = true;
+      })
+      .addCase(signup.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        state.users.push(action.payload.user);
+        state.pendingSubscriptions.push({
+          id: action.payload.subscriptionId,
+          userId: action.payload.user.id,
+          plan: action.payload.user.subscription?.plan || 'annual',
+          status: 'Pending',
+          startDate: new Date().toISOString(),
+          endDate: '',
+          user: {
+            id: action.payload.user.id,
+            email: action.payload.user.email,
+            firstName: action.payload.user.firstName,
+            lastName: action.payload.user.lastName,
+            entreprise: action.payload.user.entreprise,
+          },
+        });
+        state.snackbar = {
+          open: true,
+          message: 'Inscription réussie. En attente de validation.',
+          severity: 'success',
+        };
+        state.lastCreateSuccess = true;
+      })
+      .addCase(signup.rejected, (state, action) => {
+        state.usersLoading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload,
+          severity: 'error',
+        };
+        state.lastCreateSuccess = false;
+      })
       .addCase(fetchUsers.pending, (state) => {
         state.usersLoading = true;
       })
@@ -512,21 +825,21 @@ const usersSlice = createSlice({
       .addCase(fetchUsersByCreatedById.pending, (state) => {
         state.usersLoading = true;
       })
-  .addCase(fetchUsersByCreatedById.fulfilled, (state, action) => {
-  state.usersLoading = false;
-  const newUsers = action.payload;
-  const existingUserIds = new Set(state.users.map((user) => user.id));
-  state.users = [
-    ...state.users.filter((user) => {
-      if (!user.id) {
-        console.warn('User with missing id:', user);
-        return false;
-      }
-      return !String(user.id).startsWith('temp-') && !existingUserIds.has(user.id);
-    }),
-    ...newUsers,
-  ];
-})
+      .addCase(fetchUsersByCreatedById.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        const newUsers = action.payload;
+        const existingUserIds = new Set(state.users.map((user) => user.id));
+        state.users = [
+          ...state.users.filter((user) => {
+            if (!user.id) {
+              console.warn('User with missing id:', user);
+              return false;
+            }
+            return !String(user.id).startsWith('temp-') && !existingUserIds.has(user.id);
+          }),
+          ...newUsers,
+        ];
+      })
       .addCase(fetchUsersByCreatedById.rejected, (state, action) => {
         state.usersLoading = false;
         state.error = action.payload;
@@ -541,7 +854,10 @@ const usersSlice = createSlice({
       })
       .addCase(checkUserExists.fulfilled, (state, action) => {
         state.usersLoading = false;
-        state.userExists[action.payload.email] = action.payload.exists;
+        state.userExists[action.payload.email] = {
+          exists: action.payload.exists,
+          userId: action.payload.userId,
+        };
       })
       .addCase(checkUserExists.rejected, (state, action) => {
         state.usersLoading = false;
@@ -556,13 +872,14 @@ const usersSlice = createSlice({
       })
       .addCase(createUser.fulfilled, (state, action) => {
         state.usersLoading = false;
+        state.users = state.users.filter((user) => user.id !== `temp-${action.payload.id}`);
+        state.users.push(action.payload);
         state.snackbar = {
           open: true,
           message: 'Utilisateur créé avec succès',
           severity: 'success'
         };
         state.lastCreateSuccess = true;
-        state.users.push(action.payload);
       })
       .addCase(createUser.rejected, (state, action) => {
         state.usersLoading = false;
@@ -623,6 +940,26 @@ const usersSlice = createSlice({
           open: true,
           message: action.payload,
           severity: 'error'
+        };
+      })
+      .addCase(checkExpiredSubscriptions.pending, (state) => {
+        state.usersLoading = true;
+      })
+      .addCase(checkExpiredSubscriptions.fulfilled, (state, action) => {
+        state.usersLoading = false;
+        state.users = action.payload;
+        state.snackbar = {
+          open: true,
+          message: 'Vérification des abonnements expirés terminée.',
+          severity: 'success',
+        };
+      })
+      .addCase(checkExpiredSubscriptions.rejected, (state, action) => {
+        state.usersLoading = false;
+        state.snackbar = {
+          open: true,
+          message: action.payload || 'Erreur lors de la vérification des abonnements expirés.',
+          severity: 'error',
         };
       })
       .addCase(fetchRoles.pending, (state) => {
@@ -775,23 +1112,9 @@ const usersSlice = createSlice({
           severity: 'error'
         };
       })
-      .addCase(deleteClaim.fulfilled, (state, action) => {
-        state.usersLoading = false;
-        state.claims = state.claims.filter(claim => claim.id !== action.payload);
-        state.snackbar = {
-          open: true,
-          message: 'Claim supprimé avec succès',
-          severity: 'success'
-        };
-      })
-      .addCase(deleteClaim.rejected, (state, action) => {
-        state.usersLoading = false;
-        state.snackbar = {
-          open: true,
-          message: action.payload,
-          severity: 'error'
-        };
-      });
+   
+  
+     
   },
 });
 
@@ -800,6 +1123,7 @@ export const {
   clearUserExists,
   clearSelectedRole,
   clearSelectedClaim,
+  clearSelectedSubscription,
   optimisticCreateUser,
   removeOptimisticUser,
   removeUserOptimistically,

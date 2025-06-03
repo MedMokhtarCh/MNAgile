@@ -64,30 +64,53 @@ export const fetchChannelMembers = createAsyncThunk(
     }
   }
 );
-
 export const sendMessage = createAsyncThunk(
   'chat/sendMessage',
-  async ({ channelId, content, replyToId, files }, { rejectWithValue, dispatch }) => {
+  async ({ channelId, content, replyToId, files = [] }, { rejectWithValue, dispatch }) => {
     try {
       const formData = new FormData();
-      formData.append('channelId', channelId);
-      formData.append('content', content);
-      if (replyToId) formData.append('replyToId', replyToId);
-      if (files && files.length > 0) {
-        files.forEach((file, index) => {
-          formData.append(`files[${index}]`, file);
-        });
+      formData.append('ChannelId', channelId);
+      formData.append('Content', content || ''); // Ensure empty string for content
+      
+      if (replyToId) {
+        formData.append('ReplyToId', replyToId);
       }
-      const response = await discussionApi.post('/discussion/messages', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      
+      files.forEach((file, index) => {
+        formData.append('files', file); // Use 'files' to match backend
       });
+
+      // Log FormData contents for debugging
+      console.log('Sending message to /discussion/messages:', {
+        channelId,
+        content: content || 'empty',
+        replyToId: replyToId || 'none',
+        files: files.map(f => f.name),
+      });
+
+      const response = await discussionApi.post('/discussion/messages', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      console.log('Message sent successfully:', response.data);
       dispatch(playSound({ type: 'send' }));
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to send message');
+      console.error('sendMessage error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      return rejectWithValue({
+        message: error.response?.data?.message || error.message || 'Failed to send message',
+        status: error.response?.status,
+        details: error.response?.data,
+      });
     }
-});
-
+  }
+);
 export const createChannel = createAsyncThunk(
   'chat/createChannel',
   async (channelData, { getState, dispatch, rejectWithValue }) => {

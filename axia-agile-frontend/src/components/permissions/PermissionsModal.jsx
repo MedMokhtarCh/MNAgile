@@ -3,7 +3,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typogra
 import { Security as SecurityIcon, Close as CloseIcon } from '@mui/icons-material';
 import PermissionForm from './PermissionForm';
 import { useDispatch } from 'react-redux';
-import { updateUserClaims } from '../../store/slices/usersSlice';
+import { updateUserClaims, setSnackbar } from '../../store/slices/usersSlice';
 
 const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) => {
   const dispatch = useDispatch();
@@ -13,6 +13,13 @@ const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) =
   const handleSave = async () => {
     if (!user || !user.id || !Array.isArray(user.claimIds)) {
       console.error('PermissionsModal - Invalid user data:', user);
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Données utilisateur invalides',
+          severity: 'error',
+        })
+      );
       return;
     }
 
@@ -20,10 +27,23 @@ const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) =
     try {
       await dispatch(updateUserClaims({ id: user.id, claimIds: user.claimIds })).unwrap();
       console.log('PermissionsModal - Permissions saved successfully');
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Permissions mises à jour avec succès',
+          severity: 'success',
+        })
+      );
       onClose(); // Close modal after successful save
     } catch (error) {
       console.error('PermissionsModal - Error saving permissions:', error);
-      // Error is handled by usersSlice snackbar
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: error.message || 'Erreur lors de la mise à jour des permissions',
+          severity: 'error',
+        })
+      );
     }
   };
 

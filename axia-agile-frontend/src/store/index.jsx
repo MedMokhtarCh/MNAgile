@@ -5,6 +5,9 @@ import profileReducer from './slices/profileSlice';
 import projectsReducer from './slices/projectsSlice';
 import tasksReducer from './slices/taskSlice';
 import chatReducer from './slices/chatSlice'
+import notificationReducer from './slices/notificationSlice';
+import cahierDesChargesReducer from './slices/cahierDesChargesSlice';
+
 
 
 
@@ -16,5 +19,8 @@ export const store = configureStore({
     projects: projectsReducer,
     tasks: tasksReducer,
     chat: chatReducer,
+ 
+    notifications: notificationReducer,
+  cahierDesCharges: cahierDesChargesReducer,
   },
 });

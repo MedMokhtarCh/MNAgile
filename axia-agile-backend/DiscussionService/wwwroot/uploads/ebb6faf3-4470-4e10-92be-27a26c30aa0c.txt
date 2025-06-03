@@ -1,0 +1,69 @@
+@startuml
+!define RECTANGLE class
+skinparam monochrome true
+skinparam defaultFontSize 14
+skinparam sequenceMessageAlign center
+skinparam sequenceBoxPadding 20
+skinparam sequenceLifeLineBorderThickness 1.5
+skinparam sequenceActorBorderThickness 1.5
+skinparam sequenceParticipantBorderThickness 1.5
+skinparam dpi 150
+
+actor Utilisateur
+participant "ContrôleurProfil" as Contrôleur
+participant "ServiceProfil" as Service
+participant "ServiceUtilisateurClient" as UserServiceClient
+participant "ContexteBD" as Contexte
+participant "Profil" as Profil
+participant "ProfilDTO" as ProfilDTO
+
+Utilisateur -> Contrôleur : PUT /api/profile (UpdateProfileRequest)
+activate Contrôleur
+
+alt Utilisateur non authentifié
+  Contrôleur --> Utilisateur : 401 Non autorisé
+else Utilisateur authentifié
+  Contrôleur -> Contrôleur : Extraire userId depuis JWT
+  alt userId invalide
+    Contrôleur --> Utilisateur : 401 Non autorisé
+  else userId valide
+    Contrôleur -> Service : UpdateProfileAsync(userId, request)
+    activate Service
+
+    Service -> UserServiceClient : GetUserByIdAsync(userId)
+    activate UserServiceClient
+    UserServiceClient --> Service : Utilisateur
+    deactivate UserServiceClient
+    note right : Vérifier si l'utilisateur existe
+
+    alt Utilisateur non trouvé
+      Service -> UserServiceClient : GetUserByIdAsync(userId)
+      activate UserServiceClient
+      UserServiceClient --> Service : nul
+      deactivate UserServiceClient
+      Service --> Contrôleur : Lever InvalidOperationException
+      Contrôleur --> Utilisateur : 400 Mauvaise requête
+    else Utilisateur trouvé
+      Service -> UserServiceClient : UpdateUserAsync(user)
+      activate UserServiceClient
+      UserServiceClient --> Service : [Mis à jour]
+      deactivate UserServiceClient
+
+      Service -> Contexte : Trouver(Profil, userId)
+      activate Contexte
+      Contexte --> Service : Profil
+      deactivate Contexte
+
+      Service -> ProfilDTO : Créer(Profil, Utilisateur)
+      activate ProfilDTO
+      ProfilDTO --> Service : ProfilDTO
+      deactivate ProfilDTO
+
+      Service --> Contrôleur : ProfilDTO
+      deactivate Service
+
+      Contrôleur --> Utilisateur : 200 OK (ProfilDTO)
+    end alt
+  end alt
+end alt
+@enduml

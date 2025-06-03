@@ -1,22 +1,22 @@
 .project-layout {
   display: flex;
   height: 100vh;
-  overflow-x: auto; /* Allow horizontal scrolling for Kanban */
-  overflow-y: hidden; /* Preserve vertical clipping if needed */
+  overflow-x: auto; 
+  overflow-y: hidden; 
 }
 
 .project-layout .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Keep main-content clipped if necessary */
+  overflow: hidden; 
 }
 
 .project-layout .content {
   flex: 1;
-  overflow-y: auto; /* Allow vertical scrolling */
-  overflow-x: visible; /* Ensure horizontal content isn’t clipped */
-  background-color: #f5f5f7;
+  overflow-y: auto; 
+  overflow-x: visible; 
+
 }
 
 /* Animation for sidebar */

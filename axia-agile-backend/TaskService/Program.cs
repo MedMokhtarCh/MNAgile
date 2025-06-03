@@ -10,7 +10,7 @@ using TaskService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --------------------- CORS ---------------------
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAllOrigins", policy =>
@@ -22,11 +22,11 @@ builder.Services.AddCors(options =>
     });
 });
 
-// --------------------- DB Context ---------------------
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// --------------------- Services ---------------------
+
 builder.Services.AddHttpClient<ProjectServiceClient>(client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["ProjectService:BaseUrl"]);
@@ -42,7 +42,6 @@ builder.Services.AddScoped<BacklogService>();
 builder.Services.AddScoped<SprintService>();
 
 
-// --------------------- JWT Auth + Cookie ---------------------
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var keyValue = jwtSettings["Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY");
 if (string.IsNullOrEmpty(keyValue))
@@ -117,7 +116,7 @@ builder.Services.AddAuthentication(options =>
     options.ExpireTimeSpan = TimeSpan.FromHours(1);
 });
 
-// --------------------- Authorization ---------------------
+// Authorization 
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("CanViewTasks", policy => policy.RequireClaim("CanViewTasks", "true"));
@@ -136,12 +135,15 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanCreateSprints", policy => policy.RequireClaim("CanCreateSprints", "true"));
     options.AddPolicy("CanUpdateSprints", policy => policy.RequireClaim("CanUpdateSprints", "true"));
     options.AddPolicy("CanDeleteSprints", policy => policy.RequireClaim("CanDeleteSprints", "true"));
+    //  Kanban column policies
+    options.AddPolicy("CanCreateKanbanColumns", policy => policy.RequireClaim("CanCreateKanbanColumns", "true"));
+    options.AddPolicy("CanUpdateKanbanColumns", policy => policy.RequireClaim("CanUpdateKanbanColumns", "true"));
+    options.AddPolicy("CanDeleteKanbanColumns", policy => policy.RequireClaim("CanDeleteKanbanColumns", "true"));
     options.DefaultPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .Build();
 });
 
-// --------------------- Swagger ---------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -171,7 +173,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// --------------------- Logging ---------------------
+
 builder.Services.AddLogging(logging =>
 {
     logging.AddConsole();
@@ -180,17 +182,17 @@ builder.Services.AddLogging(logging =>
 });
 
 
-// --------------------- App ---------------------
+
 var app = builder.Build();
 
-// Créer dossier Uploads si non existant
+
 var uploadsDirectory = Path.Combine(app.Environment.WebRootPath ?? "wwwroot", "Uploads");
 if (!Directory.Exists(uploadsDirectory))
 {
     Directory.CreateDirectory(uploadsDirectory);
 }
 
-// Dev tools
+
 if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
 {
     app.UseSwagger();
@@ -198,14 +200,13 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Docker"))
     app.UseDeveloperExceptionPage();
 }
 
-// Middlewares
 app.UseCors("AllowAllOrigins");
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-// Logging Middleware
+
 app.Use(async (context, next) =>
 {
     var logger = context.RequestServices.GetService<ILogger<Program>>();

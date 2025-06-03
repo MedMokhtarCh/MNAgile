@@ -4,21 +4,45 @@ import {
   Button, TextField, Alert, Typography, Box, IconButton, Checkbox, FormControlLabel
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { styled } from '@mui/system';
+import { styled, keyframes } from '@mui/system';
 import logo from '../assets/logo.png';
 import heroImage from '../assets/hero.png';
 import { useAuth } from '../contexts/AuthContext';
 import { useSelector } from 'react-redux';
 
+// Animation keyframes
+const slideInFromTop = keyframes`
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+`;
+
+const pulse = keyframes`
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+`;
+
 const AuthContainer = styled(Box)({
   display: 'flex',
-  height: '100vh',
+  minHeight: '100vh',
   overflow: 'hidden',
   position: 'relative',
 });
 
 const BackButton = styled(IconButton)({
-  position: 'absolute',
+  position: 'fixed',
   top: 20,
   left: 20,
   backgroundColor: 'rgba(255, 255, 255, 0.8)',
@@ -28,13 +52,17 @@ const BackButton = styled(IconButton)({
 });
 
 const FormSide = styled(Box)({
-  width: '50%',
+  width: '43%',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
-  justifyContent: 'center',
   padding: '40px',
   backgroundColor: '#fff',
+  overflowY: 'auto',
+  minHeight: '100vh',
+  scrollbarWidth: 'none',
+  '&::-webkit-scrollbar': { display: 'none' },
+  msOverflowStyle: 'none',
 });
 
 const LogoContainer = styled(Box)({
@@ -46,6 +74,7 @@ const LogoContainer = styled(Box)({
 const FormContainer = styled(Box)({
   width: '480px',
   maxWidth: '90%',
+  paddingBottom: '40px',
 });
 
 const StyledButton = styled(Button)({
@@ -60,20 +89,33 @@ const StyledButton = styled(Button)({
 
 const StyledTextField = styled(TextField)({
   marginBottom: 24,
-  '& .MuiOutlinedInput-root': { borderRadius: 8, '&:hover': { '& .MuiOutlinedInput-notchedOutline': { borderColor: '#5B9BD5' } } },
+  '& .MuiOutlinedInput-root': { 
+    borderRadius: 8, 
+    '&:hover': { 
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#5B9BD5' } 
+    } 
+  },
   '& .MuiOutlinedInput-notchedOutline': { borderWidth: '1.5px' },
   '& .MuiInputLabel-root': { color: '#2c4b6f' },
   '& .MuiInputBase-input': { padding: '16px' },
 });
 
 const HeroSide = styled(Box)({
-  width: '50%',
+  width: '44%',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'space-between',
   background: '#EBF5FB',
   color: '#1A237E',
   padding: '40px',
+  position: 'fixed',
+  right: 0,
+  top: 0,
+  bottom: 0,
+  overflow: 'hidden',
+  scrollbarWidth: 'none',
+  '&::-webkit-scrollbar': { display: 'none' },
+  msOverflowStyle: 'none',
 });
 
 const HeroTitle = styled(Typography)({
@@ -89,19 +131,21 @@ const HeroImageContainer = styled(Box)({
   justifyContent: 'center',
   alignItems: 'center',
   flexGrow: 1,
-  padding: '20px 0',
+  padding: '10px 0',
+  height: 'calc(100vh - 300px)',
+  minHeight: '300px',
 });
 
 const HeroImg = styled('img')({
   maxWidth: '85%',
-  maxHeight: '60vh',
+  maxHeight: '100%',
   objectFit: 'contain',
   filter: 'drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.15))',
 });
 
 const HeroFooter = styled(Box)({
   textAlign: 'center',
-  padding: '20px 0',
+  padding: '10px 0',
 });
 
 const FormTitle = styled(Typography)({
@@ -137,6 +181,13 @@ const ForgotPasswordButton = styled(Button)({
   '&:hover': { backgroundColor: 'rgba(27, 94, 182, 0.1)' },
 });
 
+const SignUpButton = styled(Button)({
+  color: '#1A237E',
+  textTransform: 'none',
+  fontWeight: 600,
+  '&:hover': { backgroundColor: 'rgba(27, 94, 182, 0.1)' },
+});
+
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [rememberMe, setRememberMe] = useState(false);
@@ -163,8 +214,11 @@ const Login = () => {
   };
 
   const handleForgotPassword = () => {
-    // TODO: Implement forgot password functionality
     alert('Fonctionnalité "Mot de passe oublié" non implémentée.');
+  };
+
+  const handleSignUp = () => {
+    navigate('/subscribe');
   };
 
   const validateForm = () => {
@@ -247,6 +301,15 @@ const Login = () => {
             <StyledButton type="submit" fullWidth variant="contained" color="primary" disabled={loading}>
               {loading ? 'Connexion...' : 'Se connecter'}
             </StyledButton>
+
+            <Box sx={{ mt: 2, textAlign: 'center', pb: 4 }}>
+              <Typography variant="body2" color="#5c7999">
+                Vous n'avez pas de compte ? {' '}
+                <SignUpButton onClick={handleSignUp}>
+                  Créer un compte
+                </SignUpButton>
+              </Typography>
+            </Box>
           </form>
         </FormContainer>
       </FormSide>

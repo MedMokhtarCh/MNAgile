@@ -1,0 +1,101 @@
+@startuml
+!define RECTANGLE class
+skinparam monochrome true
+skinparam defaultFontSize 14
+skinparam sequenceMessageAlign center
+skinparam sequenceBoxPadding 20
+skinparam sequenceLifeLineBorderThickness 1.5
+skinparam sequenceActorBorderThickness 1.5
+skinparam sequenceParticipantBorderThickness 1.5
+skinparam dpi 150
+
+actor Utilisateur
+participant "ContrôleurTâches" as Contrôleur
+participant "ServiceTâches" as Service
+participant "ServiceProjetClient" as ProjetClient
+participant "ServiceColonnesKanban" as ColonnesKanban
+participant "ContexteBD" as Contexte
+participant "ColonneKanbanDTO" as ColonneDTO
+participant "Tâche" as Tâche
+participant "TâcheDTO" as TâcheDTO
+participant "ColonneKanban" as ColonneKanban
+
+Utilisateur -> Contrôleur : PATCH /api/tasks/{id}/status (TaskStatusRequest)
+activate Contrôleur
+
+alt Utilisateur non authentifié
+  Contrôleur --> Utilisateur : 401 Non autorisé
+else Utilisateur authentifié
+  Contrôleur -> Contrôleur : Extraire userId depuis JWT
+  alt userId invalide
+    Contrôleur --> Utilisateur : 401 Non autorisé
+  else userId valide
+    Contrôleur -> Service : UpdateTaskStatusAsync(id, request, userId)
+    activate Service
+
+    Service -> ProjetClient : Vérifier si peut déplacer tâche (CanMoveTaskAsync(projectId, userId, id))
+    activate ProjetClient
+    ProjetClient --> Service : vrai
+    deactivate ProjetClient
+    note right : Vérifier la politique CanMoveTasks
+
+    alt Non autorisé
+      Service -> ProjetClient : CanMoveTaskAsync(projectId, userId, id)
+      activate ProjetClient
+      ProjetClient --> Service : faux
+      deactivate ProjetClient
+      Service --> Contrôleur : Lever InvalidOperationException
+      Contrôleur --> Utilisateur : 403 Interdit
+    else Autorisé
+      Service -> Contexte : Trouver(Tâche, id)
+      activate Contexte
+      Contexte --> Service : Tâche
+      deactivate Contexte
+
+      alt Tâche non trouvée
+        Service -> Contexte : Trouver(Tâche, id)
+        activate Contexte
+        Contexte --> Service : nul
+        deactivate Contexte
+        Service --> Contrôleur : Lever InvalidOperationException
+        Contrôleur --> Utilisateur : 404 Non trouvé
+      else Tâche trouvée
+        Service -> ColonnesKanban : ObtenirColonnesParProjetAsync(projectId)
+        activate ColonnesKanban
+        ColonnesKanban --> Service : Liste<ColonneKanbanDTO>
+        deactivate ColonnesKanban
+
+        Service -> ColonneDTO : Vérifier Statut dans Liste
+        activate ColonneDTO
+        ColonneDTO --> Service : [Valide]
+        deactivate ColonneDTO
+
+        Service -> ColonneKanban : Valider Statut
+        activate ColonneKanban
+        ColonneKanban --> Service : [Valide]
+        deactivate ColonneKanban
+
+        Service -> Tâche : Mettre à jour Statut, OrdreAffichage
+        activate Tâche
+        Tâche --> Service : [Mis à jour]
+        deactivate Tâche
+
+        Service -> Contexte : Sauvegarder(Tâche)
+        activate Contexte
+        Contexte --> Service : [Enregistré]
+        deactivate Contexte
+
+        Service -> TâcheDTO : Créer(Tâche)
+        activate TâcheDTO
+        TâcheDTO --> Service : TâcheDTO
+        deactivate TâcheDTO
+
+        Service --> Contrôleur : TâcheDTO
+        deactivate Service
+
+        Contrôleur --> Utilisateur : 200 OK (TâcheDTO)
+      end alt
+    end alt
+  end alt
+end alt
+@enduml

@@ -22,66 +22,6 @@ namespace UserService.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("User", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("DateCreated")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<string>("Entreprise")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("FirstName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("JobTitle")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("LastLogin")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LastName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<string>("PasswordHash")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int>("RoleId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RoleId");
-
-                    b.ToTable("Users");
-                });
-
             modelBuilder.Entity("UserService.Models.Claim", b =>
                 {
                     b.Property<int>("Id")
@@ -173,6 +113,96 @@ namespace UserService.Migrations
                             Id = 12,
                             Description = "Permission de supprimer des tâches",
                             Name = "CanDeleteTasks"
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Description = "Permission de communiquer dans les canaux",
+                            Name = "CanCommunicate"
+                        },
+                        new
+                        {
+                            Id = 14,
+                            Description = "Permission de créer et gérer des canaux",
+                            Name = "CanCreateChannel"
+                        },
+                        new
+                        {
+                            Id = 15,
+                            Description = "Permission de voir les backlogs",
+                            Name = "CanViewBacklogs"
+                        },
+                        new
+                        {
+                            Id = 16,
+                            Description = "Permission de créer des backlogs",
+                            Name = "CanCreateBacklogs"
+                        },
+                        new
+                        {
+                            Id = 17,
+                            Description = "Permission de mettre à jour les backlogs",
+                            Name = "CanUpdateBacklogs"
+                        },
+                        new
+                        {
+                            Id = 18,
+                            Description = "Permission de supprimer des backlogs",
+                            Name = "CanDeleteBacklogs"
+                        },
+                        new
+                        {
+                            Id = 19,
+                            Description = "Permission de voir les colonnes Kanban",
+                            Name = "CanViewKanbanColumns"
+                        },
+                        new
+                        {
+                            Id = 20,
+                            Description = "Permission de créer des colonnes Kanban",
+                            Name = "CanCreateKanbanColumns"
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Description = "Permission de mettre à jour les colonnes Kanban",
+                            Name = "CanUpdateKanbanColumns"
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Description = "Permission de supprimer des colonnes Kanban",
+                            Name = "CanDeleteKanbanColumns"
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Description = "Permission de voir les sprints",
+                            Name = "CanViewSprints"
+                        },
+                        new
+                        {
+                            Id = 24,
+                            Description = "Permission de créer des sprints",
+                            Name = "CanCreateSprints"
+                        },
+                        new
+                        {
+                            Id = 25,
+                            Description = "Permission de mettre à jour les sprints",
+                            Name = "CanUpdateSprints"
+                        },
+                        new
+                        {
+                            Id = 26,
+                            Description = "Permission de supprimer des sprints",
+                            Name = "CanDeleteSprints"
+                        },
+                        new
+                        {
+                            Id = 27,
+                            Description = "Permission de déplacer les tâches",
+                            Name = "CanMoveTasks"
                         });
                 });
 
@@ -213,6 +243,106 @@ namespace UserService.Migrations
                         });
                 });
 
+            modelBuilder.Entity("UserService.Models.Subscription", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("EndDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("Subscriptions");
+                });
+
+            modelBuilder.Entity("UserService.Models.User", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("DateCreated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("Entreprise")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("JobTitle")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("LastLogin")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("PhoneNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("RootAdminId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoleId");
+
+                    b.HasIndex("RootAdminId");
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("UserService.Models.UserClaim", b =>
                 {
                     b.Property<int>("UserId")
@@ -228,7 +358,18 @@ namespace UserService.Migrations
                     b.ToTable("UserClaims");
                 });
 
-            modelBuilder.Entity("User", b =>
+            modelBuilder.Entity("UserService.Models.Subscription", b =>
+                {
+                    b.HasOne("UserService.Models.User", "User")
+                        .WithOne("Subscription")
+                        .HasForeignKey("UserService.Models.Subscription", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("UserService.Models.User", b =>
                 {
                     b.HasOne("UserService.Models.Role", "Role")
                         .WithMany("Users")
@@ -236,7 +377,14 @@ namespace UserService.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("UserService.Models.User", "RootAdmin")
+                        .WithMany()
+                        .HasForeignKey("RootAdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Role");
+
+                    b.Navigation("RootAdmin");
                 });
 
             modelBuilder.Entity("UserService.Models.UserClaim", b =>
@@ -247,7 +395,7 @@ namespace UserService.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("User", "User")
+                    b.HasOne("UserService.Models.User", "User")
                         .WithMany("UserClaims")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -258,11 +406,6 @@ namespace UserService.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("User", b =>
-                {
-                    b.Navigation("UserClaims");
-                });
-
             modelBuilder.Entity("UserService.Models.Claim", b =>
                 {
                     b.Navigation("UserClaims");
@@ -271,6 +414,14 @@ namespace UserService.Migrations
             modelBuilder.Entity("UserService.Models.Role", b =>
                 {
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("UserService.Models.User", b =>
+                {
+                    b.Navigation("Subscription")
+                        .IsRequired();
+
+                    b.Navigation("UserClaims");
                 });
 #pragma warning restore 612, 618
         }

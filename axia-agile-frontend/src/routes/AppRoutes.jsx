@@ -24,6 +24,8 @@ import ClaimManagement from "../pages/ClaimManagement";
 import LoadingPage from "../pages/LoadingPage";
 import SuperadminManagement from "../pages/SuperadminManagement";
 import MeetingScheduler from "../pages/MeetingScheduler";
+import Subscribe from "../pages/Subscribe";
+import SuperAdminSubscriptionManagement from "../pages/SuperAdminSubscriptionManagement";
 
 const AppRoutes = () => {
   return (
@@ -31,6 +33,7 @@ const AppRoutes = () => {
       {/* Public routes - accessible to everyone */}
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/Subscribe" element={<Subscribe />} />
 
       {/* Protected profile route - any authenticated user */}
       <Route element={<ProtectedRoute />}>
@@ -51,6 +54,8 @@ const AppRoutes = () => {
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/AdminManagement" element={<AdminManagement />} />
           <Route path="/SuperAdminStatistics" element={<SuperAdminStatistics />} />
+           <Route path="/SuperAdminSubscriptionManagement" element={<SuperAdminSubscriptionManagement />} />
+          
           <Route path="/SuperadminManagement" element={<SuperadminManagement />} />
           <Route path="/RoleManagement" element={<RoleManagement />} />
           <Route path="/ClaimManagement" element={<ClaimManagement />} />

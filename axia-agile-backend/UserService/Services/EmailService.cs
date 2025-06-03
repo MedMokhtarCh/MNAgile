@@ -25,23 +25,17 @@ namespace UserService.Services
             _fromEmail = _configuration["EmailSettings:FromEmail"];
             _fromName = _configuration["EmailSettings:FromName"];
 
-            // Vérifier que les paramètres sont chargés
-            if (string.IsNullOrEmpty(_smtpHost))
-                _logger.LogError("Hôte SMTP non configuré.");
-            if (string.IsNullOrEmpty(_smtpUsername))
-                _logger.LogError("Nom d'utilisateur SMTP non configuré.");
-            if (string.IsNullOrEmpty(_smtpPassword))
-                _logger.LogError("Mot de passe SMTP non configuré.");
-            if (string.IsNullOrEmpty(_fromEmail))
-                _logger.LogError("Adresse FromEmail non configurée.");
+            if (string.IsNullOrEmpty(_smtpHost)) _logger.LogError("Hôte SMTP non configuré.");
+            if (string.IsNullOrEmpty(_smtpUsername)) _logger.LogError("Nom d'utilisateur SMTP non configuré.");
+            if (string.IsNullOrEmpty(_smtpPassword)) _logger.LogError("Mot de passe SMTP non configuré.");
+            if (string.IsNullOrEmpty(_fromEmail)) _logger.LogError("Adresse FromEmail non configurée.");
         }
 
         public async Task<bool> SendAccountCreationEmailAsync(string toEmail, string firstName, string lastName, string password)
         {
             try
             {
-                _logger.LogInformation($"Tentative d'envoi d'email à {toEmail} depuis {_fromEmail} via SMTP {_smtpHost}:{_smtpPort}");
-
+                _logger.LogInformation($"Tentative d'envoi de l'email de création de compte à {toEmail}.");
                 var smtpClient = new SmtpClient(_smtpHost)
                 {
                     Port = _smtpPort,
@@ -68,20 +62,164 @@ namespace UserService.Services
                 };
 
                 mailMessage.To.Add(toEmail);
-
-                _logger.LogDebug("Connexion au serveur SMTP...");
                 await smtpClient.SendMailAsync(mailMessage);
-                _logger.LogInformation($"Email envoyé avec succès à {toEmail}.");
+                _logger.LogInformation($"Email de création de compte envoyé avec succès à {toEmail}.");
                 return true;
-            }
-            catch (SmtpException ex)
-            {
-                _logger.LogError(ex, $"Erreur SMTP lors de l'envoi de l'email à {toEmail}: {ex.Message}, StatusCode: {ex.StatusCode}");
-                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Erreur inattendue lors de l'envoi de l'email à {toEmail}: {ex.Message}");
+                _logger.LogError(ex, $"Erreur lors de l'envoi de l'email de création de compte à {toEmail}.");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendSubscriptionConfirmationEmailAsync(string toEmail, string firstName, string plan)
+        {
+            try
+            {
+                _logger.LogInformation($"Tentative d'envoi de l'email de confirmation d'abonnement à {toEmail}.");
+                var smtpClient = new SmtpClient(_smtpHost)
+                {
+                    Port = _smtpPort,
+                    Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                    EnableSsl = true,
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(_fromEmail, _fromName),
+                    Subject = "Confirmation de votre demande d'abonnement",
+                    Body = $@"<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                        <h2 style='color: #333;'>Demande d'abonnement reçue</h2>
+                        <p>Bonjour <strong>{firstName}</strong>,</p>
+                        <p>Votre demande d'abonnement <strong>{plan}</strong> a été reçue avec succès. Votre compte est en attente de validation par axiaAgile.</p>
+                        <p>Vous recevrez un E-mail dès que votre abonnement sera validé.</p>
+                        <p>Cordialement,<br/>L'équipe Support axiaAgile</p>
+                    </div>",
+                    IsBodyHtml = true,
+                };
+
+                mailMessage.To.Add(toEmail);
+                await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email de confirmation d'abonnement envoyé avec succès à {toEmail}.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erreur lors de l'envoi de l'email de confirmation d'abonnement à {toEmail}.");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendSubscriptionValidatedEmailAsync(string toEmail, string firstName, string plan)
+        {
+            try
+            {
+                _logger.LogInformation($"Tentative d'envoi de l'email de validation d'abonnement à {toEmail}.");
+                var smtpClient = new SmtpClient(_smtpHost)
+                {
+                    Port = _smtpPort,
+                    Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                    EnableSsl = true,
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(_fromEmail, _fromName),
+                    Subject = "Votre abonnement a été validé",
+                    Body = $@"<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                        <h2 style='color: #333;'>Abonnement validé</h2>
+                        <p>Bonjour <strong>{firstName}</strong>,</p>
+                        <p>Votre abonnement <strong>{plan}</strong> a été validé avec succès. Vous pouvez maintenant vous connecter à votre compte.</p>
+                        <p>Cordialement,<br/>L'équipe Support axiaAgile</p>
+                    </div>",
+                    IsBodyHtml = true,
+                };
+
+                mailMessage.To.Add(toEmail);
+                await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email de validation d'abonnement envoyé avec succès à {toEmail}.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erreur lors de l'envoi de l'email de validation d'abonnement à {toEmail}.");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendSubscriptionExpiredEmailAsync(string toEmail, string firstName, string plan)
+        {
+            try
+            {
+                _logger.LogInformation($"Tentative d'envoi de l'email d'expiration d'abonnement à {toEmail}.");
+                var smtpClient = new SmtpClient(_smtpHost)
+                {
+                    Port = _smtpPort,
+                    Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                    EnableSsl = true,
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(_fromEmail, _fromName),
+                    Subject = "Votre abonnement a expiré",
+                    Body = $@"<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                        <h2 style='color: #333;'>Abonnement expiré</h2>
+                        <p>Bonjour <strong>{firstName}</strong>,</p>
+                        <p>Votre abonnement <strong>{plan}</strong> a expiré. Votre compte et tous les comptes associés ont été désactivés.</p>
+                        <p>Veuillez renouveler votre abonnement pour réactiver votre compte.</p>
+                        <p>Cordialement,<br/>L'équipe Support axiaAgile</p>
+                    </div>",
+                    IsBodyHtml = true,
+                };
+
+                mailMessage.To.Add(toEmail);
+                await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email d'expiration d'abonnement envoyé avec succès à {toEmail}.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erreur lors de l'envoi de l'email d'expiration d'abonnement à {toEmail}.");
+                return false;
+            }
+        }
+
+        public async Task<bool> SendSubscriptionRenewedEmailAsync(string toEmail, string id, string plan)
+        {
+            try
+            {
+                _logger.LogInformation($"Tentative d'envoi de l'email de renouvellement d'abonnement à {toEmail}.");
+                var smtpClient = new SmtpClient(_smtpHost)
+                {
+                    Port = _smtpPort,
+                    Credentials = new NetworkCredential(_smtpUsername, _smtpPassword),
+                    EnableSsl = true,
+                };
+
+                var mailMessage = new MailMessage
+                {
+                    From = new MailAddress(_fromEmail, _fromName),
+                    Subject = "Votre abonnement a été renouvelé",
+                    Body = $@"<div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 5px;'>
+                        <h2 style='color: #333;'>Abonnement renouvelé</h2>
+                    
+                        <p>Votre abonnement a été renouvelé avec succès. Votre compte est en attente de validation par axiaAgile.</p>
+                        <p>Vous recevrez un autre email une fois que votre abonnement sera validé.</p>
+                        <p>Cordialement,<br/>L'équipe Support axiaAgile</p>
+                    </div>",
+                    IsBodyHtml = true,
+                };
+
+                mailMessage.To.Add(toEmail);
+                await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation($"Email de renouvellement d'abonnement envoyé avec succès à {toEmail}.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Erreur lors de l'envoi de l'email de renouvellement d'abonnement à {toEmail}.");
                 return false;
             }
         }

@@ -27,6 +27,7 @@ import { useAvatar } from '../hooks/useAvatar';
 import { useNotification } from '../hooks/useNotifications';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import { fetchAllTasks, fetchKanbanColumns, createKanbanColumn, updateKanbanColumn, deleteKanbanColumn, createTask, updateTask, deleteTask, clearTasksError, fetchBacklogs } from '../store/slices/taskSlice';
+import { fetchUsers } from '../store/slices/usersSlice';
 import { useAuth } from '../contexts/AuthContext';
 import { projectApi } from '../services/api';
 import { normalizeProject } from '../store/slices/projectsSlice';
@@ -90,6 +91,7 @@ function Kanban() {
 
   // Redux state
   const { tasks, columns, backlogs, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
+  const users = useSelector((state) => state.users.users) || [];
 
   // Local state
   const [project, setProject] = useState(null);
@@ -123,8 +125,10 @@ function Kanban() {
   const [newSubtask, setNewSubtask] = useState('');
   const [editingSubtaskIndex, setEditingSubtaskIndex] = useState(null);
   const [editingSubtaskText, setEditingSubtaskText] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false); 
+  const [columnToDelete, setColumnToDelete] = useState(null); 
 
-  // Drag-and-drop logic
+  // Drag-and-drop 
   const { handleDragStart, handleDragEnd, getActiveTask, getActiveColumn } = useDragAndDrop({
     columns,
     tasks,
@@ -136,32 +140,41 @@ function Kanban() {
     setKanbanError,
   });
 
-  // Map tasks to columns, filtered by backlogFilter
-  const columnsByStatus = columns.reduce((acc, col) => {
-    acc[col.name] = tasks.filter((task) => {
-      const matchesStatus = task.status === col.name;
-      let matchesBacklog = true;
-      if (backlogFilter === 'none') {
-        matchesBacklog = !task.backlogIds || task.backlogIds.length === 0;
-      } else if (backlogFilter !== 'all' && selectedBacklog) {
-        matchesBacklog = task.backlogIds?.includes(parseInt(selectedBacklog.id));
-      }
-      return matchesStatus && matchesBacklog;
-    });
-    return acc;
-  }, {});
 
-  // Filter tasks by user and priority
-  const filteredColumns = columns.reduce((acc, col) => {
-    acc[col.name] = (columnsByStatus[col.name] || []).filter((task) => {
-      const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
-      const matchesPriority = selectedPriority ? normalizePriority(task.priority).toLowerCase() === selectedPriority.toLowerCase() : true;
-      return matchesUser && matchesPriority;
-    });
-    return acc;
-  }, {});
+  // Map tasks to columns, filtered by user (created or assigned), backlogFilter
+const columnsByStatus = columns.reduce((acc, col) => {
+  acc[col.name] = tasks.filter((task) => {
+    // Check if the task was created by the authenticated user or the user is assigned
+    const isCreatedByUser = task.createdByUserId === currentUser.id;
+    const isAssignedToUser = task.assignedUserIds?.includes(currentUser.id);
+    const matchesUserCriteria = isCreatedByUser || isAssignedToUser;
 
-  // Fetch project, tasks, columns, and backlogs
+    // Check status and backlog filter
+    const matchesStatus = task.status === col.name;
+    let matchesBacklog = true;
+    if (backlogFilter === 'none') {
+      matchesBacklog = !task.backlogIds || task.backlogIds.length === 0;
+    } else if (backlogFilter !== 'all' && selectedBacklog) {
+      matchesBacklog = task.backlogIds?.includes(parseInt(selectedBacklog.id));
+    }
+
+    return matchesUserCriteria && matchesStatus && matchesBacklog;
+  });
+  return acc;
+}, {});
+
+// Filter tasks by selected user and priority
+const filteredColumns = columns.reduce((acc, col) => {
+  acc[col.name] = (columnsByStatus[col.name] || []).filter((task) => {
+    const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
+    const matchesPriority = selectedPriority
+      ? normalizePriority(task.priority).toLowerCase() === selectedPriority.toLowerCase()
+      : true;
+    return matchesUser && matchesPriority;
+  });
+  return acc;
+}, {});
+  // Fetch project, tasks, columns, backlogs, and users
   const loadData = useCallback(async () => {
     setLoading(true);
     setKanbanError('');
@@ -173,10 +186,33 @@ function Kanban() {
       const normalizedProject = normalizeProject(projectResponse.data);
       setProject(normalizedProject);
 
+      if (!users || users.length === 0) {
+        try {
+          await dispatch(fetchUsers()).unwrap();
+        } catch (userErr) {
+          console.error('[loadData] Failed to fetch users:', userErr);
+        }
+      }
+
       await Promise.all([
-        dispatch(fetchAllTasks({ projectId: parseInt(projectId) })).unwrap(),
-        dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) })).unwrap(),
-        dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap(),
+        dispatch(fetchAllTasks({ projectId: parseInt(projectId) }))
+          .unwrap()
+          .catch((err) => {
+            console.error('[loadData] Failed to fetch tasks:', err);
+            return [];
+          }),
+        dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }))
+          .unwrap()
+          .catch((err) => {
+            console.error('[loadData] Failed to fetch columns:', err);
+            return [];
+          }),
+        dispatch(fetchBacklogs({ projectId: parseInt(projectId) }))
+          .unwrap()
+          .catch((err) => {
+            console.error('[loadData] Failed to fetch backlogs:', err);
+            return [];
+          }),
       ]);
 
       const projectUserEmails = [
@@ -188,13 +224,16 @@ function Kanban() {
         ...(normalizedProject.observers || []),
       ].filter((email, index, self) => email && self.indexOf(email) === index && typeof email === 'string' && email.includes('@'));
 
-      const projectUsersData = projectUserEmails.map((email) => ({
-        email,
-        firstName: '',
-        lastName: '',
-        name: email,
-      }));
+      const projectUsersData = projectUserEmails
+        .map((email) => {
+          const user = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+          return user
+            ? { id: user.id, email: user.email, firstName: user.firstName || '', lastName: user.lastName || '', name: user.firstName ? `${user.firstName} ${user.lastName}` : email }
+            : { id: null, email, firstName: '', lastName: '', name: email };
+        })
+        .filter((user) => user.email);
 
+      console.log('[loadData] projectUsersData:', projectUsersData);
       setProjectUsers(projectUsersData);
     } catch (err) {
       console.error('[loadData] Error:', err);
@@ -210,7 +249,7 @@ function Kanban() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, navigate, dispatch]);
+  }, [projectId, navigate, dispatch, users]);
 
   useEffect(() => {
     loadData();
@@ -258,28 +297,6 @@ function Kanban() {
   const handleCancelSubtaskEdit = () => {
     setEditingSubtaskIndex(null);
     setEditingSubtaskText('');
-  };
-
-  // Notify users of task creation
-  const createTaskNotification = (userEmail, taskTitle, taskId) => {
-    createNotification({
-      recipient: userEmail,
-      type: 'task',
-      message: `Vous avez été assigné à la tâche "${taskTitle}" dans le projet "${project?.title || 'Projet inconnu'}".`,
-      sender: { name: currentUser.name || currentUser.email, avatar: null },
-      metadata: { taskId },
-    });
-  };
-
-  // Notify users of task updates
-  const updateTaskNotification = (userEmail, taskTitle, taskId) => {
-    createNotification({
-      recipient: userEmail,
-      type: 'task',
-      message: `La tâche "${taskTitle}" a été mise à jour dans le projet "${project?.title || 'Projet inconnu'}".`,
-      sender: { name: currentUser.name || currentUser.email, avatar: null },
-      metadata: { taskId },
-    });
   };
 
   // Handle task creation dialog
@@ -343,22 +360,29 @@ function Kanban() {
     setDialogOpen(true);
   };
 
-  // Handle delete column
-  const handleDeleteColumn = async (columnId) => {
+  // Handle delete column with confirmation
+  const handleDeleteColumn = (columnId) => {
+    setColumnToDelete(columnId);
+    setConfirmDeleteOpen(true);
+  };
+
+  const confirmDeleteColumn = async () => {
     try {
-    
-      const column = columns.find((col) => col.id === columnId);
+      const column = columns.find((col) => col.id === columnToDelete);
       if (column) {
         const tasksInColumn = tasks.filter((task) => task.status === column.name);
         for (const task of tasksInColumn) {
           await dispatch(deleteTask(task.id)).unwrap();
         }
       }
-     
-      await dispatch(deleteKanbanColumn({ columnId })).unwrap();
+      await dispatch(deleteKanbanColumn({ columnId: columnToDelete })).unwrap();
+      setConfirmDeleteOpen(false);
+      setColumnToDelete(null);
     } catch (err) {
-      console.error('[handleDeleteColumn] Error:', err);
+      console.error('[confirmDeleteColumn] Error:', err);
       setKanbanError('Erreur lors de la suppression de la colonne.');
+      setConfirmDeleteOpen(false);
+      setColumnToDelete(null);
     }
   };
 
@@ -404,123 +428,182 @@ function Kanban() {
   };
 
   // Create task
-// In Kanban.js, modify handleCreateTask and handleUpdateTask for clarity
-const handleCreateTask = async () => {
-  if (!currentColumn || !formValues.title || !projectId) {
-    setKanbanError('Le titre, la colonne et l\'ID du projet sont requis.');
-    return;
-  }
-  setIsCreatingTask(true);
-  setKanbanError('');
-  try {
-    const taskData = {
-      title: formValues.title,
-      description: formValues.description,
-      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [], // Explicitly optional
-      priority: normalizePriority(formValues.priority),
-      startDate: parseDate(formValues.startDate),
-      endDate: parseDate(formValues.endDate),
-      status: currentColumn || 'À faire',
-      projectId: parseInt(projectId),
-      backlogIds: formValues.backlogIds || [],
-      subtasks: subtasks.map(subtask => subtask.title),
-      metadata: { createdIn: 'kanban' },
-    };
+  const handleCreateTask = async () => {
+    if (!currentColumn || !formValues.title || !projectId) {
+      setKanbanError('Le titre, la colonne et l\'ID du projet sont requis.');
+      return;
+    }
 
-    const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
+    const validColumn = columns.find(col => col.name === currentColumn);
+    if (!validColumn) {
+      setKanbanError(`Le statut "${currentColumn}" n'est pas valide pour ce projet.`);
+      return;
+    }
 
-    // Notify assigned users (if any)
-    formValues.assignedUsers.forEach((user) => {
-      if (user.email) createTaskNotification(user.email, formValues.title, result.id);
-    });
+    setIsCreatingTask(true);
+    setKanbanError('');
+    try {
+      const taskData = {
+        title: formValues.title,
+        description: formValues.description,
+        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+        priority: normalizePriority(formValues.priority),
+        startDate: parseDate(formValues.startDate),
+        endDate: parseDate(formValues.endDate),
+        status: currentColumn,
+        projectId: parseInt(projectId),
+        backlogIds: formValues.backlogIds.filter(id => id),
+        subtasks: subtasks.map(subtask => subtask.title).filter(title => title.trim()),
+        metadata: { createdIn: 'kanban' },
+        displayOrder: formValues.displayOrder || 0,
+      };
 
-    // Reset form and update state
-    setFormValues({
-      title: '',
-      description: '',
-      assignedUsers: [], // Reset to empty array
-      priority: 'MEDIUM',
-      startDate: '',
-      endDate: '',
-      attachments: [],
-      backlogIds: [],
-    });
-    setSubtasks([]);
-    setEditingTask({ ...result, attachments: result.attachments || [] });
-    setDialogMode('view');
-    setIsEditing(false);
-    setDialogOpen(false); // Close dialog after successful creation
-  } catch (err) {
-    console.error('[handleCreateTask] Error:', err);
-    const errorMessage =
-      typeof err === 'string' ? err :
-      err.message ||
-      err.response?.data?.message ||
-      err.response?.data?.title ||
-      (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-      'Erreur lors de la création de la tâche';
-    setKanbanError(errorMessage);
-  } finally {
-    setIsCreatingTask(false);
-  }
-};
+      console.log('[handleCreateTask] Sending taskData:', taskData);
 
-const handleUpdateTask = async () => {
-  if (!editingTask || !formValues.title || !projectId) {
-    setKanbanError('Le titre et l\'ID du projet sont requis.');
-    return;
-  }
-  setIsCreatingTask(true);
-  setKanbanError('');
-  try {
-    const taskData = {
-      title: formValues.title,
-      description: formValues.description,
-      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [], // Explicitly optional
-      priority: normalizePriority(formValues.priority),
-      startDate: parseDate(formValues.startDate),
-      endDate: parseDate(formValues.endDate),
-      status: currentColumn || editingTask.status || 'À faire',
-      projectId: parseInt(projectId),
-      backlogIds: formValues.backlogIds || [],
-      subtasks: subtasks.map(subtask => subtask.title),
-      metadata: { createdIn: 'kanban' },
-    };
+      const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
 
-    const result = await dispatch(updateTask({ taskId: editingTask.id, taskData, attachments: formValues.attachments })).unwrap();
+      // Notify all assigned users
+      for (const user of formValues.assignedUsers) {
+        if (user.email) {
+          try {
+            const userId = projectUsers.find(u => u.email === user.email)?.id;
+            console.log('[handleCreateTask] Notifying user:', { email: user.email, userId });
+            if (!userId) {
+              console.warn(`No user ID found for email: ${user.email}. Skipping notification.`);
+              continue;
+            }
+            await createNotification({
+              userId,
+              type: 'task',
+              message: `Vous avez été assigné à la tâche "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+              relatedEntityType: 'Task',
+              relatedEntityId: result.id,
+            });
+            console.log(`Notification sent to ${user.email} (ID: ${userId}) for task ${result.id}`);
+          } catch (error) {
+            console.error(`Failed to send notification to ${user.email}:`, error);
+            setKanbanError(`Erreur lors de l'envoi de la notification à ${user.email}: ${error.message}`);
+          }
+        }
+      }
 
-    formValues.assignedUsers.forEach((user) => {
-      if (user.email) updateTaskNotification(user.email, formValues.title, result.id);
-    });
-    setFormValues({
-      title: result.title || '',
-      description: result.description || '',
-      assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
-      priority: normalizePriority(result.priority),
-      startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
-      endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
-      attachments: [],
-      backlogIds: result.backlogIds || [],
-    });
-    setSubtasks(result.subtasks?.map(title => ({ title, completed: false })) || []);
-    setEditingTask({ ...result, attachments: result.attachments || [] });
-    setDialogMode('view');
-    setIsEditing(false);
-  } catch (err) {
-    console.error('[handleUpdateTask] Error:', err);
-    const errorMessage =
-      typeof err === 'string' ? err :
-      err.message ||
-      err.errors?.join(', ') ||
-      err.response?.data?.message ||
-      err.response?.data?.title ||
-      (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-      'Erreur lors de la mise à jour de la tâche';
-    setKanbanError(errorMessage);
-  } finally {
-    setIsCreatingTask(false);
-  }
-};
+      window.dispatchEvent(new Event('newNotification'));
+
+      setFormValues({
+        title: '',
+        description: '',
+        assignedUsers: [],
+        priority: 'MEDIUM',
+        startDate: '',
+        endDate: '',
+        attachments: [],
+        backlogIds: [],
+      });
+      setSubtasks([]);
+      setEditingTask({ ...result, attachments: result.attachments || [] });
+      setDialogMode('view');
+      setIsEditing(false);
+      setDialogOpen(false);
+    } catch (err) {
+      console.error('[handleCreateTask] Error:', err);
+      const errorMessage =
+        typeof err === 'string' ? err :
+        err.message ||
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
+        'Erreur lors de la création de la tâche';
+      setKanbanError(errorMessage);
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
+
+  // Update task
+  const handleUpdateTask = async () => {
+    if (!editingTask || !formValues.title || !projectId) {
+      setKanbanError('Le titre et l\'ID du projet sont requis.');
+      return;
+    }
+    setIsCreatingTask(true);
+    setKanbanError('');
+    try {
+      const taskData = {
+        title: formValues.title,
+        description: formValues.description,
+        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [],
+        priority: normalizePriority(formValues.priority),
+        startDate: parseDate(formValues.startDate),
+        endDate: parseDate(formValues.endDate),
+        status: currentColumn || editingTask.status || 'À faire',
+        projectId: parseInt(projectId),
+        backlogIds: formValues.backlogIds || [],
+        subtasks: subtasks.map(subtask => subtask.title),
+        metadata: { createdIn: 'kanban' },
+      };
+
+      const previousAssignees = editingTask.assignedUserEmails || [];
+      const newAssignees = formValues.assignedUsers.map(user => user.email).filter(Boolean);
+      const newlyAssignedUsers = newAssignees.filter(email => !previousAssignees.includes(email));
+
+      const result = await dispatch(updateTask({ taskId: editingTask.id, taskData, attachments: formValues.attachments })).unwrap();
+
+      // Notify all assigned users (not just newly assigned ones)
+      for (const user of formValues.assignedUsers) {
+        if (user.email) {
+          try {
+            const userId = projectUsers.find(u => u.email === user.email)?.id;
+            console.log('[handleUpdateTask] Notifying user:', { email: user.email, userId });
+            if (!userId) {
+              console.warn(`No user ID found for email: ${user.email}. Skipping notification.`);
+              continue;
+            }
+            await createNotification({
+              userId,
+              type: 'task',
+              message: `La tâche "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}" a été mise à jour et vous y êtes assigné.`,
+              relatedEntityType: 'Task',
+              relatedEntityId: result.id,
+            });
+            console.log(`Notification sent to ${user.email} (ID: ${userId}) for task ${result.id}`);
+          } catch (error) {
+            console.error(`Failed to send notification to ${user.email}:`, error);
+            setKanbanError(`Erreur lors de l'envoi de la notification à ${user.email}: ${error.message}`);
+          }
+        }
+      }
+
+      window.dispatchEvent(new Event('newNotification'));
+
+      setFormValues({
+        title: result.title || '',
+        description: result.description || '',
+        assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
+        priority: normalizePriority(result.priority),
+        startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
+        endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
+        attachments: [],
+        backlogIds: result.backlogIds || [],
+      });
+      setSubtasks(result.subtasks?.map(title => ({ title, completed: false })) || []);
+      setEditingTask({ ...result, attachments: result.attachments || [] });
+      setDialogMode('view');
+      setIsEditing(false);
+    } catch (err) {
+      console.error('[handleUpdateTask] Error:', err);
+      const errorMessage =
+        typeof err === 'string' ? err :
+        err.message ||
+        err.errors?.join(', ') ||
+        err.response?.data?.message ||
+        err.response?.data?.title ||
+        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
+        'Erreur lors de la mise à jour de la tâche';
+      setKanbanError(errorMessage);
+    } finally {
+      setIsCreatingTask(false);
+    }
+  };
 
   // Handle dialog close
   const handleDialogClose = () => {
@@ -609,6 +692,7 @@ const handleUpdateTask = async () => {
     loadData();
   };
 
+  // Render logic
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -639,19 +723,22 @@ const handleUpdateTask = async () => {
         <Container maxWidth={false} sx={{ mt: 4, mb: 6 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <PageTitle>
-              Tableau Kanban pour le projet {project.title}
+              Tableau Kanban pour le projet : {project.title || 'Projet sans titre'}
             </PageTitle>
-            <StyledButton
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => {
-                setDialogMode('addColumn');
-                setFormValues((prev) => ({ ...prev, columnName: '' }));
-                setDialogOpen(true);
-              }}
-            >
-              Ajouter une colonne
-            </StyledButton>
+        {currentUser?.claims?.includes('CanCreateKanbanColumns') && (
+              <StyledButton
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setDialogMode('addColumn');
+                  setFormValues((prev) => ({ ...prev, columnName: '' }));
+                  setDialogOpen(true);
+                }}
+                disabled={columns.length === 0}
+              >
+                Ajouter une colonne
+              </StyledButton>
+            )}
           </Box>
           {(kanbanError || taskError) && (
             <Alert
@@ -666,6 +753,11 @@ const handleUpdateTask = async () => {
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
               <CircularProgress size={40} />
             </Box>
+          )}
+          {columns.length === 0 && (
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Aucune colonne trouvée. Ajoutez une colonne pour commencer à créer des tâches.
+            </Alert>
           )}
           <KanbanFilters
             backlogs={backlogs}
@@ -714,7 +806,7 @@ const handleUpdateTask = async () => {
                   spacing={2}
                   sx={{
                     flexWrap: 'nowrap',
-                    minWidth: `${columns.length * 300}px`,
+                    minWidth: `${columns.length * 300 || 300}px`,
                     pb: 2,
                     alignItems: 'flex-start',
                   }}
@@ -1217,6 +1309,39 @@ const handleUpdateTask = async () => {
                   {isCreatingTask ? 'Traitement...' : dialogMode === 'addColumn' ? 'Créer' : dialogMode === 'editColumn' ? 'Modifier' : isEditing ? 'Mettre à jour la tâche' : 'Créer la tâche'}
                 </StyledButton>
               )}
+            </DialogActions>
+          </StyledDialog>
+          {/* Confirmation Dialog for Deleting Column */}
+          <StyledDialog
+            open={confirmDeleteOpen}
+            onClose={() => setConfirmDeleteOpen(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle sx={{ fontWeight: 700, fontSize: '1.5rem' }}>
+              Confirmer la suppression de la colonne
+            </DialogTitle>
+            <DialogContent>
+              <Typography>
+                Êtes-vous sûr de vouloir supprimer cette colonne ? Toutes les tâches associées seront également supprimées.
+              </Typography>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 3, gap: 2 }}>
+              <StyledButton
+                onClick={() => setConfirmDeleteOpen(false)}
+                variant="outlined"
+                sx={{ bgcolor: 'white', borderRadius: 1 }}
+              >
+                Annuler
+              </StyledButton>
+              <StyledButton
+                onClick={confirmDeleteColumn}
+                variant="contained"
+                color="error"
+                sx={{ borderRadius: 1 }}
+              >
+                Supprimer
+              </StyledButton>
             </DialogActions>
           </StyledDialog>
         </Container>

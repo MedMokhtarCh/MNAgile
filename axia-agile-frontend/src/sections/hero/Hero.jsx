@@ -1,9 +1,16 @@
 import React from 'react';
 import { Button } from 'antd';
+import { useNavigate } from 'react-router-dom'; // Importer useNavigate
 import "./hero.css"; 
 import HeroImage from "../../assets/Hero.png"; 
 
 const Hero = () => {
+  const navigate = useNavigate(); // Hook pour gérer la navigation
+
+  const handleDiscoverClick = () => {
+    navigate('/login'); // Rediriger vers la page de connexion
+  };
+
   return (
     <section className="hero">
       <div className="hero-container">
@@ -15,8 +22,9 @@ const Hero = () => {
             organiser leur travail et à atteindre leurs objectifs efficacement.
           </p>
        
-          
-          <Button className="btn-pro">Découvrez Axia-Agile</Button>
+          <Button className="btn-pro" onClick={handleDiscoverClick}>
+            Découvrez Axia-Agile
+          </Button>
         </div>
     
         <div className="hero-image">

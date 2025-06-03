@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { Select, Card, Row, Col, Typography, Progress, Space } from 'antd';
+import { Select, Card, Row, Col, Typography, Progress, Space, Tag } from 'antd';
 import {
   ProjectOutlined,
   TeamOutlined,
@@ -22,6 +21,12 @@ import { fetchProjects } from '../store/slices/projectsSlice';
 import { fetchSprints, fetchAllTasks, fetchBacklogs } from '../store/slices/taskSlice';
 import PageTitle from '../components/common/PageTitle';
 import { useAuth } from '../contexts/AuthContext';
+import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+import utc from 'dayjs/plugin/utc';
+
+dayjs.extend(isBetween);
+dayjs.extend(utc);
 
 ChartJS.register(
   CategoryScale,
@@ -126,9 +131,9 @@ const ProjectsDashboard = () => {
         totalBacklog: 0,
         scrumData: [],
         burndownData: {
-          labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
-          remaining: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-          ideal: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+          labels: [],
+          remaining: [],
+          ideal: [],
         },
       };
     }
@@ -147,74 +152,85 @@ const ProjectsDashboard = () => {
     const totalBacklog = backlogs.length;
 
     // Prepare scrum data for sprints
-    const scrumData = sprints.map((sprint) => ({
-      name: sprint.name,
-      totalTasks: projectTasks.filter((task) => String(task.sprintId) === String(sprint.id)).length,
-      completedTasks: projectTasks.filter((task) => String(task.sprintId) === String(sprint.id) && task.status === 'done').length,
-    }));
+    const scrumData = sprints
+      .filter((sprint) => sprint.startDate && sprint.endDate && dayjs(sprint.startDate).isValid() && dayjs(sprint.endDate).isValid())
+      .map((sprint) => {
+        const sprintTasks = projectTasks.filter((task) => String(task.sprintId) === String(sprint.id));
+        return {
+          name: sprint.name,
+          totalTasks: sprintTasks.length,
+          completedTasks: sprintTasks.filter((task) => task.status === 'Terminé').length,
+          startDate: sprint.startDate,
+          endDate: sprint.endDate,
+          isActive: dayjs().utc().isBetween(dayjs(sprint.startDate).utc(), dayjs(sprint.endDate).utc(), null, '[]'),
+          isCompleted: dayjs().utc().isAfter(dayjs(sprint.endDate).utc()),
+        };
+      });
 
-    // Generate burndown chart data for the latest sprint
+    // Generate burndown chart data for the active sprint or most recent sprint
     let burndownData = {
-      labels: ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7', 'Jour 8', 'Jour 9', 'Jour 10'],
-      remaining: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      ideal: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      labels: [],
+      remaining: [],
+      ideal: [],
+      totalPoints: 0,
+      sprintName: '',
     };
 
-    if (sprints.length > 0) {
-      const latestSprint = sprints[sprints.length - 1];
-      const sprintTasks = projectTasks.filter((task) => String(task.sprintId) === String(latestSprint.id));
-      console.log('[getProjectData] latestSprint:', latestSprint);
+    // Find active sprint or most recent sprint
+    let targetSprint = scrumData.find((sprint) =>
+      sprint.startDate &&
+      sprint.endDate &&
+      dayjs(sprint.startDate).isValid() &&
+      dayjs(sprint.endDate).isValid() &&
+      dayjs().utc().isBetween(dayjs(sprint.startDate).utc(), dayjs(sprint.endDate).utc(), null, '[]')
+    );
+
+    if (!targetSprint) {
+      // Fallback to most recent sprint
+      targetSprint = scrumData.sort((a, b) => dayjs(b.endDate).utc().diff(dayjs(a.endDate).utc()))[0];
+    }
+
+    if (targetSprint) {
+      const sprintDuration = dayjs(targetSprint.endDate).utc().diff(dayjs(targetSprint.startDate).utc(), 'day') + 1;
+      const sprintTasks = projectTasks.filter((task) => String(task.sprintId) === String(targetSprint.id));
+      console.log('[getProjectData] targetSprint:', targetSprint);
       console.log('[getProjectData] sprintTasks:', sprintTasks);
-
-      // Calculate sprint duration
-      let sprintDays = 10; // Default to 10 days if dates are unavailable
-      let startDate, endDate;
-      if (latestSprint.startDate && latestSprint.endDate) {
-        startDate = new Date(latestSprint.startDate);
-        endDate = new Date(latestSprint.endDate);
-        const timeDiff = endDate - startDate;
-        sprintDays = Math.ceil(timeDiff / (1000 * 60 * 60 * 24)) + 1; // Days including start and end
-        console.log('[getProjectData] sprintDays:', sprintDays, 'startDate:', startDate, 'endDate:', endDate);
-      } else {
-        console.warn('[getProjectData] Missing startDate or endDate, using default 10 days');
-      }
-
-      // Ensure sprintDays is at least 1
-      sprintDays = Math.max(sprintDays, 1);
 
       // Calculate total story points
       const totalStoryPoints = sprintTasks.reduce((sum, task) => sum + (Number(task.storyPoints) || 0), 0);
       console.log('[getProjectData] totalStoryPoints:', totalStoryPoints);
 
       // Generate labels for each day
-      const labels = Array.from({ length: sprintDays }, (_, i) => {
-        if (startDate) {
-          const day = new Date(startDate);
-          day.setDate(startDate.getDate() + i);
-          return day.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
-        }
-        return `Jour ${i + 1}`;
+      const labels = Array.from({ length: sprintDuration }, (_, i) => {
+        const date = dayjs(targetSprint.startDate).utc().add(i, 'day');
+        return date.format('DD MMM');
       });
 
       // Calculate remaining story points per day
-      const remaining = Array.from({ length: sprintDays }, (_, i) => {
-        const currentDate = startDate ? new Date(startDate) : new Date();
-        currentDate.setDate(currentDate.getDate() + i);
+      const remaining = Array.from({ length: sprintDuration }, (_, i) => {
+        const currentDate = dayjs(targetSprint.startDate).utc().add(i, 'day');
         const tasksCompletedByDay = sprintTasks.filter(
           (task) =>
-            task.status === 'done' &&
-            new Date(task.updatedAt) <= currentDate
+            task.status === 'Terminé' &&
+            dayjs(task.updatedAt).isValid() &&
+            dayjs(task.updatedAt).utc().isSameOrBefore(currentDate)
         );
         const completedPoints = tasksCompletedByDay.reduce((sum, task) => sum + (Number(task.storyPoints) || 0), 0);
         return totalStoryPoints - completedPoints;
       });
 
       // Ideal burndown line
-      const ideal = Array.from({ length: sprintDays }, (_, i) =>
-        totalStoryPoints * (1 - (i + 1) / sprintDays)
+      const ideal = Array.from({ length: sprintDuration }, (_, i) =>
+        totalStoryPoints * (1 - (i + 1) / sprintDuration)
       );
 
-      burndownData = { labels, remaining, ideal };
+      burndownData = {
+        labels,
+        remaining,
+        ideal,
+        totalPoints: totalStoryPoints,
+        sprintName: targetSprint.name,
+      };
       console.log('[getProjectData] burndownData:', burndownData);
     }
 
@@ -269,7 +285,10 @@ const ProjectsDashboard = () => {
         position: 'top',
       },
       title: {
-        display: false,
+        display: true,
+        text: currentProjectData.burndownData.sprintName
+          ? `Burndown Chart - ${currentProjectData.burndownData.sprintName} (${currentProjectData.burndownData.totalPoints || 0} points)`
+          : 'Aucun sprint disponible',
       },
     },
     scales: {
@@ -370,7 +389,21 @@ const ProjectsDashboard = () => {
 
         <Card title="Burndown Chart du Sprint" style={cardStyle}>
           <div style={{ height: '400px', padding: '20px' }}>
-            <Line data={burndownChartData} options={burndownChartOptions} />
+            {currentProjectData.burndownData.labels.length > 0 ? (
+              <Line data={burndownChartData} options={burndownChartOptions} />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  height: '100%',
+                  color: '#888',
+                }}
+              >
+                Aucun sprint disponible
+              </div>
+            )}
           </div>
         </Card>
 
@@ -381,11 +414,26 @@ const ProjectsDashboard = () => {
                 <Card
                   title={
                     <Space>
-                      <CheckCircleOutlined style={{ color: '#0958d9' }} />
+                      <CheckCircleOutlined
+                        style={{
+                          color: sprint.isCompleted ? '#52c41a' : sprint.isActive ? '#1890ff' : '#d9d9d9',
+                        }}
+                      />
                       {sprint.name}
+                      {sprint.isActive && <Tag color="processing">Actif</Tag>}
+                      {sprint.isCompleted && <Tag color="success">Terminé</Tag>}
                     </Space>
                   }
                   style={cardStyle}
+                  extra={
+                    <Text type="secondary">
+                      {dayjs(sprint.startDate).isValid()
+                        ? dayjs(sprint.startDate).utc().format('DD/MM/YYYY')
+                        : 'N/A'}{' '}
+                      -{' '}
+                      {dayjs(sprint.endDate).isValid() ? dayjs(sprint.endDate).utc().format('DD/MM/YYYY') : 'N/A'}
+                    </Text>
+                  }
                 >
                   <Space direction="vertical" style={{ width: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -393,7 +441,8 @@ const ProjectsDashboard = () => {
                       <Text strong>
                         {sprint.totalTasks > 0
                           ? Math.round((sprint.completedTasks / sprint.totalTasks) * 100)
-                          : 0}%
+                          : 0}
+                        %
                       </Text>
                     </div>
                     <Progress
@@ -402,7 +451,9 @@ const ProjectsDashboard = () => {
                           ? Math.round((sprint.completedTasks / sprint.totalTasks) * 100)
                           : 0
                       }
-                      strokeColor="#0958d9"
+                      strokeColor={
+                        sprint.isCompleted ? '#52c41a' : sprint.isActive ? '#1890ff' : '#d9d9d9'
+                      }
                     />
                     <Row justify="space-between">
                       <Col>

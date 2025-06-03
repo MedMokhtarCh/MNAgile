@@ -23,20 +23,19 @@ namespace UserService.Controllers
             _context = context;
             _logger = logger;
         }
-
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             if (request == null || string.IsNullOrEmpty(request.Email) || string.IsNullOrEmpty(request.Password))
             {
                 _logger.LogWarning("Login request is invalid: Email or Password is empty.");
-                return BadRequest("Les informations d'identification sont requises.");
+                return BadRequest(new { message = "Les informations d'identification sont requises." });
             }
 
             if (!_authService.IsValidEmail(request.Email))
             {
                 _logger.LogWarning("Invalid email format: {Email}", request.Email);
-                return BadRequest("Format d'email invalide.");
+                return BadRequest(new { message = "Format d'email invalide." });
             }
 
             try
@@ -46,7 +45,7 @@ namespace UserService.Controllers
                 if (user == null)
                 {
                     _logger.LogWarning("Authentication failed for user: {Email}", request.Email);
-                    return Unauthorized("Email ou mot de passe incorrect.");
+                    return Unauthorized(new { message = "Email ou mot de passe incorrect." });
                 }
 
                 _logger.LogInformation("Generating JWT for user: {Email}", user.Email);
@@ -84,13 +83,19 @@ namespace UserService.Controllers
                     }
                 });
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.LogWarning("Authentication failed for user: {Email}. Reason: {Message}", request.Email, ex.Message);
+                return Unauthorized(new { message = ex.Message }); // Return the specific message from AuthService
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Internal error during login for user: {Email}", request.Email);
+                _logger.LogError(ex, "Internal error during login for user: {Email}", request.Email
+
+        );
                 return StatusCode(500, new { message = "Une erreur interne est survenue.", error = ex.Message });
             }
         }
-
         [HttpGet("me")]
         [Authorize]
         public async Task<IActionResult> GetCurrentUser()

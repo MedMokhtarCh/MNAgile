@@ -30,15 +30,14 @@ import {
   Alert,
   Pagination,
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ListAltIcon from '@mui/icons-material/ListAlt';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import CloseIcon from '@mui/icons-material/Close';
+import InfoIcon from '@mui/icons-material/Info';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -46,20 +45,19 @@ import {
   createBacklog,
   updateBacklog,
   deleteBacklog,
-  linkTaskToBacklog,
-  unlinkTaskFromBacklog,
   fetchAllTasks,
   createTask,
   updateTask,
   deleteTask,
   clearTasksError,
   fetchKanbanColumns,
-  updateBacklogTaskIds,
   fetchSprints,
   createSprint,
   updateSprint,
   deleteSprint,
+  createKanbanColumn,
 } from '../store/slices/taskSlice';
+import { fetchUsers } from '../store/slices/usersSlice';
 import { projectApi } from '../services/api';
 import { normalizeProject } from '../store/slices/projectsSlice';
 import { useAvatar } from '../hooks/useAvatar';
@@ -67,96 +65,46 @@ import { useNotification } from '../hooks/useNotifications';
 import { useAuth } from '../contexts/AuthContext';
 import PageTitle from '../components/common/PageTitle';
 import InputUserAssignment from '../components/common/InputUserAssignment';
-import { useDragAndDrop } from '../hooks/useDragAndDrop';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import {
+  StyledPaper,
+  TaskItem,
+  BacklogHeader,
+  BacklogContainer,
+  BacklogContent,
+  ScrollableContainer,
+  FormDialogContent,
+} from '../components/backlog/theme';
 
-// Styled components
-const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  borderRadius: 8,
-  marginBottom: theme.spacing(2),
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-}));
+// Utility Functions
+const isSprintOverdue = (sprint) => {
+  if (!sprint?.endDate) return false;
+  const endDate = new Date(sprint.endDate);
+  const today = new Date();
+  return endDate < today;
+};
 
-const TaskItem = styled(Box)(({ theme, isDragging }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  padding: theme.spacing(1.5),
-  border: '1px solid #e0e0e0',
-  borderRadius: 8,
-  marginBottom: theme.spacing(1.5),
-  backgroundColor: isDragging ? '#f0f7ff' : '#fff',
-  transition: 'all 0.2s ease',
-  '&:hover': {
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    borderColor: '#bbdefb',
-  },
-}));
+const findNextUpcomingSprint = (sprints, currentDate) => {
+  if (!sprints || sprints.length === 0) return null;
+  const upcomingSprints = sprints.filter((sprint) => {
+    const endDate = new Date(sprint.endDate);
+    return endDate >= currentDate;
+  });
+  if (upcomingSprints.length === 0) return null;
+  return upcomingSprints.reduce((closest, sprint) => {
+    const startDate = new Date(sprint.startDate);
+    if (!closest) return sprint;
+    const closestStartDate = new Date(closest.startDate);
+    return Math.abs(startDate - currentDate) < Math.abs(closestStartDate - currentDate)
+      ? sprint
+      : closest;
+  }, null);
+};
 
-const BacklogContainer = styled(Box)(({ theme }) => ({
-  marginBottom: theme.spacing(3),
-  border: '1px solid #e0e0e0',
-  borderRadius: 8,
-  overflow: 'hidden',
-}));
-
-const BacklogHeader = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(2),
-  backgroundColor: '#f5f5f5',
-  borderBottom: '1px solid #e0e0e0',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-}));
-
-const BacklogContent = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(2),
-}));
-
-const ScrollableContainer = styled(Box)(({ theme }) => ({
-  flex: 1,
-  overflowY: 'auto',
-  scrollbarWidth: 'none',
-  '-ms-overflow-style': 'none',
-  '&::-webkit-scrollbar': {
-    display: 'none',
-  },
-  bgcolor: '#fff',
-}));
-
-const FormDialogContent = styled(DialogContent)(({ theme }) => ({
-  overflowY: 'auto',
-  scrollbarWidth: 'none',
-  '-ms-overflow-style': 'none',
-  '&::-webkit-scrollbar': {
-    display: 'none',
-  },
-}));
-
-// Sortable Task Item Component
-const SortableTaskItem = ({ task, backlogId, renderBacklogItem, isSprint }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id.toString() });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      {renderBacklogItem(backlogId, task, isDragging, listeners, isSprint)}
-    </div>
-  );
+// Priority Mapping for French Display
+const priorityMap = {
+  HIGH: 'Haute',
+  MEDIUM: 'Moyenne',
+  LOW: 'Basse',
 };
 
 // Main BacklogPage Component
@@ -167,11 +115,10 @@ function BacklogPage() {
   const { createNotification } = useNotification();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-
-  // Redux state
+  const users = useSelector((state) => state.users?.users || []);
   const { backlogs, tasks, columns, sprints, status, error: reduxError } = useSelector((state) => state.tasks);
 
-  // Local state
+  // State Management
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -184,6 +131,7 @@ function BacklogPage() {
   const [deleteBacklogDialogOpen, setDeleteBacklogDialogOpen] = useState(false);
   const [deleteItemDialogOpen, setDeleteItemDialogOpen] = useState(false);
   const [deleteSprintDialogOpen, setDeleteSprintDialogOpen] = useState(false);
+  const [taskDetailsDialogOpen, setTaskDetailsDialogOpen] = useState(false);
   const [currentBacklog, setCurrentBacklog] = useState(null);
   const [currentItem, setCurrentItem] = useState(null);
   const [currentSprint, setCurrentSprint] = useState(null);
@@ -192,6 +140,7 @@ function BacklogPage() {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [backlogToDelete, setBacklogToDelete] = useState(null);
   const [sprintToDelete, setSprintToDelete] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
   const [formValues, setFormValues] = useState({
     name: '',
     description: '',
@@ -210,15 +159,7 @@ function BacklogPage() {
   const backlogsPerPage = 2;
   const sprintsPerPage = 3;
 
-  // Drag-and-Drop Setup
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  // Redirect if user lacks necessary permissions
+  // Permission Check
   useEffect(() => {
     if (!currentUser?.claims?.some(claim => [
       'CanViewProjects',
@@ -233,194 +174,79 @@ function BacklogPage() {
     }
   }, [currentUser, navigate]);
 
-  // Custom handleDragEnd to enforce two-position movement
-  const customHandleDragEnd = (event) => {
-    const { active, over } = event;
-    setIsDragging(false);
-    setActiveDragId(null);
+  // Reassign Incomplete Tasks from Overdue Sprints
+  useEffect(() => {
+    const reassignIncompleteTasks = async () => {
+      if (!sprints || !tasks || !projectId) return;
+      const currentDate = new Date();
+      const completedSprints = sprints.filter((sprint) => isSprintOverdue(sprint));
+      const nextSprint = findNextUpcomingSprint(sprints, currentDate);
 
-    if (!active || !over || !active.id || !over.id) {
-      console.log('[customHandleDragEnd] Invalid drag event', { active, over });
-      return;
-    }
-
-    try {
-      const activeIdValue = active.id.toString();
-      const overId = over.id.toString();
-
-      if (activeIdValue === overId) {
-        console.log('[customHandleDragEnd] No change (same position)');
+      if (!nextSprint) {
+        console.log('[reassignIncompleteTasks] No upcoming sprint found.');
         return;
       }
 
-      // Find the active task
-      const activeTask = tasks.find((task) => task.id.toString() === activeIdValue);
-      if (!activeTask) {
-        console.error('[customHandleDragEnd] Active task not found:', activeIdValue);
-        return;
-      }
+      for (const sprint of completedSprints) {
+        const incompleteTasks = tasks.filter(
+          (task) => task.sprintId === sprint.id && task.status !== 'Terminé'
+        );
 
-      // Determine source and destination containers
-      const sourceContainer = backlogs.find((b) => b.taskIds.includes(activeTask.id)) ||
-                             sprints.find((s) => s.taskIds?.includes(activeTask.id));
-      const overTask = tasks.find((t) => t.id.toString() === overId);
-      const destContainer = overTask
-        ? (backlogs.find((b) => b.taskIds.includes(overTask.id)) ||
-           sprints.find((s) => s.taskIds?.includes(overTask.id)))
-        : (backlogs.find((b) => b.id.toString() === overId) ||
-           sprints.find((s) => s.id.toString() === overId));
+        for (const task of incompleteTasks) {
+          try {
+            const taskData = {
+              ...task,
+              sprintId: nextSprint.id,
+              projectId: parseInt(projectId),
+              overdueFromSprint: sprint.name, // Tag task with overdue sprint name
+            };
+            await dispatch(updateTask({ taskId: task.id, taskData, attachments: [] })).unwrap();
 
-      if (!sourceContainer || !destContainer) {
-        console.error('[customHandleDragEnd] Source or destination container not found');
-        return;
-      }
-
-      const isSourceBacklog = 'description' in sourceContainer;
-      const isDestBacklog = 'description' in destContainer;
-
-      // Handle reordering within the same container
-      if (sourceContainer.id === destContainer.id) {
-        const taskIds = [...(sourceContainer.taskIds || [])];
-        const sourceIndex = taskIds.findIndex((id) => id.toString() === activeIdValue);
-        let destIndex = overTask
-          ? taskIds.findIndex((id) => id.toString() === overId)
-          : taskIds.length;
-
-        if (sourceIndex === -1 || destIndex === -1) {
-          console.error('[customHandleDragEnd] Invalid indices:', { sourceIndex, destIndex });
-          return;
-        }
-
-        // Enforce two-position movement
-        const direction = destIndex > sourceIndex ? 2 : -2;
-        destIndex = sourceIndex + direction;
-        if (destIndex < 0) destIndex = 0;
-        if (destIndex >= taskIds.length) destIndex = taskIds.length - 1;
-
-        if (sourceIndex !== destIndex) {
-          const newTaskIds = arrayMove(taskIds, sourceIndex, destIndex);
-          console.log('[customHandleDragEnd] New task order:', newTaskIds);
-
-          if (isSourceBacklog) {
-            dispatch(updateBacklogTaskIds({
-              backlogId: sourceContainer.id,
-              taskIds: newTaskIds,
-            }));
-          } else {
+            // Update sprint taskIds
+            const updatedSprintTasks = [...(nextSprint.taskIds || []), task.id];
             dispatch(updateSprint({
-              sprintId: sourceContainer.id,
-              sprintData: { ...sourceContainer, taskIds: newTaskIds },
+              sprintId: nextSprint.id,
+              sprintData: { ...nextSprint, taskIds: updatedSprintTasks },
             }));
-          }
 
-          dispatch(updateTask({
-            taskId: activeTask.id,
-            taskData: { ...activeTask, displayOrder: destIndex },
-            attachments: [],
-          }));
-        }
-      } else {
-        // Handle moving between containers
-        const sourceTaskIds = [...(sourceContainer.taskIds || [])];
-        const destTaskIds = [...(destContainer.taskIds || [])];
-        const sourceIndex = sourceTaskIds.findIndex((id) => id.toString() === activeIdValue);
-        const destIndex = overTask
-          ? destTaskIds.findIndex((id) => id.toString() === overId)
-          : destTaskIds.length;
+            // Remove task from completed sprint
+            const updatedCompletedSprintTasks = (sprint.taskIds || []).filter(
+              (id) => id !== task.id
+            );
+            dispatch(updateSprint({
+              sprintId: sprint.id,
+              sprintData: { ...sprint, taskIds: updatedCompletedSprintTasks },
+            }));
 
-        if (sourceIndex === -1) {
-          console.error('[customHandleDragEnd] Source task not found in source container');
-          return;
-        }
-
-        sourceTaskIds.splice(sourceIndex, 1);
-        destTaskIds.splice(destIndex, 0, activeTask.id);
-
-        console.log('[customHandleDragEnd] Moving task:', {
-          taskId: activeTask.id,
-          from: sourceContainer.name,
-          to: destContainer.name,
-        });
-
-        if (isSourceBacklog) {
-          dispatch(updateBacklogTaskIds({
-            backlogId: sourceContainer.id,
-            taskIds: sourceTaskIds,
-          }));
-        } else {
-          dispatch(updateSprint({
-            sprintId: sourceContainer.id,
-            sprintData: { ...sourceContainer, taskIds: sourceTaskIds },
-          }));
-        }
-
-        if (isDestBacklog) {
-          dispatch(updateBacklogTaskIds({
-            backlogId: destContainer.id,
-            taskIds: destTaskIds,
-          }));
-        } else {
-          dispatch(updateSprint({
-            sprintId: destContainer.id,
-            sprintData: { ...destContainer, taskIds: destTaskIds },
-          }));
-        }
-
-        const updatedTaskData = {
-          ...activeTask,
-          sprintId: isDestBacklog ? null : destContainer.id,
-          backlogIds: isDestBacklog ? [destContainer.id] : activeTask.backlogIds.filter(id => id !== sourceContainer.id),
-          displayOrder: destIndex,
-          projectId: parseInt(projectId),
-        };
-
-        dispatch(updateTask({
-          taskId: activeTask.id,
-          taskData: updatedTaskData,
-          attachments: [],
-        }));
-
-        if (activeTask.assignedUserEmails && Array.isArray(activeTask.assignedUserEmails)) {
-          activeTask.assignedUserEmails.forEach((email) => {
-            if (email && email !== currentUser?.email) {
-              createNotification({
-                recipient: email,
-                type: 'task',
-                message: `La tâche "${activeTask.title}" a été déplacée de "${sourceContainer.name}" à "${destContainer.name}" dans le projet "${project?.title || 'Projet inconnu'}".`,
-                sender: { name: currentUser?.name || currentUser?.email, avatar: null },
-                metadata: { taskId: activeTask.id },
+            // Notify assigned users
+            if (task.assignedUserEmails && Array.isArray(task.assignedUserEmails)) {
+              task.assignedUserEmails.forEach((email) => {
+                if (email && email !== currentUser?.email) {
+                  createNotification({
+                    recipient: email,
+                    type: 'task',
+                    message: `La tâche "${task.title}" a été déplacée du sprint terminé "${sprint.name}" vers le sprint "${nextSprint.name}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+                    sender: { name: currentUser?.name || currentUser?.email, avatar: null },
+                    metadata: { taskId: task.id },
+                  });
+                }
               });
             }
-          });
+          } catch (err) {
+            console.error('[reassignIncompleteTasks] Error reassigning task:', {
+              taskId: task.id,
+              error: err.message,
+            });
+            setError('Erreur lors du déplacement des tâches incomplètes.');
+          }
         }
       }
-    } catch (err) {
-      console.error('[customHandleDragEnd] Error during drag-and-drop:', err);
-      setError('Erreur lors du déplacement. Veuillez réessayer.');
-    }
-  };
+    };
 
-  // Initialize useDragAndDrop hook
-  const {
-    handleDragStart,
-    handleDragOver,
-    handleDragCancel,
-    getActiveTask,
-    isDragging,
-    activeDragId,
-  } = useDragAndDrop({
-    backlogs,
-    sprints,
-    tasks,
-    projectId,
-    dispatch,
-    createNotification,
-    currentUser,
-    project,
-    setError,
-  });
+    reassignIncompleteTasks();
+  }, [sprints, tasks, projectId, dispatch, currentUser, project, createNotification]);
 
-  // Fetch project, backlogs, tasks, columns, sprints, and users
+  // Fetch Data
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
@@ -430,10 +256,13 @@ function BacklogPage() {
           throw new Error('ID du projet invalide');
         }
 
-        console.log('[BacklogPage] Fetching data for projectId:', projectId);
         const projectResponse = await projectApi.get(`/Projects/${projectId}`);
         const normalizedProject = normalizeProject(projectResponse.data);
         setProject(normalizedProject);
+
+        if (!users || users.length === 0) {
+          await dispatch(fetchUsers()).unwrap();
+        }
 
         await Promise.all([
           dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap(),
@@ -451,22 +280,18 @@ function BacklogPage() {
           ...(normalizedProject.observers || []),
         ].filter((email, index, self) => email && self.indexOf(email) === index);
 
-        const projectUsersData = projectUserEmails.map((email) => ({
-          email,
-          firstName: '',
-          lastName: '',
-          name: email,
-        }));
+        const projectUsersData = projectUserEmails
+          .map((email) => {
+            const user = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
+            return user
+              ? { id: user.id, email: user.email, firstName: user.firstName || '', lastName: user.lastName || '', name: user.firstName ? `${user.firstName} ${user.lastName}` : email }
+              : { id: null, email, firstName: '', lastName: '', name: email };
+          })
+          .filter((user) => user.email);
 
         setProjectUsers(projectUsersData);
       } catch (err) {
-        console.error('[BacklogPage] Error:', {
-          message: err.message,
-          response: err.response ? {
-            status: err.response.status,
-            data: err.response.data,
-          } : null,
-        });
+        console.error('[loadData] Error:', err);
         setError(err.response?.data?.message || err.message || 'Erreur lors du chargement des données');
       } finally {
         setLoading(false);
@@ -474,41 +299,125 @@ function BacklogPage() {
     };
 
     loadData();
-  }, [projectId, dispatch]);
+  }, [projectId, dispatch, users]);
+ const handleUpdateItem = async () => {
+  if (!currentItem || !currentItem.id) {
+    setError('Tâche introuvable pour la mise à jour.');
+    return;
+  }
+  
+  if (!formValues.title.trim()) {
+    setError('Le titre de la tâche est requis.');
+    return;
+  }
+  if (!formValues.status) {
+    setError('Le statut de la tâche est requis.');
+    return;
+  }
+  
+  setIsSubmitting(true);
+  setError('');
+  
+  try {
+    const taskData = {
+      title: formValues.title,
+      description: formValues.description || '',
+      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+      priority: formValues.priority.toUpperCase(),
+      status: formValues.status,
+      projectId: parseInt(projectId),
+      backlogIds: currentItem.backlogIds || [],
+      subtasks: formValues.subtasks.filter((subtask) => subtask.trim()),
+      sprintId: formValues.sprintId || null,
+      createdIn: currentItem.createdIn || 'backlog',
+    };
 
-  // Notify users of task creation
-  const createTaskNotification = (userEmail, taskTitle, taskId) => {
-    createNotification({
-      recipient: userEmail,
-      type: 'task',
-      message: `Vous avez été assigné à la tâche "${taskTitle}" dans le projet "${project?.title || 'Projet inconnu'}".`,
-      sender: {
-        name: currentUser.name || currentUser.email,
-        avatar: null,
-      },
-      metadata: {
-        taskId,
-      },
-    });
-  };
+    // Vérifier si le sprint a changé
+    const oldSprintId = currentItem.sprintId;
+    const newSprintId = formValues.sprintId;
+    const sprintChanged = oldSprintId !== newSprintId;
 
-  // Notify users of task updates
-  const updateTaskNotification = (userEmail, taskTitle, taskId) => {
-    createNotification({
-      recipient: userEmail,
-      type: 'task',
-      message: `La tâche "${taskTitle}" a été mise à jour dans le projet "${project?.title || 'Projet inconnu'}".`,
-      sender: {
-        name: currentUser.name || currentUser.email,
-        avatar: null,
-      },
-      metadata: {
-        taskId,
-      },
-    });
-  };
+    // Mettre à jour la tâche
+    const result = await dispatch(updateTask({ 
+      taskId: currentItem.id, 
+      taskData, 
+      attachments: [] 
+    })).unwrap();
 
-  // Handlers UI
+    // Gérer le changement de sprint si nécessaire
+    if (sprintChanged) {
+      // Retirer la tâche de l'ancien sprint
+      if (oldSprintId) {
+        const oldSprint = sprints.find(s => s.id === oldSprintId);
+        if (oldSprint) {
+          const updatedTaskIds = oldSprint.taskIds?.filter(id => id !== currentItem.id) || [];
+          await dispatch(updateSprint({
+            sprintId: oldSprintId,
+            sprintData: { ...oldSprint, taskIds: updatedTaskIds }
+          }));
+        }
+      }
+
+      // Ajouter la tâche au nouveau sprint
+      if (newSprintId) {
+        const newSprint = sprints.find(s => s.id === newSprintId);
+        if (newSprint) {
+          const updatedTaskIds = [...(newSprint.taskIds || []), currentItem.id];
+          await dispatch(updateSprint({
+            sprintId: newSprintId,
+            sprintData: { ...newSprint, taskIds: updatedTaskIds }
+          }));
+        }
+      }
+    }
+
+    // Notifier les utilisateurs assignés
+    const previousAssignedEmails = currentItem.assignedUserEmails || [];
+    const newAssignedEmails = taskData.assignedUserEmails;
+    const newlyAssignedEmails = newAssignedEmails.filter(email => !previousAssignedEmails.includes(email));
+
+    for (const email of newlyAssignedEmails) {
+      const user = projectUsers.find(u => u.email === email);
+      if (user && user.email !== currentUser.email && user.id) {
+        await createNotification({
+          recipientUserId: user.id, // Changé de userId à recipientUserId
+          type: 'task',
+          message: `Vous avez été assigné à la tâche mise à jour "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+          relatedEntityType: 'Task',
+          relatedEntityId: currentItem.id,
+        });
+      }
+    }
+
+    // Notifier du changement de sprint si nécessaire
+    if (sprintChanged && taskData.assignedUserEmails?.length > 0) {
+      const sprintName = sprints.find(s => s.id === newSprintId)?.name || 'nouveau sprint';
+      const oldSprintName = sprints.find(s => s.id === oldSprintId)?.name || 'ancien sprint';
+      
+      for (const email of taskData.assignedUserEmails) {
+        const user = projectUsers.find(u => u.email === email);
+        if (user && user.id && email !== currentUser?.email) {
+          createNotification({
+            recipientUserId: user.id, // Changé de recipient à recipientUserId
+            type: 'task',
+            message: `La tâche "${formValues.title}" a été déplacée ${oldSprintId ? `du sprint "${oldSprintName}" ` : ''}vers le sprint "${sprintName}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+            sender: { name: currentUser?.name || currentUser?.email, avatar: null },
+            metadata: { taskId: currentItem.id },
+          });
+        }
+      }
+    }
+
+    window.dispatchEvent(new Event('newNotification'));
+    handleCloseItemDialog();
+  } catch (err) {
+    console.error('[handleUpdateItem] Error:', err);
+    setError(err.response?.data?.message || 'Erreur lors de la mise à jour de la tâche');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+  // Handlers for Dialogs
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
@@ -662,7 +571,17 @@ function BacklogPage() {
     setSprintToDelete(null);
   };
 
-  // Handlers for backend operations
+  const handleOpenTaskDetailsDialog = (task) => {
+    setSelectedTask(task);
+    setTaskDetailsDialogOpen(true);
+  };
+
+  const handleCloseTaskDetailsDialog = () => {
+    setTaskDetailsDialogOpen(false);
+    setSelectedTask(null);
+  };
+
+  // Handlers for Backend Operations
   const handleAddBacklog = async () => {
     if (!formValues.name.trim()) {
       setError('Le nom du backlog est requis.');
@@ -679,12 +598,8 @@ function BacklogPage() {
       await dispatch(createBacklog({ backlogData })).unwrap();
       handleCloseBacklogDialog();
     } catch (err) {
-      console.error('[handleAddBacklog] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la création du backlog';
-      setError(errorMessage);
+      console.error('[handleAddBacklog] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la création du backlog');
     } finally {
       setIsSubmitting(false);
     }
@@ -703,14 +618,11 @@ function BacklogPage() {
         description: formValues.description,
       };
       await dispatch(updateBacklog({ backlogId: currentBacklog.id, backlogData })).unwrap();
+      await dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap();
       handleCloseBacklogDialog();
     } catch (err) {
-      console.error('[handleUpdateBacklog] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la mise à jour du backlog';
-      setError(errorMessage);
+      console.error('[handleUpdateBacklog] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la mise à jour du backlog');
     } finally {
       setIsSubmitting(false);
     }
@@ -729,124 +641,63 @@ function BacklogPage() {
         setBacklogPage(1);
       }
     } catch (err) {
-      console.error('[handleDeleteBacklog] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la suppression du backlog';
-      setError(errorMessage);
+      console.error('[handleDeleteBacklog] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la suppression du backlog');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleAddItem = async () => {
-    if (!formValues.title.trim()) {
-      setError('Le titre de la tâche est requis.');
-      return;
-    }
-    if (!formValues.status) {
-      setError('Le statut de la tâche est requis.');
-      return;
-    }
-    setIsSubmitting(true);
-    setError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description || '',
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
-        priority: formValues.priority.toUpperCase(),
-        status: formValues.status,
-        projectId: parseInt(projectId),
-        backlogIds: [parseInt(currentBacklog.id)],
-        subtasks: formValues.subtasks.filter((subtask) => subtask.trim()),
-        sprintId: formValues.sprintId || null,
-        createdIn: 'backlog',
-      };
-      console.log('[handleAddItem] Creating task with payload:', taskData);
-      const result = await dispatch(createTask({ taskData, attachments: [] })).unwrap();
-      console.log('[handleAddItem] Created task:', result);
+ const handleAddItem = async () => {
+  if (!formValues.title.trim()) {
+    setError('Le titre de la tâche est requis.');
+    return;
+  }
+  if (!formValues.status) {
+    setError('Le statut de la tâche est requis.');
+    return;
+  }
+  setIsSubmitting(true);
+  setError('');
+  try {
+    const taskData = {
+      title: formValues.title,
+      description: formValues.description || '',
+      assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
+      priority: formValues.priority.toUpperCase(),
+      status: formValues.status,
+      projectId: parseInt(projectId),
+      backlogIds: [parseInt(currentBacklog.id)],
+      subtasks: formValues.subtasks.filter((subtask) => subtask.trim()),
+      sprintId: formValues.sprintId || null,
+      createdIn: 'backlog',
+    };
+    const result = await dispatch(createTask({ taskData, attachments: [] })).unwrap();
 
-      await dispatch(linkTaskToBacklog({ backlogId: parseInt(currentBacklog.id), taskId: result.id })).unwrap();
+    // Refetch backlogs to ensure taskIds are updated
+    await dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap();
 
-      dispatch(updateBacklogTaskIds({
-        backlogId: parseInt(currentBacklog.id),
-        taskId: result.id,
-      }));
+    for (const user of formValues.assignedUsers) {
+      if (user.email && user.email !== currentUser.email && user.id) {
+        await createNotification({
+          userId: user.id,
+          type: 'task',
+          message: `Vous avez été assigné à la tâche "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+          relatedEntityType: 'Task',
+          relatedEntityId: result.id,
+        });
+      }
+    }
 
-      formValues.assignedUsers.forEach((user) => {
-        if (user.email) {
-          createTaskNotification(user.email, formValues.title, result.id);
-        }
-      });
-      handleCloseItemDialog();
-    } catch (err) {
-      console.error('[handleAddItem] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors && Object.values(err.response?.data?.errors).join(', ')) ||
-        err.message ||
-        'Erreur lors de la création de la tâche';
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUpdateItem = async () => {
-    if (!formValues.title.trim()) {
-      setError('Le titre de la tâche est requis.');
-      return;
-    }
-    if (!formValues.status) {
-      setError('Le statut de la tâche est requis.');
-      return;
-    }
-    setIsSubmitting(true);
-    setError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description || '',
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
-        priority: formValues.priority.toUpperCase(),
-        status: formValues.status,
-        projectId: parseInt(projectId),
-        backlogIds: currentItem?.backlogIds || [parseInt(currentBacklog.id)],
-        subtasks: formValues.subtasks.filter((subtask) => subtask.trim()),
-        sprintId: formValues.sprintId || null,
-        kanbanColumnId: currentItem?.kanbanColumnId || null,
-      };
-      console.log('[handleUpdateItem] Updating task with payload:', taskData);
-      const result = await dispatch(updateTask({ taskId: currentItem.id, taskData, attachments: [] })).unwrap();
-      formValues.assignedUsers.forEach((user) => {
-        if (user.email) {
-          updateTaskNotification(user.email, formValues.title, result.id);
-        }
-      });
-      handleCloseItemDialog();
-    } catch (err) {
-      console.error('[handleUpdateItem] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors && Object.values(err.response?.data?.errors).join(', ')) ||
-        err.message ||
-        'Erreur lors de la mise à jour de la tâche';
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
+    window.dispatchEvent(new Event('newNotification'));
+    handleCloseItemDialog();
+  } catch (err) {
+    console.error('[handleAddItem] Error:', err);
+    setError(err.response?.data?.message || 'Erreur lors de la création de la tâche');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
   const handleDeleteItem = async () => {
     setIsSubmitting(true);
     setError('');
@@ -854,16 +705,8 @@ function BacklogPage() {
       await dispatch(deleteTask(itemToDelete)).unwrap();
       handleCloseDeleteItemDialog();
     } catch (err) {
-      console.error('[handleDeleteItem] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        err.message ||
-        'Erreur lors de la suppression de la tâche';
-      setError(errorMessage);
+      console.error('[handleDeleteItem] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la suppression de la tâche');
     } finally {
       setIsSubmitting(false);
     }
@@ -887,12 +730,8 @@ function BacklogPage() {
       await dispatch(createSprint({ sprintData })).unwrap();
       handleCloseSprintDialog();
     } catch (err) {
-      console.error('[handleCreateSprint] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la création du sprint';
-      setError(errorMessage);
+      console.error('[handleCreateSprint] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la création du sprint');
     } finally {
       setIsSubmitting(false);
     }
@@ -916,12 +755,8 @@ function BacklogPage() {
       await dispatch(updateSprint({ sprintId: currentSprint.id, sprintData })).unwrap();
       handleCloseSprintDialog();
     } catch (err) {
-      console.error('[handleUpdateSprint] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la mise à jour du sprint';
-      setError(errorMessage);
+      console.error('[handleUpdateSprint] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la mise à jour du sprint');
     } finally {
       setIsSubmitting(false);
     }
@@ -940,12 +775,8 @@ function BacklogPage() {
         setSprintPage(1);
       }
     } catch (err) {
-      console.error('[handleDeleteSprint] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la suppression du sprint';
-      setError(errorMessage);
+      console.error('[handleDeleteSprint] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de la suppression du sprint');
     } finally {
       setIsSubmitting(false);
     }
@@ -967,7 +798,6 @@ function BacklogPage() {
       };
       await dispatch(updateTask({ taskId: task.id, taskData, attachments: [] })).unwrap();
 
-      // Update sprint taskIds
       const sprint = sprints.find((s) => s.id === sprintId);
       if (sprint) {
         const newTaskIds = [...(sprint.taskIds || []), task.id];
@@ -977,7 +807,6 @@ function BacklogPage() {
         }));
       }
 
-      // Notify assigned users
       if (task.assignedUserEmails && Array.isArray(task.assignedUserEmails)) {
         task.assignedUserEmails.forEach((email) => {
           if (email && email !== currentUser?.email) {
@@ -994,43 +823,71 @@ function BacklogPage() {
 
       handleCloseAddToSprintDialog();
     } catch (err) {
-      console.error('[handleAddToSprint] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de l’ajout au sprint';
-      setError(errorMessage);
+      console.error('[handleAddToSprint] Error:', err);
+      setError(err.response?.data?.message || 'Erreur lors de l’ajout au sprint');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleUpdateSprintItemStatus = async (taskId, newStatus) => {
-    setIsSubmitting(true);
-    setError('');
-    try {
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) {
-        throw new Error('Tâche non trouvée');
+ const handleUpdateSprintItemStatus = async (taskId, newStatus) => {
+  setIsSubmitting(true);
+  setError('');
+  
+  try {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      throw new Error('Tâche non trouvée');
+    }
+
+    // Vérifier si nous devons créer la colonne "Terminé"
+    if (newStatus === 'Terminé') {
+      const doneColumn = columns.find((col) => col.name.toLowerCase() === 'terminé');
+      if (!doneColumn) {
+        await dispatch(createKanbanColumn({
+          columnData: {
+            name: 'Terminé',
+            projectId: parseInt(projectId),
+            displayOrder: columns.length + 1,
+          },
+        })).unwrap();
       }
-      const taskData = {
-        ...task,
-        status: newStatus,
-      };
-      await dispatch(updateTask({ taskId, taskData, attachments: [] })).unwrap();
-    } catch (err) {
-      console.error('[handleUpdateSprintItemStatus] Error:', {
-        message: err.message,
-        response: err.response?.data,
-      });
-      const errorMessage = err.response?.data?.message || err.response?.data?.title || err.message || 'Erreur lors de la mise à jour du statut';
-      setError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
     }
-  };
 
-  // Pagination handlers
+    // Mettre à jour la tâche
+    const taskData = {
+      ...task,
+      status: newStatus,
+    };
+    
+    await dispatch(updateTask({ 
+      taskId, 
+      taskData, 
+      attachments: [] 
+    })).unwrap();
+
+    // Notifier les utilisateurs assignés
+    if (task.assignedUserEmails && Array.isArray(task.assignedUserEmails)) {
+      for (const email of task.assignedUserEmails) {
+        if (email && email !== currentUser?.email) {
+          createNotification({
+            recipient: email,
+            type: 'task',
+            message: `Le statut de la tâche "${task.title}" a été mis à jour à "${newStatus}" dans le projet "${project?.title || 'Projet inconnu'}".`,
+            sender: { name: currentUser?.name || currentUser?.email, avatar: null },
+            metadata: { taskId: task.id },
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[handleUpdateSprintItemStatus] Error:', err);
+    setError(err.response?.data?.message || 'Erreur lors de la mise à jour du statut');
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+  // Pagination Handlers
   const handleBacklogPageChange = (event, value) => {
     setBacklogPage(value);
   };
@@ -1039,7 +896,7 @@ function BacklogPage() {
     setSprintPage(value);
   };
 
-  // Form change handler
+  // Form Handlers
   const handleFormChange = (field) => (event, value) => {
     if (field === 'assignedUsers') {
       setFormValues((prev) => ({ ...prev, [field]: value || [] }));
@@ -1050,7 +907,6 @@ function BacklogPage() {
     }
   };
 
-  // Subtask handlers
   const handleAddSubtask = () => {
     setFormValues((prev) => ({
       ...prev,
@@ -1071,476 +927,540 @@ function BacklogPage() {
     }));
   };
 
-  // Modified renderBacklogItem to support drag-and-drop and conditional buttons
-  const renderBacklogItem = (backlogId, task, isDragging = false, listeners, isSprint = false) => (
-    <TaskItem isDragging={isDragging}>
-      <DragIndicatorIcon
-        sx={{ color: '#bdbdbd', mr: 1, cursor: 'grab' }}
-        {...listeners}
-      />
-      {isSprint && (
-        <Checkbox
-          checked={task.status === 'COMPLETED'}
-          onChange={() =>
-            handleUpdateSprintItemStatus(
-              task.id,
-              task.status === 'COMPLETED' ? 'OPEN' : 'COMPLETED'
-            )
-          }
-        />
-      )}
-      <Box sx={{ flex: 1 }}>
-        <Typography variant="subtitle1">{task.title}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {task.description}
-        </Typography>
-        {task.subtasks?.length > 0 && (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="caption" color="text.secondary">
-              Sous-tâches :
+  // Render Task Item
+  const renderBacklogItem = (backlogId, task, isSprint = false) => {
+    const sprint = isSprint ? sprints.find(s => s.id === task.sprintId) : null;
+    const isOverdue = sprint ? isSprintOverdue(sprint) : false;
+    const isTaskDone = task.status === 'Terminé';
+
+    return (
+      <TaskItem
+        sx={{
+          ...(isSprint && isOverdue && !isTaskDone && {
+            textDecoration: 'line-through',
+            opacity: 0.7,
+            backgroundColor: '#f9f9f9'
+          })
+        }}
+      >
+        {isSprint && (
+          <Checkbox
+            checked={isTaskDone}
+            onChange={() =>
+              handleUpdateSprintItemStatus(
+                task.id,
+                isTaskDone ? 'OPEN' : 'Terminé'
+              )
+            }
+            disabled={isOverdue}
+            sx={{ mt: 1 }}
+          />
+        )}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                mr: 1,
+                flex: '1 1 auto',
+                ...(isSprint && isOverdue && !isTaskDone && { textDecoration: 'line-through' })
+              }}
+            >
+              {task.title}
             </Typography>
-            <List dense>
-              {task.subtasks.map((subtask, index) => (
-                <ListItem key={index} sx={{ py: 0 }}>
-                  <ListItemText primary={subtask} />
-                </ListItem>
-              ))}
-            </List>
+            {isSprint && isOverdue && !isTaskDone && (
+              <Chip
+                label="Sprint terminé"
+                size="small"
+                color="error"
+              />
+            )}
+            {isSprint && task.overdueFromSprint && !isTaskDone && (
+              <Chip
+                label={`En retard du sprint ${task.overdueFromSprint}`}
+                size="small"
+                color="warning"
+              />
+            )}
           </Box>
-        )}
-      </Box>
-      <AvatarGroup max={3} sx={{ mr: 1 }}>
-        {task.assignedUserEmails?.map((email) => {
-          const user = projectUsers.find((u) => u.email === email);
-          return user ? (
-            <Tooltip key={email} title={user.name}>
-              <Avatar alt={user.name} sx={{ bgcolor: getAvatarColor(user.name) }}>
-                {generateInitials(user.name)}
-              </Avatar>
-            </Tooltip>
-          ) : null;
-        })}
-      </AvatarGroup>
-      <Box sx={{ display: 'flex' }}>
-        {!isSprint && currentUser?.claims?.includes('CanCreateTasks') && (
-          <IconButton
-            size="small"
-            onClick={() => handleOpenAddToSprintDialog(backlogId, task.id)}
-            title="Ajouter au sprint"
-          >
-            <ArrowForwardIcon fontSize="small" />
-          </IconButton>
-        )}
-        {currentUser?.claims?.includes('CanUpdateTasks') && (
-          <IconButton
-            size="small"
-            onClick={() => handleOpenItemDialog(backlogId, task)}
-            title="Modifier"
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-        )}
-        {currentUser?.claims?.includes('CanDeleteTasks') && (
-          <IconButton
-            size="small"
-            onClick={() => handleOpenDeleteItemDialog(task.id)}
-            title="Supprimer"
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
-        )}
-      </Box>
-    </TaskItem>
-  );
-
-  // Render sprint item
-  const renderSprintItem = (task) => (
-    <SortableTaskItem
-      task={task}
-      backlogId={task.backlogIds[0] || null}
-      renderBacklogItem={renderBacklogItem}
-      isSprint={true}
-    />
-  );
-
-  // Render backlog tab
-  const renderBacklogTab = () => {
-    const startIndex = (backlogPage - 1) * backlogsPerPage;
-    const endIndex = startIndex + backlogsPerPage;
-    const paginatedBacklogs = backlogs.slice(startIndex, endIndex);
-    const totalBacklogPages = Math.ceil(backlogs.length / backlogsPerPage);
-
-    const droppableIds = [
-      ...paginatedBacklogs.map((backlog) => backlog.id.toString()),
-      ...tasks.map((task) => task.id.toString()),
-    ];
-
-    return (
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={customHandleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
-        <SortableContext items={droppableIds} strategy={verticalListSortingStrategy}>
-          <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <PageTitle>Backlogs pour le projet {project.title}</PageTitle>
-              {currentUser?.claims?.includes('CanCreateBacklogs') && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => handleOpenBacklogDialog()}
-                >
-                  Nouveau Backlog
-                </Button>
-              )}
-            </Box>
-            {status === 'loading' && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-                <CircularProgress size={40} />
-              </Box>
-            )}
-            {(error || reduxError) && (
-              <Alert
-                severity="error"
-                sx={{ mb: 3 }}
-                action={
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => {
-                      dispatch(clearTasksError());
-                      setError('');
-                      dispatch(fetchBacklogs({ projectId: parseInt(projectId) }));
-                      dispatch(fetchAllTasks({ projectId: parseInt(projectId) }));
-                      dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }));
-                      dispatch(fetchSprints({ projectId: parseInt(projectId) }));
-                    }}
-                  >
-                    Réessayer
-                  </Button>
-                }
-              >
-                {error || reduxError}
-              </Alert>
-            )}
-            {paginatedBacklogs.length === 0 && status !== 'loading' && !error && !reduxError ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flex: 1,
-                  textAlign: 'center',
-                  borderRadius: 2,
-                  py: 8,
-                  px: 4,
-                }}
-              >
-                <ListAltIcon
-                  sx={{
-                    fontSize: 80,
-                    color: 'primary.main',
-                    mb: 2,
-                    opacity: 0.8,
-                  }}
-                />
-                <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
-                  Aucun backlog dans ce projet
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
-                  Commencez à organiser votre projet en créant votre premier backlog.
-                </Typography>
-                {currentUser?.claims?.includes('CanCreateBacklogs') && (
-                  <IconButton
-                    onClick={() => handleOpenBacklogDialog()}
-                    sx={{
-                      mb: 2,
-                      bgcolor: 'primary.main',
-                      color: 'white',
-                      '&:hover': { bgcolor: 'primary.dark' },
-                      width: 60,
-                      height: 60,
-                    }}
-                    title="Créer un nouveau backlog"
-                  >
-                    <AddIcon sx={{ fontSize: 40 }} />
-                  </IconButton>
-                )}
-              </Box>
-            ) : (
-              <>
-                {paginatedBacklogs.map((backlog) => (
-                  <BacklogContainer key={backlog.id} id={backlog.id.toString()}>
-                    <BacklogHeader>
-                      <Box>
-                        <Typography variant="h6">{backlog.name}</Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          {backlog.description}
-                        </Typography>
-                      </Box>
-                      <Box>
-                        {currentUser?.claims?.includes('CanUpdateBacklogs') && (
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenBacklogDialog(backlog)}
-                            title="Modifier le backlog"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        )}
-                        {currentUser?.claims?.includes('CanDeleteBacklogs') && (
-                          <IconButton
-                            size="small"
-                            onClick={() => handleOpenDeleteBacklogDialog(backlog.id)}
-                            title="Supprimer le backlog"
-                            disabled={isSubmitting}
-                          >
-                            <DeleteIcon fontSize="small" />
-                          </IconButton>
-                        )}
-                        {currentUser?.claims?.includes('CanCreateTasks') && (
-                          <Button
-                            variant="outlined"
-                            startIcon={<AddIcon />}
-                            onClick={() => handleOpenItemDialog(backlog.id)}
-                            size="small"
-                            sx={{ ml: 1 }}
-                          >
-                            Ajouter Item
-                          </Button>
-                        )}
-                      </Box>
-                    </BacklogHeader>
-                    <BacklogContent>
-                      {backlog.taskIds.length > 0 ? (
-                        <SortableContext
-                          items={backlog.taskIds.map((id) => id.toString())}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {tasks
-                            .filter((task) => backlog.taskIds.includes(task.id))
-                            .map((task) => (
-                              <SortableTaskItem
-                                key={task.id}
-                                task={task}
-                                backlogId={backlog.id}
-                                renderBacklogItem={renderBacklogItem}
-                              />
-                            ))}
-                        </SortableContext>
-                      ) : (
-                        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                          Aucun item dans ce backlog. {currentUser?.claims?.includes('CanCreateTasks') ? 'Cliquez sur "Ajouter Item" pour commencer.' : ''}
-                        </Typography>
-                      )}
-                    </BacklogContent>
-                  </BacklogContainer>
+          {task.description && (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ mt: 0.5, wordBreak: 'break-word' }}
+            >
+              {task.description}
+            </Typography>
+          )}
+          <Box sx={{ mt: 1, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+            <Chip
+              label={priorityMap[task.priority] || task.priority}
+              size="small"
+              color={
+                task.priority === 'HIGH' ? 'error' :
+                task.priority === 'MEDIUM' ? 'warning' :
+                task.priority === 'LOW' ? 'success' : 'default'
+              }
+            />
+            <Chip
+              label={task.status}
+              size="small"
+              color={
+                task.status === 'Terminé' ? 'success' :
+                task.status === 'En À faire' ? 'info' : 'default'
+              }
+            />
+            {task.assignedUserEmails?.length > 0 && (
+              <AvatarGroup max={4} sx={{ flexShrink: 0 }}>
+                {task.assignedUserEmails.map((email) => (
+                  <Tooltip key={email} title={email}>
+                    <Avatar
+                      sx={{
+                        bgcolor: getAvatarColor(email),
+                        width: 24,
+                        height: 24,
+                        fontSize: 12,
+                      }}
+                    >
+                      {generateInitials(email)}
+                    </Avatar>
+                  </Tooltip>
                 ))}
-                {totalBacklogPages > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                    <Pagination
-                      count={totalBacklogPages}
-                      page={backlogPage}
-                      onChange={handleBacklogPageChange}
-                      color="primary"
-                    />
-                  </Box>
-                )}
-              </>
+              </AvatarGroup>
             )}
-          </ScrollableContainer>
-        </SortableContext>
-      </DndContext>
-    );
-  };
-
-  // Render sprints tab
-  const renderSprintsTab = () => {
-    const startIndex = (sprintPage - 1) * sprintsPerPage;
-    const endIndex = startIndex + sprintsPerPage;
-    const paginatedSprints = sprints.slice(startIndex, endIndex);
-    const totalSprintPages = Math.ceil(sprints.length / sprintsPerPage);
-
-    const droppableIds = [
-      ...paginatedSprints.map((sprint) => sprint.id.toString()),
-      ...tasks.map((task) => task.id.toString()),
-    ];
-
-    return (
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragEnd={customHandleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
-        <SortableContext items={droppableIds} strategy={verticalListSortingStrategy}>
-          <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <PageTitle>Tableau Kanban pour le projet {project.title}</PageTitle>
-              {currentUser?.claims?.includes('CanCreateSprints') && (
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => handleOpenSprintDialog()}
-                >
-                  Nouveau Sprint
-                </Button>
-              )}
+          </Box>
+          {task.subtasks?.length > 0 && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant="caption" display="block">Sous-tâches :</Typography>
+              <List dense sx={{ py: 0 }}>
+                {task.subtasks.map((subtask, index) => (
+                  <ListItem key={index} sx={{ py: 0, pl: 1 }}>
+                    <ListItemText
+                      primary={`- ${subtask}`}
+                      primaryTypographyProps={{ variant: 'caption' }}
+                    />
+                  </ListItem>
+                ))}
+              </List>
             </Box>
-            {status === 'loading' && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-                <CircularProgress size={40} />
-              </Box>
-            )}
-            {(error || reduxError) && (
-              <Alert
-                severity="error"
-                sx={{ mb: 3 }}
-                action={
-                  <Button
-                    color="inherit"
-                    size="small"
-                    onClick={() => {
-                      dispatch(clearTasksError());
-                      setError('');
-                      dispatch(fetchSprints({ projectId: parseInt(projectId) }));
-                    }}
-                  >
-                    Réessayer
-                  </Button>
-                }
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, ml: 'auto', pl: 1, flexShrink: 0 }}>
+          <Tooltip title="Voir les détails de la tâche">
+            <IconButton
+              size="small"
+              onClick={() => handleOpenTaskDetailsDialog(task)}
+            >
+              <InfoIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        
+          {!isSprint && currentUser?.claims?.includes('CanCreateSprints') && (
+            <Tooltip title="Ajouter au sprint">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenAddToSprintDialog(backlogId, task.id)}
               >
-                {error || reduxError}
-              </Alert>
-            )}
-            {paginatedSprints.length === 0 && status !== 'loading' && !error && !reduxError ? (
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flex: 1,
-                  textAlign: 'center',
-                  borderRadius: 2,
-                  py: 8,
-                  px: 4,
-                }}
+                <TimelineIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {currentUser?.claims?.includes('CanUpdateTasks') && (
+            <Tooltip title="Modifier la tâche">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenItemDialog(backlogId, task)}
               >
-                <TimelineIcon
-                  sx={{
-                    fontSize: 80,
-                    color: 'primary.main',
-                    mb: 2,
-                    opacity: 0.8,
-                  }}
-                />
-                <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
-                  Aucun sprint dans ce projet
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
-                  Lancez votre projet en créant votre premier sprint.
-                </Typography>
-                {currentUser?.claims?.includes('CanCreateSprints') && (
-                  <IconButton
-                    onClick={() => handleOpenSprintDialog()}
-                    sx={{
-                      mb: 2,
-                      bgcolor: 'primary.main',
-                      color: 'white',
-                      '&:hover': { bgcolor: 'primary.dark' },
-                      width: 60,
-                      height: 60,
-                    }}
-                    title="Créer un nouveau sprint"
-                  >
-                    <AddIcon sx={{ fontSize: 40 }} />
-                  </IconButton>
-                )}
-              </Box>
-            ) : (
-              <>
-                {paginatedSprints.map((sprint) => {
-                  const sprintTasks = tasks.filter((task) => task.sprintId === sprint.id);
-                  return (
-                    <StyledPaper key={sprint.id} id={sprint.id.toString()}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Box>
-                          <Typography variant="h6">{sprint.name}</Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {sprint.description}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {sprint.startDate} à {sprint.endDate}
-                          </Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography sx={{ mr: 2 }}>
-                            {sprintTasks.length} tâches • {sprintTasks.filter((t) => t.status === 'COMPLETED').length} terminées
-                          </Typography>
-                          {currentUser?.claims?.includes('CanUpdateSprints') && (
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenSprintDialog(sprint)}
-                              title="Modifier le sprint"
-                            >
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                          {currentUser?.claims?.includes('CanDeleteSprints') && (
-                            <IconButton
-                              size="small"
-                              onClick={() => handleOpenDeleteSprintDialog(sprint.id)}
-                              title="Supprimer le sprint"
-                              disabled={isSubmitting}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          )}
-                        </Box>
-                      </Box>
-                      <Divider sx={{ mb: 2 }} />
-                      {sprintTasks.length > 0 ? (
-                        <SortableContext
-                          items={sprintTasks.map((task) => task.id.toString())}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {sprintTasks.map((task) => renderSprintItem(task))}
-                        </SortableContext>
-                      ) : (
-                        <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                          Aucune tâche dans ce sprint. Ajoutez des tâches depuis le backlog.
-                        </Typography>
-                      )}
-                    </StyledPaper>
-                  );
-                })}
-                {totalSprintPages > 1 && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                    <Pagination
-                      count={totalSprintPages}
-                      page={sprintPage}
-                      onChange={handleSprintPageChange}
-                      color="primary"
-                    />
-                  </Box>
-                )}
-              </>
-            )}
-          </ScrollableContainer>
-        </SortableContext>
-      </DndContext>
+                <EditIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+          {currentUser?.claims?.includes('CanDeleteTasks') && (
+            <Tooltip title="Supprimer la tâche">
+              <IconButton
+                size="small"
+                onClick={() => handleOpenDeleteItemDialog(task.id)}
+              >
+                <DeleteIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
+      </TaskItem>
     );
   };
 
-  // Render backlog dialog
+  // Render Backlog Tab
+  // Render Backlog Tab
+const renderBacklogTab = () => {
+  const startIndex = (backlogPage - 1) * backlogsPerPage;
+  const endIndex = startIndex + backlogsPerPage;
+  const paginatedBacklogs = backlogs.slice(startIndex, endIndex);
+  const totalBacklogPages = Math.ceil(backlogs.length / backlogsPerPage);
+
+  // Filter tasks for the authenticated user
+  const userTasks = tasks.filter(
+    (task) =>
+      task.createdByUserId === currentUser?.id ||
+      task.assignedUserIds?.includes(currentUser?.id)
+  );
+
+  return (
+    <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <PageTitle>Backlogs pour le projet {project.title}</PageTitle>
+        {currentUser?.claims?.includes('CanCreateBacklogs') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenBacklogDialog()}
+          >
+            Nouveau Backlog
+          </Button>
+        )}
+      </Box>
+      {status === 'loading' && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <CircularProgress size={40} />
+        </Box>
+      )}
+      {(error || reduxError) && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearTasksError());
+                setError('');
+                dispatch(fetchBacklogs({ projectId: parseInt(projectId) }));
+                dispatch(fetchAllTasks({ projectId: parseInt(projectId) }));
+                dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }));
+                dispatch(fetchSprints({ projectId: parseInt(projectId) }));
+              }}
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          {error || reduxError}
+        </Alert>
+      )}
+      {paginatedBacklogs.length === 0 && status !== 'loading' && !error && !reduxError ? (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            textAlign: 'center',
+            borderRadius: 2,
+            py: 8,
+            px: 4,
+          }}
+        >
+          <ListAltIcon
+            sx={{
+              fontSize: 80,
+              color: 'primary.main',
+              mb: 2,
+              opacity: 0.8,
+            }}
+          />
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
+            Aucun backlog dans ce projet
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
+            Commencez à organiser votre projet en créant votre premier backlog.
+          </Typography>
+          {currentUser?.claims?.includes('CanCreateBacklogs') && (
+            <IconButton
+              onClick={() => handleOpenBacklogDialog()}
+              sx={{
+                mb: 2,
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' },
+                width: 60,
+                height: 60,
+              }}
+              title="Créer un nouveau backlog"
+            >
+              <AddIcon sx={{ fontSize: 40 }} />
+            </IconButton>
+          )}
+        </Box>
+      ) : (
+        <>
+          {paginatedBacklogs.map((backlog) => {
+            // Filter tasks for this backlog that belong to the user
+            const backlogUserTasks = userTasks.filter((task) =>
+              backlog.taskIds.includes(task.id)
+            );
+
+            return (
+              <BacklogContainer key={backlog.id}>
+                <BacklogHeader>
+                  <Box>
+                    <Typography variant="h6">{backlog.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {backlog.description}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    {currentUser?.claims?.includes('CanUpdateBacklogs') && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenBacklogDialog(backlog)}
+                        title="Modifier le backlog"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    {currentUser?.claims?.includes('CanDeleteBacklogs') && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenDeleteBacklogDialog(backlog.id)}
+                        title="Supprimer le backlog"
+                        disabled={isSubmitting}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    {currentUser?.claims?.includes('CanCreateTasks') && (
+                      <Button
+                        variant="outlined"
+                        startIcon={<AddIcon />}
+                        onClick={() => handleOpenItemDialog(backlog.id)}
+                        size="small"
+                        sx={{ ml: 1 }}
+                      >
+                        Ajouter Item
+                      </Button>
+                    )}
+                  </Box>
+                </BacklogHeader>
+                <BacklogContent>
+                  {backlogUserTasks.length > 0 ? (
+                    backlogUserTasks.map((task) => (
+                      <Box key={task.id}>
+                        {renderBacklogItem(backlog.id, task)}
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                      Aucune tâche créée ou assignée à vous dans ce backlog.
+                      {currentUser?.claims?.includes('CanCreateTasks') ? ' Cliquez sur "Ajouter Item" pour commencer.' : ''}
+                    </Typography>
+                  )}
+                </BacklogContent>
+              </BacklogContainer>
+            );
+          })}
+          {totalBacklogPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={totalBacklogPages}
+                page={backlogPage}
+                onChange={handleBacklogPageChange}
+                color="primary"
+              />
+            </Box>
+          )}
+        </>
+      )}
+    </ScrollableContainer>
+  );
+};
+
+  // Render Sprints Tab
+ // Render Sprints Tab
+const renderSprintsTab = () => {
+  const startIndex = (sprintPage - 1) * sprintsPerPage;
+  const endIndex = startIndex + sprintsPerPage;
+  const paginatedSprints = sprints.slice(startIndex, endIndex);
+  const totalSprintPages = Math.ceil(sprints.length / sprintsPerPage);
+
+  // Filter tasks for the authenticated user
+  const userTasks = tasks.filter(
+    (task) =>
+      task.createdByUserId === currentUser?.id ||
+      task.assignedUserIds?.includes(currentUser?.id)
+  );
+
+  return (
+    <ScrollableContainer sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <PageTitle>Tableau Kanban pour le projet {project.title}</PageTitle>
+        {currentUser?.claims?.includes('CanCreateSprints') && (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenSprintDialog()}
+          >
+            Nouveau Sprint
+          </Button>
+        )}
+      </Box>
+      {status === 'loading' && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <CircularProgress size={40} />
+        </Box>
+      )}
+      {(error || reduxError) && (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() => {
+                dispatch(clearTasksError());
+                setError('');
+                dispatch(fetchSprints({ projectId: parseInt(projectId) }));
+              }}
+            >
+              Réessayer
+            </Button>
+          }
+        >
+          {error || reduxError}
+        </Alert>
+      )}
+      {paginatedSprints.length === 0 && status !== 'loading' && !error && !reduxError ? (
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            textAlign: 'center',
+            borderRadius: 2,
+            py: 8,
+            px: 4,
+          }}
+        >
+          <TimelineIcon
+            sx={{
+              fontSize: 80,
+              color: 'primary.main',
+              mb: 2,
+              opacity: 0.8,
+            }}
+          />
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 'medium', color: 'text.primary' }}>
+            Aucun sprint dans ce projet
+          </Typography>
+          <Typography variant="body1" sx={{ mb: 3, color: 'text.secondary', maxWidth: 400 }}>
+            Lancez votre projet en créant votre premier sprint.
+          </Typography>
+          {currentUser?.claims?.includes('CanCreateSprints') && (
+            <IconButton
+              onClick={() => handleOpenSprintDialog()}
+              sx={{
+                mb: 2,
+                bgcolor: 'primary.main',
+                color: 'white',
+                '&:hover': { bgcolor: 'primary.dark' },
+                width: 60,
+                height: 60,
+              }}
+              title="Créer un nouveau sprint"
+            >
+              <AddIcon sx={{ fontSize: 40 }} />
+            </IconButton>
+          )}
+        </Box>
+      ) : (
+        <>
+          {paginatedSprints.map((sprint) => {
+            // Filter tasks for this sprint that belong to the user
+            const sprintUserTasks = userTasks.filter((task) => task.sprintId === sprint.id);
+            const isOverdue = isSprintOverdue(sprint);
+
+            return (
+              <StyledPaper key={sprint.id}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="h6">{sprint.name}</Typography>
+                      {isOverdue && (
+                        <Chip
+                          label="Sprint terminé"
+                          size="small"
+                          color="error"
+                        />
+                      )}
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {sprint.description}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {sprint.startDate} à {sprint.endDate}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Typography sx={{ mr: 2 }}>
+                      {sprintUserTasks.length} tâches • {sprintUserTasks.filter((t) => t.status === 'Terminé').length} terminées
+                    </Typography>
+                    {currentUser?.claims?.includes('CanUpdateSprints') && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenSprintDialog(sprint)}
+                        title="Modifier le sprint"
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    {currentUser?.claims?.includes('CanDeleteSprints') && (
+                      <IconButton
+                        size="small"
+                        onClick={() => handleOpenDeleteSprintDialog(sprint.id)}
+                        title="Supprimer le sprint"
+                        disabled={isSubmitting}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </Box>
+                <Divider sx={{ mb: 2 }} />
+                {sprintUserTasks.length > 0 ? (
+                  sprintUserTasks.map((task) => (
+                    <Box key={task.id}>
+                      {renderBacklogItem(null, task, true)}
+                    </Box>
+                  ))
+                ) : (
+                  <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    Aucune tâche créée ou assignée à vous dans ce sprint.
+                  </Typography>
+                )}
+              </StyledPaper>
+            );
+          })}
+          {totalSprintPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={totalSprintPages}
+                page={sprintPage}
+                onChange={handleSprintPageChange}
+                color="primary"
+              />
+            </Box>
+          )}
+        </>
+      )}
+    </ScrollableContainer>
+  );
+};
+
+  // Render Dialogs
   const renderBacklogDialog = () => (
     <Dialog
       open={backlogDialogOpen}
@@ -1610,7 +1530,6 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render item dialog
   const renderItemDialog = () => (
     <Dialog
       open={itemDialogOpen}
@@ -1702,8 +1621,8 @@ function BacklogPage() {
             <MenuItem value="À faire">À faire</MenuItem>
             {currentItem && formValues.status !== 'À faire' && (
               <>
-                <MenuItem value="IN_PROGRESS">En cours</MenuItem>
-                <MenuItem value="COMPLETED">Terminé</MenuItem>
+             
+                <MenuItem value="Terminé">Terminé</MenuItem>
               </>
             )}
           </Select>
@@ -1779,7 +1698,6 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render sprint dialog
   const renderSprintDialog = () => (
     <Dialog
       open={sprintDialogOpen}
@@ -1872,7 +1790,6 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render add to sprint dialog
   const renderAddToSprintDialog = () => (
     <Dialog
       open={addToSprintDialogOpen}
@@ -1938,7 +1855,279 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render delete backlog confirmation dialog
+ const renderTaskDetailsDialog = () => (
+  <Dialog
+    open={taskDetailsDialogOpen}
+    onClose={handleCloseTaskDetailsDialog}
+    maxWidth="sm"
+    fullWidth
+    disableBackdropClick
+  >
+    <DialogTitle sx={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center',
+      backgroundColor: 'primary.main',
+      color: 'white',
+      py: 2
+    }}>
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <ListAltIcon sx={{ mr: 1 }} />
+        <Typography variant="h6">Détails de la tâche</Typography>
+      </Box>
+      <IconButton
+        onClick={handleCloseTaskDetailsDialog}
+        sx={{ color: 'white' }}
+        title="Fermer"
+      >
+        <CloseIcon />
+      </IconButton>
+    </DialogTitle>
+    <FormDialogContent>
+      {selectedTask && (
+        <>
+          {/* Section Principale */}
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: 3, 
+            mt: 2 
+          }}>
+            {/* Titre et Description */}
+            <Box>
+              <Typography variant="h5" sx={{ 
+                fontWeight: 'bold',
+                mb: 1,
+                color: 'text.primary'
+              }}>
+                {selectedTask.title}
+              </Typography>
+              {selectedTask.description && (
+                <Paper elevation={0} sx={{ 
+                  p: 2, 
+                  backgroundColor: 'grey.50',
+                  borderRadius: 1
+                }}>
+                  <Typography variant="body1">
+                    {selectedTask.description}
+                  </Typography>
+                </Paper>
+              )}
+            </Box>
+
+            {/* Métadonnées */}
+            <Box sx={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', 
+              gap: 2 
+            }}>
+              {/* Priorité */}
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'grey.50',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Priorité
+                </Typography>
+                <Chip
+                  label={priorityMap[selectedTask.priority] || selectedTask.priority}
+                  size="medium"
+                  color={
+                    selectedTask.priority === 'HIGH' ? 'error' :
+                    selectedTask.priority === 'MEDIUM' ? 'warning' :
+                    selectedTask.priority === 'LOW' ? 'success' : 'default'
+                  }
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Paper>
+
+              {/* Statut */}
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'grey.50',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Statut
+                </Typography>
+                <Chip
+                  label={selectedTask.status}
+                  size="medium"
+                  color={
+                    selectedTask.status === 'Terminé' ? 'success' :
+                    selectedTask.status === 'En cours' ? 'info' : 'default'
+                  }
+                  sx={{ fontWeight: 'bold' }}
+                />
+              </Paper>
+
+              {/* Dates */}
+              {selectedTask.createdAt && (
+                <Paper elevation={0} sx={{ 
+                  p: 2, 
+                  backgroundColor: 'grey.50',
+                  borderRadius: 1
+                }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                    Créée le
+                  </Typography>
+                  <Typography variant="body2">
+                    {new Date(selectedTask.createdAt).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: 'long',
+                      year: 'numeric'
+                    })}
+                  </Typography>
+                </Paper>
+              )}
+            </Box>
+
+            {/* Sprint Information */}
+            {selectedTask.sprintId && (
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'grey.50',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Sprint
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TimelineIcon color="primary" />
+                  <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
+                    {sprints.find(s => s.id === selectedTask.sprintId)?.name || 'Inconnu'}
+                  </Typography>
+                </Box>
+                {sprints.find(s => s.id === selectedTask.sprintId)?.description && (
+                  <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                    {sprints.find(s => s.id === selectedTask.sprintId)?.description}
+                  </Typography>
+                )}
+              </Paper>
+            )}
+
+            {/* Overdue Information */}
+            {selectedTask.overdueFromSprint && selectedTask.status !== 'Terminé' && (
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'warning.light',
+                borderRadius: 1,
+                borderLeft: '4px solid',
+                borderColor: 'warning.main'
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <InfoIcon color="warning" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                    Tâche en retard
+                  </Typography>
+                </Box>
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  Cette tâche n'a pas été terminée à temps et a été déplacée depuis le sprint "{selectedTask.overdueFromSprint}".
+                </Typography>
+              </Paper>
+            )}
+
+            {/* Assignés */}
+            {selectedTask.assignedUserEmails?.length > 0 && (
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'grey.50',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                  Membres assignés ({selectedTask.assignedUserEmails.length})
+                </Typography>
+                <List dense>
+                  {selectedTask.assignedUserEmails.map((email) => {
+                    const user = projectUsers.find(u => u.email === email);
+                    return (
+                      <ListItem key={email} sx={{ py: 0.5 }}>
+                        <ListItemIcon>
+                          <Avatar
+                            sx={{
+                              bgcolor: getAvatarColor(email),
+                              width: 32,
+                              height: 32,
+                              fontSize: 14,
+                            }}
+                          >
+                            {generateInitials(email)}
+                          </Avatar>
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={user?.name || email}
+                          secondary={email}
+                          primaryTypographyProps={{ fontWeight: 'medium' }}
+                          secondaryTypographyProps={{ variant: 'caption' }}
+                        />
+                      </ListItem>
+                    );
+                  })}
+                </List>
+              </Paper>
+            )}
+
+            {/* Sous-tâches */}
+            {selectedTask.subtasks?.length > 0 && (
+              <Paper elevation={0} sx={{ 
+                p: 2, 
+                backgroundColor: 'grey.50',
+                borderRadius: 1
+              }}>
+                <Typography variant="subtitle2" sx={{ mb: 2 }}>
+                  Sous-tâches ({selectedTask.subtasks.length})
+                </Typography>
+                <List dense>
+                  {selectedTask.subtasks.map((subtask, index) => (
+                    <ListItem key={index} sx={{ py: 0 }}>
+                      <ListItemIcon>
+                        <Checkbox
+                          edge="start"
+                          disabled
+                          checked={false}
+                          tabIndex={-1}
+                          size="small"
+                        />
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={subtask}
+                        primaryTypographyProps={{ variant: 'body2' }}
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Paper>
+            )}
+          </Box>
+        </>
+      )}
+    </FormDialogContent>
+    <DialogActions sx={{ p: 2 }}>
+      <Button 
+        onClick={handleCloseTaskDetailsDialog}
+        variant="outlined"
+        sx={{ mr: 1 }}
+      >
+        Fermer
+      </Button>
+      {currentUser?.claims?.includes('CanUpdateTasks') && (
+        <Button
+          variant="contained"
+          onClick={() => {
+            handleCloseTaskDetailsDialog();
+            const backlogId = selectedTask.backlogIds?.[0];
+            if (backlogId) {
+              handleOpenItemDialog(backlogId, selectedTask);
+            }
+          }}
+        >
+          Modifier la tâche
+        </Button>
+      )}
+    </DialogActions>
+  </Dialog>
+);
   const renderDeleteBacklogDialog = () => (
     <Dialog
       open={deleteBacklogDialogOpen}
@@ -1978,7 +2167,6 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render delete item confirmation dialog
   const renderDeleteItemDialog = () => (
     <Dialog
       open={deleteItemDialogOpen}
@@ -2018,7 +2206,6 @@ function BacklogPage() {
     </Dialog>
   );
 
-  // Render delete sprint confirmation dialog
   const renderDeleteSprintDialog = () => (
     <Dialog
       open={deleteSprintDialogOpen}
@@ -2058,6 +2245,7 @@ function BacklogPage() {
     </Dialog>
   );
 
+  // Loading State
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -2066,9 +2254,10 @@ function BacklogPage() {
     );
   }
 
+  // Error State
   if (!project) {
     return (
-      <Box sx={{ p: 3, bgcolor: '#fff' }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Alert
           severity="error"
           action={
@@ -2094,6 +2283,7 @@ function BacklogPage() {
     );
   }
 
+  // Main Render
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Tabs
@@ -2116,6 +2306,7 @@ function BacklogPage() {
       {renderDeleteBacklogDialog()}
       {renderDeleteItemDialog()}
       {renderDeleteSprintDialog()}
+      {renderTaskDetailsDialog()}
     </Box>
   );
 }

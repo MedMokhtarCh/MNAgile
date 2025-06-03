@@ -77,7 +77,6 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
                 }
 
-                // Validate backlog IDs
                 if (request.BacklogIds != null && request.BacklogIds.Any())
                 {
                     var backlogs = await _context.Backlogs
@@ -90,7 +89,6 @@ namespace TaskService.Services
                     }
                 }
 
-                // Validate sprint ID
                 if (request.SprintId.HasValue)
                 {
                     var sprint = await _context.Sprints.FindAsync(request.SprintId.Value);
@@ -103,13 +101,13 @@ namespace TaskService.Services
 
                 var assignedUserIds = new List<int>();
                 var validAssignedUserEmails = new List<string>();
-                if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
+                if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any(email => !string.IsNullOrEmpty(email)))
                 {
                     _logger.LogDebug($"Validating {request.AssignedUserEmails.Count} emails...");
-                    var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails);
+                    var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)).ToList());
                     var invalidEmails = new List<string>();
 
-                    foreach (var email in request.AssignedUserEmails)
+                    foreach (var email in request.AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)))
                     {
                         if (userIdsByEmail.ContainsKey(email))
                         {
@@ -171,7 +169,6 @@ namespace TaskService.Services
                 _context.Tasks.Add(task);
                 await _context.SaveChangesAsync();
 
-                // Link to backlogs
                 if (request.BacklogIds != null && request.BacklogIds.Any())
                 {
                     foreach (var backlogId in request.BacklogIds)
@@ -400,7 +397,6 @@ namespace TaskService.Services
                     }
                 }
 
-                // Validate backlog IDs if provided and not empty
                 if (request.BacklogIds != null && request.BacklogIds.Any())
                 {
                     var backlogs = await _context.Backlogs
@@ -413,7 +409,6 @@ namespace TaskService.Services
                     }
                 }
 
-                // Validate sprint ID
                 if (request.SprintId.HasValue)
                 {
                     var sprint = await _context.Sprints.FindAsync(request.SprintId.Value);
@@ -426,11 +421,11 @@ namespace TaskService.Services
 
                 var assignedUserIds = new List<int>();
                 var validAssignedUserEmails = new List<string>();
-                if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any())
+                if (request.AssignedUserEmails != null && request.AssignedUserEmails.Any(email => !string.IsNullOrEmpty(email)))
                 {
-                    var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails);
+                    var userIdsByEmail = await _userServiceClient.GetUserIdsByEmailsAsync(request.AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)).ToList());
                     var invalidEmails = new List<string>();
-                    foreach (var email in request.AssignedUserEmails)
+                    foreach (var email in request.AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)))
                     {
                         if (userIdsByEmail.ContainsKey(email))
                         {
@@ -477,13 +472,14 @@ namespace TaskService.Services
                 task.EndDate = request.EndDate ?? task.EndDate;
                 task.ProjectId = request.ProjectId ?? task.ProjectId;
                 task.UpdatedAt = DateTime.UtcNow;
-                task.AssignedUserIds = assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null;
+                task.AssignedUserIds = request.AssignedUserEmails != null && request.AssignedUserEmails.Any(email => !string.IsNullOrEmpty(email))
+                    ? (assignedUserIds.Any() ? string.Join(",", assignedUserIds) : null)
+                    : task.AssignedUserIds;
                 task.Attachments = attachmentDtos.Any() ? JsonSerializer.Serialize(attachmentDtos) : null;
                 task.Subtasks = request.Subtasks != null ? JsonSerializer.Serialize(request.Subtasks) : task.Subtasks;
                 task.SprintId = request.SprintId ?? task.SprintId;
                 task.DisplayOrder = request.DisplayOrder ?? task.DisplayOrder;
 
-                // Update backlog links
                 if (request.BacklogIds != null)
                 {
                     var existingBacklogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
@@ -589,7 +585,6 @@ namespace TaskService.Services
                     return null;
                 }
 
-                // Valider le statut
                 var columns = await _kanbanColumnService.GetColumnsByProjectAsync(task.ProjectId);
                 if (!columns.Any(c => c.Name == request.Status))
                 {
@@ -597,7 +592,6 @@ namespace TaskService.Services
                     throw new InvalidOperationException($"Le statut '{request.Status}' n'est pas valide pour ce projet.");
                 }
 
-                // Mettre à jour status et displayOrder
                 task.Status = request.Status;
                 task.DisplayOrder = request.DisplayOrder;
                 task.UpdatedAt = DateTime.UtcNow;
@@ -607,7 +601,6 @@ namespace TaskService.Services
 
                 _logger.LogInformation($"Task {id} status updated to {task.Status} with displayOrder {task.DisplayOrder} by user {userId}");
 
-                // Préparer TaskDTO
                 var assignedUserIds = string.IsNullOrEmpty(task.AssignedUserIds)
                     ? new List<int>()
                     : task.AssignedUserIds.Split(',').Select(int.Parse).ToList();

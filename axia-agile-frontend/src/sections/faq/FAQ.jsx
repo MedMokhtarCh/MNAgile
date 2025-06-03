@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import "./faq.css";
 
 const FAQItem = ({ question, answer, isOpen, onClick }) => (
@@ -15,6 +16,7 @@ const FAQItem = ({ question, answer, isOpen, onClick }) => (
 
 const FAQ = () => {
   const [openIndex, setOpenIndex] = useState(null);
+  const navigate = useNavigate();
 
   const faqData = [
     {
@@ -43,6 +45,10 @@ const FAQ = () => {
     setOpenIndex(openIndex === index ? null : index);
   };
 
+  const handleSubscribe = () => {
+    navigate('/Subscribe');
+  };
+
   return (
     <section className="faq-section">
       <div className="faq-container">
@@ -63,7 +69,7 @@ const FAQ = () => {
         <h3>Commencez maintenant et profitez des meilleurs services.</h3>
         <p>Lancez-vous dès maintenant</p>
         <p>et profitez de services exceptionnels !</p>
-        <button className="cta-button">Commencer</button>
+        <button className="cta-button" onClick={handleSubscribe}>Commencer</button>
         <div className="cta-deco one"></div>
         <div className="cta-deco two"></div>
         <div className="cta-line top"></div>

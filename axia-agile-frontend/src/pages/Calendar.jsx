@@ -35,6 +35,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useParams } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchAllTasks, clearTasksError } from '../store/slices/taskSlice';
+import { useAuth } from '../contexts/AuthContext';
 
 // Custom Theme
 const theme = createTheme({
@@ -44,7 +45,6 @@ const theme = createTheme({
     success: { main: '#84c887' },
     error: { main: '#f67d74' },
     info: { main: '#50c1e9' },
-
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
@@ -120,6 +120,7 @@ const Calendar = () => {
   const { projectId } = useParams();
   const dispatch = useDispatch();
   const { tasks, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
+  const { currentUser } = useAuth(); // Access authenticated user
 
   // Validate projectId
   const isValidProjectId = projectId && !isNaN(parseInt(projectId));
@@ -149,7 +150,6 @@ const Calendar = () => {
         if (isMounted) {
           setLoading(false);
           if (retryCount < maxRetries && err.status !== 400) {
-            // Retry for non-400 errors (e.g., network issues)
             retryTimeout = setTimeout(() => {
               setRetryCount((prev) => prev + 1);
               loadTasks();
@@ -167,24 +167,33 @@ const Calendar = () => {
     };
   }, [projectId, dispatch, retryCount, isValidProjectId]);
 
-  // Map tasks to events
-  const events = useMemo(() => tasks.map((task) => ({
-    id: task.id,
-    title: task.title,
-    description: task.description,
-    startDate: task.startDate ? new Date(task.startDate) : new Date(),
-    endDate: task.endDate ? new Date(task.endDate) : new Date(),
-    color: priorityColors[task.priority] || 'info',
-    priority: task.priority,
-    status: task.status,
-    assignedTo: task.assignedTo,
-    backlogIds: task.backlogIds || [],
-    sprintId: task.sprintId || null,
-    subtasks: task.subtasks || [],
-    attachments: task.attachments || [],
-    metadata: task.metadata || {},
-    originalTask: task,
-  })), [tasks]);
+  // Map tasks to events with user-based filtering
+  const events = useMemo(() => {
+    return tasks
+      .filter((task) => {
+        // Filter tasks created by or assigned to the current user
+        const isCreatedByUser = task.createdByUserId === currentUser.id;
+        const isAssignedToUser = task.assignedUserIds?.includes(currentUser.id);
+        return isCreatedByUser || isAssignedToUser;
+      })
+      .map((task) => ({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        startDate: task.startDate ? new Date(task.startDate) : new Date(),
+        endDate: task.endDate ? new Date(task.endDate) : new Date(),
+        color: priorityColors[task.priority] || 'info',
+        priority: task.priority,
+        status: task.status,
+        assignedTo: task.assignedTo,
+        backlogIds: task.backlogIds || [],
+        sprintId: task.sprintId || null,
+        subtasks: task.subtasks || [],
+        attachments: task.attachments || [],
+        metadata: task.metadata || {},
+        originalTask: task,
+      }));
+  }, [tasks, currentUser.id]);
 
   // Utility functions
   const getDaysInMonth = (date) => {
@@ -957,7 +966,7 @@ const Calendar = () => {
           {taskError === 'Failed to fetch tasks' && retryCount < maxRetries
             ? `Tentative de connexion au serveur... (${retryCount + 1}/${maxRetries})`
             : taskError.includes('400')
-            ? 'Requête invalide. Vérifiez l\'ID du projet ou contactez l\'administrateur.'
+            ? 'Requête invalide. Vérifiez l\'ID du projet .'
             : taskError || 'Erreur lors du chargement des tâches.'}
         </Alert>
       </Box>

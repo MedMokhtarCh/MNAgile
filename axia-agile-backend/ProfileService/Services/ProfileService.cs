@@ -40,21 +40,25 @@ namespace ProfileService.Services
                 ? $"/Uploads/{Path.GetFileName(profile.ProfilePhotoPath)}"
                 : null;
 
-            return new ProfileDTO
+            var profileDto = new ProfileDTO
             {
                 UserId = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                PhoneNumber = user.PhoneNumber,
-                JobTitle = user.JobTitle,
+                Email = user.Email ?? "",
+                FirstName = profile?.FirstName ?? user.FirstName ?? "",
+                LastName = profile?.LastName ?? user.LastName ?? "",
+                PhoneNumber = profile?.PhoneNumber ?? user.PhoneNumber ?? "",
+                JobTitle = profile?.JobTitle ?? user.JobTitle ?? "",
                 ProfilePhotoUrl = photoUrl
             };
+
+            _logger.LogDebug($"Profile retrieved: {System.Text.Json.JsonSerializer.Serialize(profileDto)}");
+            return profileDto;
         }
 
         public async Task<ProfileDTO> UpdateProfileAsync(int userId, UpdateProfileRequest request)
         {
-            _logger.LogInformation($"Updating profile for UserId: {userId}");
+            _logger.LogInformation($"Updating profile for UserId: {userId} with data: {System.Text.Json.JsonSerializer.Serialize(request)}");
+
             var user = await _userServiceClient.GetUserByIdAsync(userId);
             if (user == null)
             {
@@ -62,58 +66,91 @@ namespace ProfileService.Services
                 throw new InvalidOperationException("Utilisateur non trouvé.");
             }
 
-            user.FirstName = request.FirstName ?? user.FirstName;
-            user.LastName = request.LastName ?? user.LastName;
-            user.PhoneNumber = request.PhoneNumber ?? user.PhoneNumber;
-            user.JobTitle = request.JobTitle ?? user.JobTitle;
-
-            await _userServiceClient.UpdateUserAsync(user);
-
             var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.UserId == userId);
-            var photoUrl = profile?.ProfilePhotoPath != null
-                ? $"/Uploads/{Path.GetFileName(profile.ProfilePhotoPath)}"
-                : null;
-
-            return new ProfileDTO
+            if (profile == null)
             {
-                UserId = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                PhoneNumber = user.PhoneNumber,
-                JobTitle = user.JobTitle,
-                ProfilePhotoUrl = photoUrl
-            };
+                profile = new Profile { UserId = userId };
+                _context.Profiles.Add(profile);
+            }
+
+            // Update profile fields only if provided
+            profile.FirstName = request.FirstName ?? profile.FirstName ?? user.FirstName ?? "";
+            profile.LastName = request.LastName ?? profile.LastName ?? user.LastName ?? "";
+            profile.PhoneNumber = request.PhoneNumber ?? profile.PhoneNumber ?? user.PhoneNumber ?? "";
+            profile.JobTitle = request.JobTitle ?? profile.JobTitle ?? user.JobTitle ?? "";
+
+            try
+            {
+                await _context.SaveChangesAsync();
+
+                // Only update UserService if fields differ
+                if (user.FirstName != profile.FirstName ||
+                    user.LastName != profile.LastName ||
+                    user.PhoneNumber != profile.PhoneNumber ||
+                    user.JobTitle != profile.JobTitle)
+                {
+                    var updateRequest = new UserServiceClient.UpdateOwnProfileRequest
+                    {
+                        FirstName = profile.FirstName,
+                        LastName = profile.LastName,
+                        PhoneNumber = profile.PhoneNumber,
+                        JobTitle = profile.JobTitle
+                    };
+                    await _userServiceClient.UpdateUserProfileAsync(userId, updateRequest);
+                    _logger.LogDebug($"User profile updated in UserService: {System.Text.Json.JsonSerializer.Serialize(updateRequest)}");
+                }
+
+                var photoUrl = !string.IsNullOrEmpty(profile.ProfilePhotoPath)
+                    ? $"/Uploads/{Path.GetFileName(profile.ProfilePhotoPath)}"
+                    : null;
+
+                var profileDto = new ProfileDTO
+                {
+                    UserId = user.Id,
+                    Email = user.Email ?? "",
+                    FirstName = profile.FirstName,
+                    LastName = profile.LastName,
+                    PhoneNumber = profile.PhoneNumber,
+                    JobTitle = profile.JobTitle,
+                    ProfilePhotoUrl = photoUrl
+                };
+
+                _logger.LogDebug($"Profile updated: {System.Text.Json.JsonSerializer.Serialize(profileDto)}");
+                return profileDto;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError($"Database error: {ex.Message}");
+                throw new InvalidOperationException("Erreur lors de la sauvegarde du profil.");
+            }
         }
 
         public async Task UpdatePasswordAsync(int userId, string newPassword)
         {
             _logger.LogInformation($"Updating password for UserId: {userId}");
-            if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 12 ||
-                !Regex.IsMatch(newPassword, @"[A-Z]") ||
-                !Regex.IsMatch(newPassword, @"[a-z]") ||
-                !Regex.IsMatch(newPassword, @"[0-9]") ||
-                !Regex.IsMatch(newPassword, @"[!@#$%^&*]"))
+            if (string.IsNullOrEmpty(newPassword) || newPassword.Length < 8)
             {
-                _logger.LogWarning("Password does not meet requirements.");
-                throw new InvalidOperationException("Le mot de passe doit contenir au moins 12 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
+                _logger.LogWarning("Password does not meet minimum requirements.");
+                throw new InvalidOperationException("Le mot de passe doit contenir au moins 8 caractères.");
             }
 
-            var user = await _userServiceClient.GetUserByIdAsync(userId);
-            if (user == null)
+            try
             {
-                _logger.LogError($"User with ID {userId} not found.");
-                throw new InvalidOperationException("Utilisateur non trouvé.");
+                await _userServiceClient.UpdateUserPasswordAsync(userId, newPassword);
+                _logger.LogInformation($"Password updated in UserService for UserId: {userId}");
             }
-
-            await _userServiceClient.UpdateUserPasswordAsync(userId, newPassword);
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError($"Failed to update password in UserService for UserId: {userId}: {ex.Message}");
+                throw new InvalidOperationException("Erreur lors de la mise à jour du mot de passe dans UserService. Contactez l'administrateur.");
+            }
         }
 
         public async Task<ProfileDTO> UploadProfilePhotoAsync(int userId, IFormFile file)
         {
             try
             {
-                _logger.LogInformation($"Attempting to upload profile photo for UserId: {userId}");
+                _logger.LogInformation($"Attempting to upload profile photo for UserId: {userId}, File: {file.FileName}, Size: {file.Length} bytes, MIME: {file.ContentType}");
 
                 var user = await _userServiceClient.GetUserByIdAsync(userId);
                 if (user == null)
@@ -121,114 +158,78 @@ namespace ProfileService.Services
                     _logger.LogError($"User with ID {userId} not found in UserService.");
                     throw new InvalidOperationException("Utilisateur non trouvé.");
                 }
-                _logger.LogInformation($"User found: {user.Email}");
 
-                // Validate file
                 var allowedExtensions = new[] { ".jpg", ".jpeg", ".png" };
                 var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-                if (!allowedExtensions.Contains(extension))
+                if (!allowedExtensions.Contains(extension) || !new[] { "image/jpeg", "image/png" }.Contains(file.ContentType))
                 {
-                    _logger.LogWarning($"Invalid file extension: {extension}");
-                    throw new InvalidOperationException("Seuls les fichiers JPG, JPEG et PNG sont autorisés.");
+                    _logger.LogWarning($"Invalid file type: {extension}, MIME: {file.ContentType}");
+                    throw new InvalidOperationException("Seuls les fichiers JPG et PNG sont autorisés.");
                 }
 
-                if (file.Length > 5 * 1024 * 1024) // 5MB limit
+                if (file.Length > 5 * 1024 * 1024)
                 {
                     _logger.LogWarning($"File size exceeds 5MB: {file.Length} bytes");
                     throw new InvalidOperationException("La taille du fichier ne doit pas dépasser 5 Mo.");
                 }
 
-                // Check if uploads folder exists and create it if not
                 var uploadsFolder = Path.Combine(_environment.WebRootPath, "Uploads");
-                _logger.LogInformation($"Uploads folder path: {uploadsFolder}");
-
                 if (!Directory.Exists(uploadsFolder))
                 {
                     _logger.LogInformation("Creating Uploads directory");
-                    try
-                    {
-                        Directory.CreateDirectory(uploadsFolder);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError($"Error creating Uploads directory: {ex.Message}");
-                        throw new InvalidOperationException($"Erreur lors de la création du répertoire d'Uploads: {ex.Message}");
-                    }
+                    Directory.CreateDirectory(uploadsFolder);
                 }
 
-                // Save file
                 var fileName = $"{Guid.NewGuid()}{extension}";
                 var filePath = Path.Combine(uploadsFolder, fileName);
-                _logger.LogInformation($"Saving file to: {filePath}");
 
-                try
+                using (var stream = new FileStream(filePath, FileMode.Create))
                 {
-                    using (var stream = new FileStream(filePath, FileMode.Create))
-                    {
-                        await file.CopyToAsync(stream);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError($"Error saving file: {ex.Message}");
-                    throw new InvalidOperationException($"Erreur lors de l'enregistrement du fichier: {ex.Message}");
+                    await file.CopyToAsync(stream);
                 }
 
-                // Update or create profile
                 var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.UserId == userId);
                 if (profile == null)
                 {
-                    _logger.LogInformation($"Creating new profile for UserId: {userId}");
-                    profile = new Profile { UserId = userId, ProfilePhotoPath = filePath };
+                    profile = new Profile { UserId = userId };
                     _context.Profiles.Add(profile);
                 }
-                else
-                {
-                    _logger.LogInformation($"Updating existing profile for UserId: {userId}");
-                    if (!string.IsNullOrEmpty(profile.ProfilePhotoPath) && File.Exists(profile.ProfilePhotoPath))
-                    {
-                        try
-                        {
-                            File.Delete(profile.ProfilePhotoPath);
-                            _logger.LogInformation($"Deleted old profile photo: {profile.ProfilePhotoPath}");
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning($"Could not delete old profile photo: {ex.Message}");
-                        }
-                    }
-                    profile.ProfilePhotoPath = filePath;
-                    _context.Entry(profile).State = EntityState.Modified;
-                }
 
-                _logger.LogInformation("Saving changes to database");
-                try
+                if (!string.IsNullOrEmpty(profile.ProfilePhotoPath) && File.Exists(profile.ProfilePhotoPath))
                 {
-                    await _context.SaveChangesAsync();
-                    _logger.LogInformation("Changes saved successfully");
+                    _logger.LogInformation($"Deleting old photo: {profile.ProfilePhotoPath}");
+                    File.Delete(profile.ProfilePhotoPath);
                 }
-                catch (DbUpdateException dbEx)
-                {
-                    _logger.LogError($"Database error when saving profile: {dbEx.Message}");
-                    _logger.LogError($"Inner exception: {dbEx.InnerException?.Message}");
-                    throw new InvalidOperationException($"Erreur lors de l'enregistrement du profil: {dbEx.InnerException?.Message ?? dbEx.Message}");
-                }
+                profile.ProfilePhotoPath = fileName; // Store only the file name
 
-                return new ProfileDTO
+                await _context.SaveChangesAsync();
+
+                var photoUrl = $"/Uploads/{fileName}";
+                _logger.LogInformation($"Profile photo saved at: {photoUrl}");
+
+                var profileDto = new ProfileDTO
                 {
                     UserId = user.Id,
-                    Email = user.Email,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    PhoneNumber = user.PhoneNumber,
-                    JobTitle = user.JobTitle,
-                    ProfilePhotoUrl = $"/Uploads/{fileName}"
+                    Email = user.Email ?? "",
+                    FirstName = profile.FirstName ?? user.FirstName ?? "",
+                    LastName = profile.LastName ?? user.LastName ?? "",
+                    PhoneNumber = profile.PhoneNumber ?? user.PhoneNumber ?? "",
+                    JobTitle = profile.JobTitle ?? user.JobTitle ?? "",
+                    ProfilePhotoUrl = photoUrl
                 };
+
+                _logger.LogDebug($"Profile photo uploaded: {System.Text.Json.JsonSerializer.Serialize(profileDto)}");
+                return profileDto;
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, $"Database error while saving profile changes: {ex.InnerException?.Message}");
+                throw new InvalidOperationException($"Erreur lors de la sauvegarde du profil : {ex.InnerException?.Message ?? ex.Message}");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Unhandled exception in UploadProfilePhotoAsync: {ex.Message}");
-                throw;
+                _logger.LogError(ex, $"Unhandled exception in UploadProfilePhotoAsync: {ex.Message}");
+                throw new InvalidOperationException($"Erreur inattendue lors de l'upload de la photo : {ex.Message}");
             }
         }
     }

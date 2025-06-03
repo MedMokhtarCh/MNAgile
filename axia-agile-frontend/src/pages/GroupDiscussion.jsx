@@ -23,6 +23,8 @@ import PeopleIcon from '@mui/icons-material/People';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   fetchChannels,
   fetchChannelMessages,
@@ -38,13 +40,12 @@ import {
   selectConnectionStatus,
   selectChatError,
   selectChannelMembers,
-  messageReceived,
 } from '../store/slices/chatSlice';
 import { fetchCurrentUser } from '../store/slices/authSlice';
 import { fetchUsers } from '../store/slices/usersSlice';
 import InputUserAssignment from '../components/common/InputUserAssignment';
 import signalRService from '../services/signalRService';
-import { discussionApi } from '../services/api';
+import { useNotification } from '../hooks/useNotifications'; // Import useNotification
 import sendSound from '../assets/sounds/send.mp3';
 import receiveSound from '../assets/sounds/receive.mp3';
 
@@ -66,18 +67,18 @@ const parseJwt = (token) => {
   }
 };
 
-// Styled Components
+// Styled Components (unchanged)
 const ChatContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
-  height: '100vh', // Use full viewport height
+  height: '100vh',
   width: '100%',
   backgroundColor: '#e3f2fd',
   overflow: 'hidden',
   boxSizing: 'border-box',
-  margin: 0, // Remove any default margins
-  padding: 0, // Remove any default padding
-  position: 'relative', // Ensure it stays within the viewport
-  top: 0, // Explicitly start at the top
+  margin: 0,
+  padding: 0,
+  position: 'relative',
+  top: 0,
 }));
 
 const SidebarContainer = styled(Box, {
@@ -115,9 +116,10 @@ const MainArea = styled(Box)({
   flexGrow: 1,
   display: 'flex',
   flexDirection: 'column',
-  height: '100vh', // Ensure MainArea also uses full viewport height
+  height: '100vh',
   overflow: 'hidden',
 });
+
 const ChannelItem = styled(ListItem, {
   shouldForwardProp: (prop) => prop !== 'active',
 })(({ theme, active }) => ({
@@ -146,9 +148,7 @@ const MessageContainer = styled(Box)({
   display: 'flex',
   flexDirection: 'column',
   backgroundColor: '#f0f7ff',
-  '&::-webkit-scrollbar': {
-    display: 'none',
-  },
+  '&::-webkit-scrollbar': { display: 'none' },
   msOverflowStyle: 'none',
   scrollbarWidth: 'none',
 });
@@ -220,7 +220,7 @@ const StyledDialog = styled(Dialog)(({ theme }) => ({
   },
 }));
 
-// Utility Functions
+// Utility Functions (unchanged)
 const formatTimestamp = (isoString) => {
   if (!isoString) return '';
   const date = new Date(isoString);
@@ -258,10 +258,9 @@ const getAvatarColor = (name) => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Audio Playback Utility
 const playAudio = (audio, type) => {
   if (document.visibilityState === 'visible') {
-    audio.currentTime = 0; // Reset to start for rapid consecutive plays
+    audio.currentTime = 0;
     audio.play().catch((error) => {
       console.error(`Failed to play ${type} sound:`, error);
     });
@@ -270,7 +269,7 @@ const playAudio = (audio, type) => {
   }
 };
 
-// Dialog for Creating a Channel
+// Dialog Components (unchanged except for UpdateChannelDialog to handle notifications)
 const CreateChannelDialog = ({ open, handleClose, handleCreate, users, currentUser }) => {
   const [channelName, setChannelName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -287,12 +286,7 @@ const CreateChannelDialog = ({ open, handleClose, handleCreate, users, currentUs
   };
 
   return (
-    <StyledDialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="sm"
-    >
+    <StyledDialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#1e3a8a' }}>
         Créer un nouveau canal
         <IconButton onClick={handleClose}>
@@ -312,13 +306,7 @@ const CreateChannelDialog = ({ open, handleClose, handleCreate, users, currentUs
           placeholder="Entrez le nom du canal"
           value={channelName}
           onChange={(e) => setChannelName(e.target.value)}
-          sx={{
-            mb: 2,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '10px',
-              backgroundColor: '#ffffff',
-            },
-          }}
+          sx={{ mb: 2, '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#ffffff' } }}
           error={channelName.trim() === ''}
           helperText={channelName.trim() === '' ? 'Le nom du canal est requis' : ''}
           aria-label="Nom du canal"
@@ -349,9 +337,7 @@ const CreateChannelDialog = ({ open, handleClose, handleCreate, users, currentUs
           sx={{
             background: 'linear-gradient(135deg, #90caf9 0%, #42a5f5 100%)',
             borderRadius: '10px',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #bbdefb 0%, #64b5f6 100%)',
-            },
+            '&:hover': { background: 'linear-gradient(135deg, #bbdefb 0%, #64b5f6 100%)' },
           }}
         >
           Créer
@@ -361,7 +347,6 @@ const CreateChannelDialog = ({ open, handleClose, handleCreate, users, currentUs
   );
 };
 
-// Dialog for Updating a Channel
 const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUser, channel }) => {
   const [channelName, setChannelName] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -403,12 +388,7 @@ const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUs
   );
 
   return (
-    <StyledDialog
-      open={open}
-      onClose={handleClose}
-      fullWidth
-      maxWidth="md"
-    >
+    <StyledDialog open={open} onClose={handleClose} fullWidth maxWidth="md">
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#1e3a8a' }}>
         Modifier le canal #{channel?.name}
         <IconButton onClick={handleClose} disabled={isSubmitting}>
@@ -428,13 +408,7 @@ const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUs
           placeholder="Entrez le nom du canal"
           value={channelName}
           onChange={(e) => setChannelName(e.target.value)}
-          sx={{
-            mb: 3,
-            '& .MuiOutlinedInput-root': {
-              borderRadius: '10px',
-              backgroundColor: '#ffffff',
-            },
-          }}
+          sx={{ mb: 3, '& .MuiOutlinedInput-root': { borderRadius: '10px', backgroundColor: '#ffffff' } }}
           error={channelName.trim() === ''}
           helperText={channelName.trim() === '' ? 'Le nom du canal est requis' : ''}
           aria-label="Nom du canal"
@@ -531,11 +505,7 @@ const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUs
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button
-          onClick={handleClose}
-          sx={{ color: '#1e3a8a', borderRadius: '10px' }}
-          disabled={isSubmitting}
-        >
+        <Button onClick={handleClose} sx={{ color: '#1e3a8a', borderRadius: '10px' }} disabled={isSubmitting}>
           Annuler
         </Button>
         <Button
@@ -545,9 +515,7 @@ const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUs
           sx={{
             background: 'linear-gradient(135deg, #90caf9 0%, #42a5f5 100%)',
             borderRadius: '10px',
-            '&:hover': {
-              background: 'linear-gradient(135deg, #bbdefb 0%, #64b5f6 100%)',
-            },
+            '&:hover': { background: 'linear-gradient(135deg, #bbdefb 0%, #64b5f6 100%)' },
           }}
         >
           {isSubmitting ? <CircularProgress size={24} /> : 'Mettre à jour'}
@@ -557,15 +525,9 @@ const UpdateChannelDialog = ({ open, handleClose, handleUpdate, users, currentUs
   );
 };
 
-// Dialog for Confirming Channel Deletion
 const DeleteChannelDialog = ({ open, handleClose, handleConfirm, channelName }) => {
   return (
-    <StyledDialog
-      open={open}
-      onClose={handleClose}
-      maxWidth="xs"
-      fullWidth
-    >
+    <StyledDialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#1e3a8a' }}>
         Confirmer la suppression
         <IconButton onClick={handleClose}>
@@ -582,12 +544,7 @@ const DeleteChannelDialog = ({ open, handleClose, handleConfirm, channelName }) 
         <Button onClick={handleClose} sx={{ color: '#1e3a8a', borderRadius: '10px' }}>
           Annuler
         </Button>
-        <Button
-          onClick={handleConfirm}
-          color="error"
-          variant="contained"
-          sx={{ borderRadius: '10px' }}
-        >
+        <Button onClick={handleConfirm} color="error" variant="contained" sx={{ borderRadius: '10px' }}>
           Supprimer
         </Button>
       </DialogActions>
@@ -595,7 +552,6 @@ const DeleteChannelDialog = ({ open, handleClose, handleConfirm, channelName }) 
   );
 };
 
-// Member List Drawer
 const MemberListDrawer = ({ open, onClose, members, currentUserId }) => {
   return (
     <MembersDrawer anchor="right" open={open} onClose={onClose}>
@@ -618,12 +574,7 @@ const MemberListDrawer = ({ open, onClose, members, currentUserId }) => {
                 secondary={member.id === currentUserId ? 'Vous' : member.email || ''}
               />
               {member.id === currentUserId && (
-                <Chip
-                  size="small"
-                  label="Vous"
-                  color="primary"
-                  sx={{ ml: 1 }}
-                />
+                <Chip size="small" label="Vous" color="primary" sx={{ ml: 1 }} />
               )}
             </MemberItem>
           ))}
@@ -643,6 +594,7 @@ const GroupDiscussion = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const dispatch = useDispatch();
+  const { createNotification } = useNotification(); // Initialize useNotification
 
   // State
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
@@ -745,7 +697,6 @@ const GroupDiscussion = () => {
     const handleMessageReceived = (message) => {
       console.log('Received message:', message);
       console.log('Current user ID:', currentUser?.id, 'Message sender ID:', message.senderId);
-      // Coerce IDs to strings for comparison to handle type mismatches
       if (String(message.senderId) !== String(currentUser?.id)) {
         playAudio(receiveAudioRef.current, 'receive');
       } else {
@@ -796,14 +747,40 @@ const GroupDiscussion = () => {
   const handleCreateChannel = async (channelData) => {
     if (!hasCanCreateChannel) {
       console.log('Create blocked: Missing permission', { hasCanCreateChannel });
-      setErrorMessage('Vous n\'avez pas la permission de créer un canal.');
+      setErrorMessage("Vous n'avez pas la permission de créer un canal.");
       setErrorSnackbarOpen(true);
       return;
     }
     try {
-      await dispatch(createChannel(channelData)).unwrap();
+      const result = await dispatch(createChannel(channelData)).unwrap();
+      const channelId = result?.id; // Assuming createChannel returns the channel ID
+      const channelName = channelData.name;
+
+      // Send notifications to all members (except the creator)
+      const memberIds = channelData.MemberIds.filter(
+        (id) => String(id) !== String(currentUser?.id)
+      );
+      for (const userId of memberIds) {
+        try {
+          await createNotification({
+            userId: String(userId),
+            type: 'canal',
+            message: `Vous avez été ajouté au canal #${channelName} par ${currentUser.firstName} ${currentUser.lastName}.`,
+            relatedEntityType: 'Channel',
+            relatedEntityId: String(channelId),
+          });
+          console.log(`Notification sent to user ${userId} for channel #${channelName}`);
+        } catch (error) {
+          console.error(`Failed to send notification to user ${userId}:`, error);
+          // Optionally set error message, but don't interrupt channel creation
+          setErrorMessage('Canal créé, mais erreur lors de l\'envoi de certaines notifications.');
+          setErrorSnackbarOpen(true);
+        }
+      }
+
       setCreateChannelDialogOpen(false);
     } catch (error) {
+      console.error('CreateChannel error:', error);
       setErrorMessage(error.message || 'Erreur lors de la création du canal.');
       setErrorSnackbarOpen(true);
     }
@@ -811,8 +788,11 @@ const GroupDiscussion = () => {
 
   const handleUpdateChannel = async (channelData) => {
     if (!hasCanCreateChannel || !selectedChannelForMenu) {
-      console.log('Update blocked: Missing permission or channel', { hasCanCreateChannel, selectedChannelForMenu });
-      setErrorMessage('Vous n\'avez pas la permission de modifier ce canal.');
+      console.log('Update blocked: Missing permission or channel', {
+        hasCanCreateChannel,
+        selectedChannelForMenu,
+      });
+      setErrorMessage("Vous n'avez pas la permission de modifier ce canal.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -831,7 +811,7 @@ const GroupDiscussion = () => {
     });
     if (isNaN(channelCreatorId) || isNaN(userId)) {
       console.error('Invalid IDs:', { channelCreatorId, userId });
-      setErrorMessage('Erreur: Identifiants de créateur ou d\'utilisateur invalides.');
+      setErrorMessage("Erreur: Identifiants de créateur ou d'utilisateur invalides.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -842,26 +822,36 @@ const GroupDiscussion = () => {
       return;
     }
     try {
-      console.log('Sending update request:', {
-        url: `/api/discussion/channels/${selectedChannelForMenu.id}`,
-        method: 'PUT',
-        data: {
-          name: channelData.name,
-          MemberIdsToAdd: channelData.MemberIdsToAdd,
-          MemberIdsToRemove: channelData.MemberIdsToRemove || [],
-        },
-        headers: {
-          Authorization: `Bearer ${document.cookie.replace(/(?:(?:^|.*;\s*)AuthToken\s*=\s*([^;]*).*$)|^.*$/, '$1')}`
+      await dispatch(
+        updateChannel({
+          channelId: selectedChannelForMenu.id,
+          channelData: {
+            name: channelData.name,
+            MemberIdsToAdd: channelData.MemberIdsToAdd,
+            MemberIdsToRemove: channelData.MemberIdsToRemove || [],
+          },
+        })
+      ).unwrap();
+
+      // Send notifications to newly added members
+      const memberIdsToAdd = channelData.MemberIdsToAdd || [];
+      for (const userId of memberIdsToAdd) {
+        try {
+          await createNotification({
+            userId: String(userId),
+            type: 'canal',
+            message: `Vous avez été ajouté au canal #${channelData.name} par ${currentUser.firstName} ${currentUser.lastName}.`,
+            relatedEntityType: 'Channel',
+            relatedEntityId: String(selectedChannelForMenu.id),
+          });
+          console.log(`Notification sent to user ${userId} for channel #${channelData.name}`);
+        } catch (error) {
+          console.error(`Failed to send notification to user ${userId}:`, error);
+          setErrorMessage('Canal mis à jour, mais erreur lors de l\'envoi de certaines notifications.');
+          setErrorSnackbarOpen(true);
         }
-      });
-      await dispatch(updateChannel({
-        channelId: selectedChannelForMenu.id,
-        channelData: {
-          name: channelData.name,
-          MemberIdsToAdd: channelData.MemberIdsToAdd,
-          MemberIdsToRemove: channelData.MemberIdsToRemove || [],
-        }
-      })).unwrap();
+      }
+
       setUpdateChannelDialogOpen(false);
       setSelectedChannelForMenu(null);
       setMenuAnchorEl(null);
@@ -870,12 +860,11 @@ const GroupDiscussion = () => {
         message: error.message,
         response: error.response?.data,
         status: error.response?.status,
-        url: `/api/discussion/channels/${selectedChannelForMenu.id}`
       });
       const message = error.message?.includes('Seul le créateur')
         ? 'Seul le créateur du canal peut le modifier.'
         : error.message?.includes('Unauthorized')
-        ? 'Erreur d\'authentification. Veuillez vous reconnecter.'
+        ? "Erreur d'authentification. Veuillez vous reconnecter."
         : error.message?.includes('duplicate')
         ? 'Un canal avec ce nom existe déjà.'
         : error.message || 'Erreur lors de la mise à jour du canal.';
@@ -887,7 +876,7 @@ const GroupDiscussion = () => {
   const handleDeleteChannel = async () => {
     if (!hasCanCreateChannel || !selectedChannelForMenu) {
       console.log('Delete blocked: Missing permission or channel', { hasCanCreateChannel, selectedChannelForMenu });
-      setErrorMessage('Vous n\'avez pas la permission de supprimer ce canal.');
+      setErrorMessage("Vous n'avez pas la permission de supprimer ce canal.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -905,7 +894,7 @@ const GroupDiscussion = () => {
     });
     if (isNaN(channelCreatorId) || isNaN(userId)) {
       console.error('Invalid IDs:', { channelCreatorId, userId });
-      setErrorMessage('Erreur: Identifiants de créateur ou d\'utilisateur invalides.');
+      setErrorMessage("Erreur: Identifiants de créateur ou d'utilisateur invalides.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -932,7 +921,7 @@ const GroupDiscussion = () => {
 
   const handleOpenDeleteDialog = () => {
     if (!hasCanCreateChannel) {
-      setErrorMessage('Vous n\'avez pas la permission de supprimer un canal.');
+      setErrorMessage("Vous n'avez pas la permission de supprimer un canal.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -947,26 +936,50 @@ const GroupDiscussion = () => {
 
   const handleSendMessage = async () => {
     if (!hasCanCommunicate) {
-      setErrorMessage('Vous n\'avez pas la permission d\'envoyer des messages.');
+      setErrorMessage("Vous n'avez pas la permission d'envoyer des messages.");
       setErrorSnackbarOpen(true);
       return;
     }
-    if (selectedChannel && (messageInput.trim() || attachedFiles.length > 0)) {
-      try {
-        await dispatch(
-          sendMessage({
-            channelId: selectedChannel.id,
-            content: messageInput.trim(),
-            files: attachedFiles,
-          })
-        ).unwrap();
-        playAudio(sendAudioRef.current, 'send'); // Play send sound on success
-        setMessageInput('');
-        setAttachedFiles([]);
-      } catch (error) {
-        setErrorMessage(error.message || 'Erreur lors de l\'envoi du message.');
-        setErrorSnackbarOpen(true);
-      }
+    if (!selectedChannel) {
+      setErrorMessage("Aucun canal sélectionné.");
+      setErrorSnackbarOpen(true);
+      return;
+    }
+    if (!messageInput.trim() && attachedFiles.length === 0) {
+      setErrorMessage("Vous devez fournir un message ou un fichier.");
+      setErrorSnackbarOpen(true);
+      return;
+    }
+    const payload = {
+      channelId: selectedChannel.id,
+      content: messageInput.trim() || "",
+      files: attachedFiles.map((f) => f.name),
+    };
+    console.log("Sending message payload:", payload);
+    try {
+      await dispatch(
+        sendMessage({
+          channelId: selectedChannel.id,
+          content: messageInput.trim() || "",
+          files: attachedFiles,
+        })
+      ).unwrap();
+      console.log("Message sent successfully:", payload);
+      playAudio(sendAudioRef.current, "send");
+      setMessageInput("");
+      setAttachedFiles([]);
+    } catch (error) {
+      console.error("Send message error:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Erreur lors de l'envoi du message.";
+      setErrorMessage(errorMessage);
+      setErrorSnackbarOpen(true);
     }
   };
 
@@ -979,7 +992,7 @@ const GroupDiscussion = () => {
 
   const handleFileSelection = (event) => {
     if (!hasCanCommunicate) {
-      setErrorMessage('Vous n\'avez pas la permission de joindre des fichiers.');
+      setErrorMessage("Vous n'avez pas la permission de joindre des fichiers.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -988,7 +1001,7 @@ const GroupDiscussion = () => {
 
   const handleEmojiClick = (emojiData) => {
     if (!hasCanCommunicate) {
-      setErrorMessage('Vous n\'avez pas la permission d\'ajouter des emojis.');
+      setErrorMessage("Vous n'avez pas la permission d'ajouter des emojis.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -1004,7 +1017,7 @@ const GroupDiscussion = () => {
     event.stopPropagation();
     if (!hasCanCreateChannel) {
       console.log('Menu open blocked: Missing permission', { hasCanCreateChannel });
-      setErrorMessage('Vous n\'avez pas la permission de modifier ou supprimer un canal.');
+      setErrorMessage("Vous n'avez pas la permission de modifier ou supprimer un canal.");
       setErrorSnackbarOpen(true);
       return;
     }
@@ -1016,6 +1029,26 @@ const GroupDiscussion = () => {
   const handleMenuClose = () => {
     console.log('Closing menu, selectedChannelForMenu:', selectedChannelForMenu);
     setMenuAnchorEl(null);
+  };
+
+  const handleFileClick = async (fileUrl, fileName) => {
+    try {
+      const fullUrl = fileUrl.startsWith('http') ? fileUrl : `https://localhost:7270${fileUrl}`;
+      const response = await fetch(fullUrl);
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.setAttribute('download', fileName || 'file');
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      setErrorMessage('Erreur lors du téléchargement du fichier');
+      setErrorSnackbarOpen(true);
+    }
   };
 
   // Render Sidebar
@@ -1053,11 +1086,7 @@ const GroupDiscussion = () => {
                 onClick={() => handleSelectChannel(channel)}
                 secondaryAction={
                   hasCanCreateChannel && parseInt(channel.creatorId, 10) === parseInt(currentUser?.id, 10) && (
-                    <IconButton
-                      edge="end"
-                      size="small"
-                      onClick={(e) => handleMenuOpen(e, channel)}
-                    >
+                    <IconButton edge="end" size="small" onClick={(e) => handleMenuOpen(e, channel)}>
                       <MoreVertIcon />
                     </IconButton>
                   )
@@ -1075,15 +1104,8 @@ const GroupDiscussion = () => {
         </Box>
       </Box>
       {hasCanCreateChannel && (
-        <Menu
-          anchorEl={menuAnchorEl}
-          open={Boolean(menuAnchorEl)}
-          onClose={handleMenuClose}
-        >
-          <MenuItem onClick={() => {
-            console.log('Edit menu item clicked, selectedChannelForMenu:', selectedChannelForMenu);
-            setUpdateChannelDialogOpen(true);
-          }}>
+        <Menu anchorEl={menuAnchorEl} open={Boolean(menuAnchorEl)} onClose={handleMenuClose}>
+          <MenuItem onClick={() => setUpdateChannelDialogOpen(true)}>
             <EditIcon sx={{ mr: 1 }} />
             Modifier
           </MenuItem>
@@ -1199,10 +1221,41 @@ const GroupDiscussion = () => {
                 <Box sx={{ mt: 1 }}>
                   {msg.attachments.map((attachment, i) => (
                     <FileAttachment key={i}>
-                      {getFileIcon(attachment.fileName)}
-                      <Typography variant="body2" sx={{ ml: 1 }}>
-                        {attachment.fileName}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
+                        {getFileIcon(attachment.fileName)}
+                        <Typography variant="body2" sx={{ ml: 1 }}>
+                          {attachment.fileName}
+                        </Typography>
+                      </Box>
+                      <Box>
+                        <Tooltip title="Ouvrir">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const fullUrl = attachment.fileUrl.startsWith('http')
+                                ? attachment.fileUrl
+                                : `https://localhost:7270${attachment.fileUrl}`;
+                              window.open(fullUrl, '_blank');
+                            }}
+                            sx={{ ml: 1 }}
+                          >
+                            <VisibilityIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Télécharger">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleFileClick(attachment.fileUrl, attachment.fileName);
+                            }}
+                            sx={{ ml: 1 }}
+                          >
+                            <DownloadIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
                     </FileAttachment>
                   ))}
                 </Box>
@@ -1218,12 +1271,7 @@ const GroupDiscussion = () => {
     <ChatContainer>
       {renderSidebar()}
       <MainArea>
-        <AppBar
-          position="static"
-          color="transparent"
-          elevation={0}
-          sx={{ backgroundColor: '#ffffff', borderBottom: '1px solid #bbdefb' }}
-        >
+        <AppBar position="static" color="transparent" elevation={0} sx={{ backgroundColor: '#ffffff', borderBottom: '1px solid #bbdefb' }}>
           <Toolbar>
             {isMobile && (
               <IconButton edge="start" color="inherit" onClick={() => setSidebarOpen(true)}>
@@ -1235,18 +1283,9 @@ const GroupDiscussion = () => {
             </Typography>
             {selectedChannel && (
               <>
-                <AvatarGroup
-                  max={3}
-                  sx={{ 
-                    mr: 2,
-                    '& .MuiAvatar-root': { width: 30, height: 30 }
-                  }}
-                >
+                <AvatarGroup max={3} sx={{ mr: 2, '& .MuiAvatar-root': { width: 30, height: 30 } }}>
                   {channelMembers.slice(0, 3).map((member) => (
-                    <Tooltip 
-                      key={member.id} 
-                      title={`${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Utilisateur inconnu'}
-                    >
+                    <Tooltip key={member.id} title={`${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Utilisateur inconnu'}>
                       <Avatar sx={{ bgcolor: member.id === currentUser?.id ? '#42a5f5' : '#90caf9' }}>
                         {getInitials(`${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Utilisateur')}
                       </Avatar>
@@ -1275,13 +1314,7 @@ const GroupDiscussion = () => {
         {selectedChannel && hasCanCommunicate && (
           <InputArea>
             <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <input
-                type="file"
-                multiple
-                style={{ display: 'none' }}
-                ref={fileInputRef}
-                onChange={handleFileSelection}
-              />
+              <input type="file" multiple style={{ display: 'none' }} ref={fileInputRef} onChange={handleFileSelection} />
               <StyledTextField
                 fullWidth
                 multiline

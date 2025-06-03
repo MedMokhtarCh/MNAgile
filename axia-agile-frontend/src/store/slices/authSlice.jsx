@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { userApi } from '../../services/api';
 import { clearProfile } from './profileSlice';
-
 export const login = createAsyncThunk(
   'auth/login',
   async ({ email, password }, { rejectWithValue }) => {
@@ -9,7 +8,16 @@ export const login = createAsyncThunk(
       const response = await userApi.post('/Auth/login', { email, password });
       return response.data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Login failed');
+    
+      if (error.response?.data?.message) {
+        return rejectWithValue(error.response.data.message);
+      }
+    
+      if (typeof error.response?.data === 'string') {
+        return rejectWithValue(error.response.data);
+      }
+      // Fallback for other errors or unexpected formats
+      return rejectWithValue(error.response?.statusText || 'Échec de la connexion');
     }
   }
 );
@@ -22,12 +30,16 @@ export const fetchCurrentUser = createAsyncThunk(
       return response.data;
     } catch (error) {
       if (error.response?.status === 401) {
-        return rejectWithValue('utilisateur déconnecter');
+        console.error('utilisateur déconnecter');
+      } else {
+        console.error(error.response?.data?.message || '');
       }
-      return rejectWithValue(error.response?.data?.message || '');
+    
+      return rejectWithValue(); 
     }
   }
 );
+
 
 export const logoutUser = createAsyncThunk(
   'auth/logoutUser',

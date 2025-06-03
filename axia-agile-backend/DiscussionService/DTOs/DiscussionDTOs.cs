@@ -17,7 +17,7 @@
         public int ChannelId { get; set; }
         public int SenderId { get; set; }
         public string SenderName { get; set; }
-        public string Content { get; set; }
+        public string Content { get; set; } = ""; // Default to empty string
         public DateTime Timestamp { get; set; }
         public int? ReplyToId { get; set; }
         public int? RecipientId { get; set; }
@@ -43,7 +43,7 @@
     public class SendMessageRequest
     {
         public int ChannelId { get; set; }
-        public string Content { get; set; }
+        public string? Content { get; set; }
         public int? ReplyToId { get; set; }
         public int? RecipientId { get; set; }
 

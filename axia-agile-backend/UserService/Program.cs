@@ -38,6 +38,8 @@ builder.Services.AddScoped<UserService.Services.UserService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddHostedService<SubscriptionExpiryService>();
+builder.Services.AddScoped<SubscriptionService>();
 
 // Configure JWT authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -112,6 +113,10 @@ builder.Services.AddAuthorization(options =>
 
 // Add CSRF protection
 builder.Services.AddAntiforgery();
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 10 * 1024 * 1024; // 10MB
+});
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -143,10 +148,17 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+
 var app = builder.Build();
 
 // Use CORS policy
 app.UseCors("AllowFrontend");
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot/uploads")),
+    RequestPath = "/uploads"
+});
 
 // Serve static files
 app.UseStaticFiles();
@@ -175,8 +187,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseAntiforgery();
 app.UseAuthentication();
+app.UseStaticFiles();
 app.UseAuthorization();
-
+app.UseCors("AllowAll");
 // Map SignalR hub
 app.MapHub<ChatHub>("/hubs/chat");
 

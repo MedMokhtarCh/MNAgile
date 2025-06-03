@@ -1,4 +1,6 @@
-﻿namespace UserService.DTOs
+﻿using UserService.Models;
+
+namespace UserService.DTOs
 {
     public class UserDTO
     {
@@ -14,9 +16,14 @@
         public DateTime? LastLogin { get; set; }
         public int RoleId { get; set; }
         public int? CreatedById { get; set; }
+        public int? RootAdminId { get; set; } 
         public List<int> ClaimIds { get; set; } = new List<int>();
         public List<ClaimDTO> Claims { get; set; } = new List<ClaimDTO>();
+        public Subscription Subscription { get; set; }
     }
-
+    public class RenewSubscriptionRequest
+    {
+        public string Plan { get; set; }
+    }
 
 }

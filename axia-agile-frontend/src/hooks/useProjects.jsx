@@ -11,7 +11,7 @@ import {
   deleteProject,
   clearError,
 } from '../store/slices/projectsSlice';
-import { fetchUsers } from '../store/slices/usersSlice'; // Importer fetchUsers
+import { fetchUsers } from '../store/slices/usersSlice';
 
 export const useProject = () => {
   const navigate = useNavigate();
@@ -19,8 +19,11 @@ export const useProject = () => {
   const { createNotification } = useNotification();
   const { currentUser, isAuthenticated, logout } = useAuth();
 
-  const { projects, status, error } = useSelector((state) => state.projects);
-  const { users } = useSelector((state) => state.users); // Récupérer les utilisateurs depuis le store
+  const { projects, status: projectsStatus, error } = useSelector((state) => state.projects);
+  const { users, status: usersStatus } = useSelector((state) => state.users);
+
+  // Filter active users only for project-related operations
+  const activeUsers = users.filter(user => user.isActive);
 
   const [projectForm, setProjectForm] = useState({
     id: '',
@@ -57,14 +60,15 @@ export const useProject = () => {
       return;
     }
 
-    // Only fetch projects and users if user has CanViewProjects
     if (!currentUser?.claims?.includes('CanViewProjects')) {
       setFormError("Vous n'avez pas les autorisations pour voir les projets.");
       navigate('/no-access', { replace: true });
       return;
     }
 
+    // Fetch all users (as per usersSlice) and projects
     dispatch(fetchUsers()).catch((err) => {
+      console.error('Failed to fetch users:', err);
       if (err.status === 401) {
         logout();
         navigate('/login', { replace: true });
@@ -72,6 +76,7 @@ export const useProject = () => {
     });
 
     dispatch(fetchProjects()).catch((err) => {
+      console.error('Failed to fetch projects:', err);
       if (err.status === 401) {
         logout();
         navigate('/login', { replace: true });
@@ -81,17 +86,15 @@ export const useProject = () => {
 
   useEffect(() => {
     if (error) {
-      if (typeof error === 'object' && error !== null) {
-        const message =
-          error.title ||
-          error.message ||
-          error.detail ||
-          (error.errors ? JSON.stringify(error.errors) : null) ||
-          'Une erreur est survenue lors de l\'opération';
-        setFormError(message);
-      } else {
-        setFormError(error || 'Échec de l\'opération');
-      }
+      const message =
+        typeof error === 'object' && error !== null
+          ? error.title ||
+            error.message ||
+            error.detail ||
+            (error.errors ? JSON.stringify(error.errors) : null) ||
+            'Une erreur est survenue lors de l\'opération'
+          : error || 'Échec de l\'opération';
+      setFormError(message);
 
       if (error?.status === 401) {
         logout();
@@ -105,7 +108,6 @@ export const useProject = () => {
   const getFilteredProjects = useCallback(() => {
     let filteredProjects = [...projects];
 
-    // Filter projects based on current user's involvement
     if (currentUser?.email) {
       filteredProjects = filteredProjects.filter((project) => {
         const isCreator = project.createdBy === currentUser.email;
@@ -121,21 +123,18 @@ export const useProject = () => {
       });
     }
 
-    // Apply search filter
     if (searchQuery) {
       filteredProjects = filteredProjects.filter((project) =>
         project.title?.toLowerCase()?.includes(searchQuery.toLowerCase())
       );
     }
 
-    // Apply date filter
     if (dateFilter) {
       filteredProjects = filteredProjects.filter(
         (project) => project.createdAt.split('T')[0] === dateFilter
       );
     }
 
-    // Sort projects
     filteredProjects.sort((a, b) => {
       const dateA = new Date(a.createdAt || '1970-01-01');
       const dateB = new Date(b.createdAt || '1970-01-01');
@@ -154,13 +153,11 @@ export const useProject = () => {
 
   const handleModalOpen = useCallback(
     (editMode = false, project = null) => {
-      // Check CanViewProjects for all actions
       if (!currentUser?.claims?.includes('CanViewProjects')) {
         setFormError("Vous n'avez pas les autorisations pour voir les projets.");
         return;
       }
 
-      // Check specific permissions based on mode
       if (editMode && !currentUser?.claims?.includes('CanEditProjects')) {
         setFormError("Vous n'avez pas les autorisations pour modifier un projet.");
         return;
@@ -188,7 +185,7 @@ export const useProject = () => {
         });
 
         const getUsersByEmails = (emails) =>
-          users.filter((user) => emails?.includes(user.email)) || [];
+          activeUsers.filter((user) => emails?.includes(user.email)) || [];
 
         setProjectManagers(getUsersByEmails(project.projectManagers));
         setProductOwners(getUsersByEmails(project.productOwners));
@@ -215,7 +212,7 @@ export const useProject = () => {
 
       setModalOpen(true);
     },
-    [users, currentUser]
+    [activeUsers, currentUser]
   );
 
   const handleModalClose = useCallback(() => {
@@ -267,12 +264,13 @@ export const useProject = () => {
       setDeleteDialogOpen(false);
       setProjectToDelete(null);
 
-      if (currentUser?.email && projectToDelete?.title) {
-        createNotification({
-          recipient: currentUser.email,
+      if (currentUser?.id && projectToDelete?.title) {
+        await createNotification({
+          userId: currentUser.id,
           type: 'project',
           message: `Le projet "${projectToDelete.title}" a été supprimé.`,
-          metadata: { projectId: projectToDelete.id },
+          relatedEntityType: 'Project',
+          relatedEntityId: projectToDelete.id,
         });
       }
     } catch (err) {
@@ -293,9 +291,7 @@ export const useProject = () => {
     if (activeStep === 0) {
       errors = validateProject(projectForm, { projectManagers }, isEditing);
     } else if (activeStep === 1) {
-      if (projectManagers.length === 0) {
-        errors.push('Au moins un chef de projet doit être assigné');
-      }
+      // No validation changes needed here
     }
 
     if (errors.length > 0) {
@@ -314,15 +310,56 @@ export const useProject = () => {
   }, [activeStep]);
 
   const notifyProjectUsers = useCallback(
-    (projectData, isEditing) => {
+    async (projectData, isEditing) => {
+      // Wait for users to be fetched if still loading
+      if (usersStatus === 'loading') {
+        console.log('Waiting for users to load before sending notifications...');
+        await new Promise((resolve) => {
+          const checkUsers = setInterval(() => {
+            if (usersStatus !== 'loading') {
+              clearInterval(checkUsers);
+              resolve();
+            }
+          }, 100);
+        });
+      }
+
+      // Log available active users for debugging
+      console.log('Available active users:', activeUsers.map(u => ({ id: u.id, email: u.email })));
+
       const projectTitle = projectData.title;
       const projectId = projectData.id;
 
-      const notifyUsersByRole = (users, roleName) => {
-        users.forEach((userEmail) => {
-          if (userEmail !== currentUser?.email) {
-            createNotification({
-              recipient: userEmail,
+      const notifyUsersByRole = async (emails, roleName) => {
+        if (!emails || !Array.isArray(emails)) {
+          console.warn(`Invalid or empty email array for role: ${roleName}`);
+          return;
+        }
+
+        for (const userEmail of emails) {
+          // Normalize email for comparison (handle case sensitivity)
+          const normalizedEmail = userEmail?.toLowerCase()?.trim();
+          if (!normalizedEmail) {
+            console.warn(`Invalid email for role ${roleName}: ${userEmail}`);
+            continue;
+          }
+
+          // Find user by email among active users
+          const user = activeUsers.find((u) => u.email?.toLowerCase()?.trim() === normalizedEmail);
+          if (!user || !user.id) {
+            console.warn(`No valid active user found for email: ${userEmail} in role: ${roleName}`);
+            continue;
+          }
+
+          // Skip notification for the current user to avoid duplicates
+          if (normalizedEmail === currentUser?.email?.toLowerCase()?.trim()) {
+            console.log(`Skipping notification for current user: ${userEmail}`);
+            continue;
+          }
+
+          try {
+            await createNotification({
+              userId: user.id,
               type: 'project',
               message: isEditing
                 ? `Vous avez été ${
@@ -331,26 +368,28 @@ export const useProject = () => {
                 : `Vous avez été ${
                     roleName === 'développeur' ? 'assigné' : 'assignée'
                   } en tant que ${roleName} au nouveau projet "${projectTitle}".`,
-              sender: {
-                name: currentUser?.nom
-                  ? `${currentUser.nom} ${currentUser.prenom}`
-                  : 'Système',
-                avatar: null,
-              },
-              metadata: { projectId },
+              relatedEntityType: 'Project',
+              relatedEntityId: projectId,
             });
+            console.log(`Notification sent to user ${user.email} (ID: ${user.id}) for role: ${roleName}`);
+          } catch (error) {
+            console.error(`Failed to send notification to ${user.email}:`, error);
           }
-        });
+        }
       };
 
-      notifyUsersByRole(projectData.projectManagers || [], 'chef de projet');
-      notifyUsersByRole(projectData.productOwners || [], 'product owner');
-      notifyUsersByRole(projectData.scrumMasters || [], 'scrum master');
-      notifyUsersByRole(projectData.developers || [], 'développeur');
-      notifyUsersByRole(projectData.testers || [], 'testeur');
-      notifyUsersByRole(projectData.observers || [], 'observateur');
+      // Notify users by role
+      await notifyUsersByRole(projectData.projectManagers || [], 'chef de projet');
+      await notifyUsersByRole(projectData.productOwners || [], 'product owner');
+      await notifyUsersByRole(projectData.scrumMasters || [], 'scrum master');
+      await notifyUsersByRole(projectData.developers || [], 'développeur');
+      await notifyUsersByRole(projectData.testers || [], 'testeur');
+      await notifyUsersByRole(projectData.observers || [], 'observateur');
+
+      // Dispatch newNotification event
+      window.dispatchEvent(new Event('newNotification'));
     },
-    [createNotification, currentUser]
+    [createNotification, currentUser, activeUsers, usersStatus]
   );
 
   const handleSaveProject = useCallback(async () => {
@@ -374,7 +413,6 @@ export const useProject = () => {
       return;
     }
 
-    // Prepare payload matching backend CreateProjectDto/UpdateProjectDto
     const projectData = {
       title: projectForm.title,
       description: projectForm.description,
@@ -396,8 +434,7 @@ export const useProject = () => {
       let savedProject;
 
       if (isEditing) {
-        // For updates, include the ID and send partial data
-        projectData.id = parseInt(projectForm.id); // Backend expects integer ID
+        projectData.id = parseInt(projectForm.id);
         savedProject = await dispatch(
           updateProject({ id: projectForm.id, project: projectData })
         ).unwrap();
@@ -405,16 +442,18 @@ export const useProject = () => {
         savedProject = await dispatch(createProject(projectData)).unwrap();
       }
 
-      createNotification({
-        recipient: currentUser.email,
+      await createNotification({
+        userId: currentUser.id,
         type: 'project',
         message: `Projet "${savedProject.title}" ${
           isEditing ? 'mis à jour' : 'créé'
         } avec succès`,
-        metadata: { projectId: savedProject.id },
+        relatedEntityType: 'Project',
+        relatedEntityId: savedProject.id,
       });
 
-      notifyProjectUsers(savedProject, isEditing);
+      // Notify assigned users
+      await notifyProjectUsers(savedProject, isEditing);
 
       setFormSuccess(
         isEditing
@@ -469,11 +508,10 @@ export const useProject = () => {
     setSelectedProject(null);
   }, []);
 
-  // Fonctions pour ProjectFormStepper
   const getAvatarColor = useCallback((name) => {
     const colors = ['#1976d2', '#d32f2f', '#388e3c', '#f57c00', '#7b1fa2'];
     let hash = 0;
-    for (let i = 0; i (name?.length || 0); i++) {
+    for (let i = 0; i < (name?.length || 0); i++) {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
@@ -491,9 +529,9 @@ export const useProject = () => {
 
   return {
     projects,
-    status,
+    status: projectsStatus,
     currentUser,
-    registeredUsers: users, // Utiliser les utilisateurs du store
+    registeredUsers: activeUsers, // Return only active users for project assignments
     projectForm,
     setProjectForm,
     formError,
@@ -536,7 +574,7 @@ export const useProject = () => {
     handleSaveProject,
     handleMenuOpen,
     handleMenuClose,
-    getAvatarColor, 
-    generateInitials, 
+    getAvatarColor,
+    generateInitials,
   };
 };

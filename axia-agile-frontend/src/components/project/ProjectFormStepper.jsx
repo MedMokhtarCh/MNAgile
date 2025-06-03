@@ -33,6 +33,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GroupIcon from '@mui/icons-material/Group';
 import InputUserAssignment from '../common/InputUserAssignment';
+import { fetchProjects} from '../../store/slices/projectsSlice';
+
 
 // Styled Components (inchangés)
 const StepperContainer = styled(Box)(({ theme }) => ({
@@ -401,16 +403,19 @@ const ProjectFormStepper = ({
   };
 
   // Gestion de la sauvegarde avec indicateur de chargement
-  const handleSaveProjectWithLoading = async () => {
-    setIsCreating(true); // Activer l'indicateur de chargement
-    try {
-      await handleSaveProject(); // Appeler la fonction de sauvegarde
-      // Le formulaire est fermé par handleSaveProject dans useProject après 1,5s
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde du projet:', error);
-      setIsCreating(false); // Désactiver l'indicateur en cas d'erreur
-    }
-  };
+const handleSaveProjectWithLoading = async () => {
+  setIsCreating(true);
+  try {
+    await handleSaveProject();
+    // Forcer la mise à jour des projets après la création
+    await dispatch(fetchProjects()).unwrap();
+  } catch (error) {
+    console.error('Erreur lors de la sauvegarde du projet:', error);
+    setFormError(error.message || 'Échec de la sauvegarde du projet');
+  } finally {
+    setIsCreating(false); // Toujours réinitialiser l'état
+  }
+};
 
   return (
     <Dialog

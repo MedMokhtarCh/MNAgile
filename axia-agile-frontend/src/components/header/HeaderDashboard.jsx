@@ -24,13 +24,13 @@ import { setSnackbar } from "../../store/slices/profileSlice";
 
 const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
   const [open, setOpen] = useState(false);
+  const [avatarKey, setAvatarKey] = useState(Date.now());
   const anchorRef = useRef(null);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { generateInitials, getAvatarColor } = useAvatar();
   const { logout } = useAuth();
 
-  // Select relevant state from Redux
   const { currentUser, isAuthenticated, loading: authLoading } = useSelector(
     (state) => state.auth
   );
@@ -38,7 +38,6 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     (state) => state.profile
   );
 
-  // Fetch user and profile data on mount or when authentication changes
   useEffect(() => {
     if (isAuthenticated && !currentUser && !authLoading) {
       dispatch(fetchCurrentUser());
@@ -48,7 +47,13 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     }
   }, [isAuthenticated, currentUser, profile, profileLoading, profileError, authLoading, dispatch]);
 
-  // Memoize userData to prevent unnecessary recomputation
+  // Force refresh avatar when profile photo changes
+  useEffect(() => {
+    if (profile?.profilePhotoUrl) {
+      setAvatarKey(Date.now());
+    }
+  }, [profile?.profilePhotoUrl]);
+
   const userData = useMemo(() => {
     return {
       email: profile?.email || currentUser?.email || "",
@@ -59,23 +64,16 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     };
   }, [profile, currentUser]);
 
-  // Define role name based on roleId
   const getRoleName = (roleId) => {
     switch (roleId) {
-      case 1:
-        return "Super Admin";
-      case 2:
-        return "Admin";
-      case 3:
-        return "Chef de Projet";
-      case 4:
-        return "Membre d'Équipe";
-      default:
-        return "Utilisateur";
+      case 1: return "Super Admin";
+      case 2: return "Admin";
+      case 3: return "Chef de Projet";
+      case 4: return "Membre d'Équipe";
+      default: return "Utilisateur";
     }
   };
 
-  // Standardize fullName for consistent avatar color and display
   const fullName = useMemo(
     () =>
       userData.firstName && userData.lastName
@@ -84,15 +82,14 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     [userData.firstName, userData.lastName, userData.email, userData.roleId]
   );
 
-  // Construct profile photo URL with cache-busting only when necessary
   const PROFILE_SERVICE_BASE_URL = "http://localhost:5289";
   const profilePhotoUrl = useMemo(() => {
     if (!userData.profilePhotoUrl) return null;
     const baseUrl = userData.profilePhotoUrl.startsWith("http")
       ? userData.profilePhotoUrl
       : `${PROFILE_SERVICE_BASE_URL}${userData.profilePhotoUrl}`;
-    return `${baseUrl}?t=${Date.now()}`;
-  }, [userData.profilePhotoUrl]);
+    return `${baseUrl}?t=${avatarKey}`;
+  }, [userData.profilePhotoUrl, avatarKey]);
 
   const userInitial = useMemo(() => generateInitials(fullName), [fullName]);
   const avatarColor = useMemo(() => getAvatarColor(fullName), [fullName]);
@@ -123,7 +120,6 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
     logout();
   };
 
-  // Handle avatar image load errors
   const handleAvatarError = (e) => {
     console.error("Error loading profile photo:", profilePhotoUrl);
     dispatch(
@@ -133,10 +129,10 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
         severity: "error",
       })
     );
-    e.target.src = ""; // Fallback to initials
+    e.target.src = "";
+    e.target.onerror = null; // Prevent infinite loop
   };
 
-  // Don't render if not authenticated or still loading
   if (!isAuthenticated || authLoading || (!currentUser && !profile)) {
     return null;
   }
@@ -154,7 +150,7 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
       </div>
 
       <div className="header-right">
-        <NotificationSystem currentUser={userData} />
+        {currentUser?.id && <NotificationSystem userId={currentUser.id} />}
 
         <div className="user-profile">
           <div
@@ -164,17 +160,21 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
             aria-haspopup="true"
             onClick={handleToggle}
           >
-            <Avatar
-              src={profilePhotoUrl}
-              className="avatar"
-              style={{ backgroundColor: avatarColor }}
-              imgProps={{
-                onError: handleAvatarError,
-                onLoad: () => console.log("Profile photo loaded:", profilePhotoUrl),
-              }}
-            >
-              {profileLoading ? <CircularProgress size={24} /> : userInitial}
-            </Avatar>
+            {profileLoading ? (
+              <CircularProgress size={40} />
+            ) : (
+              <Avatar
+                key={`avatar-${avatarKey}`}
+                src={profilePhotoUrl}
+                className="avatar"
+                style={{ backgroundColor: avatarColor }}
+                imgProps={{
+                  onError: handleAvatarError,
+                }}
+              >
+                {userInitial}
+              </Avatar>
+            )}
             <div className="user-info">
               <Typography variant="subtitle2" className="user-name">
                 {fullName}
@@ -209,24 +209,15 @@ const HeaderDashboard = ({ collapsed, toggleSidebar }) => {
                       id="menu-list-grow"
                       className="user-menu-list"
                     >
-                      <MenuItem
-                        onClick={handleProfileNavigate}
-                        className="menu-item"
-                      >
+                      <MenuItem onClick={handleProfileNavigate} className="menu-item">
                         <FiUser size={16} className="menu-icon" />
                         Mon Profil
                       </MenuItem>
-                      <MenuItem
-                        onClick={handleHelpNavigate}
-                        className="menu-item"
-                      >
+                      <MenuItem onClick={handleHelpNavigate} className="menu-item">
                         <FiHelpCircle size={16} className="menu-icon" />
                         Aide
                       </MenuItem>
-                      <MenuItem
-                        onClick={handleLogout}
-                        className="menu-item logout"
-                      >
+                      <MenuItem onClick={handleLogout} className="menu-item logout">
                         <FiLogOut size={16} className="menu-icon" />
                         Déconnexion
                       </MenuItem>

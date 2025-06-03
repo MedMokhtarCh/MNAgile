@@ -20,26 +20,20 @@ namespace ProfileService.Services
         private void AddAuthorizationHeader()
         {
             string token = null;
-
-            // Try to get token from Authorization header
             var authHeader = _httpContextAccessor.HttpContext?.Request.Headers["Authorization"].ToString();
             if (!string.IsNullOrEmpty(authHeader) && authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
             {
                 token = authHeader.Substring("Bearer ".Length).Trim();
-                _logger.LogInformation($"Extracted token from Authorization header: {token.Substring(0, Math.Min(10, token.Length))}...");
+                _logger.LogDebug($"Extracted token from Authorization header: {token.Substring(0, Math.Min(10, token.Length))}...");
             }
-
-            // If no token in header, try to get from AuthToken cookie
             if (string.IsNullOrEmpty(token))
             {
                 token = _httpContextAccessor.HttpContext?.Request.Cookies["AuthToken"];
                 if (!string.IsNullOrEmpty(token))
                 {
-                    _logger.LogInformation($"Extracted token from AuthToken cookie: {token.Substring(0, Math.Min(10, token.Length))}...");
+                    _logger.LogDebug($"Extracted token from AuthToken cookie: {token.Substring(0, Math.Min(10, token.Length))}...");
                 }
             }
-
-            // Add token to request if found
             if (!string.IsNullOrEmpty(token))
             {
                 if (_httpClient.DefaultRequestHeaders.Contains("Authorization"))
@@ -51,7 +45,8 @@ namespace ProfileService.Services
             }
             else
             {
-                _logger.LogWarning("No Authorization header or AuthToken cookie found in the request.");
+                _logger.LogError("No Authorization header or AuthToken cookie found in the request.");
+                throw new InvalidOperationException("No authentication token found.");
             }
         }
 
@@ -60,6 +55,7 @@ namespace ProfileService.Services
             try
             {
                 AddAuthorizationHeader();
+                _logger.LogDebug($"Fetching user with ID: {userId}");
                 var response = await _httpClient.GetAsync($"users/{userId}");
                 if (!response.IsSuccessStatusCode)
                 {
@@ -68,6 +64,7 @@ namespace ProfileService.Services
                     throw new HttpRequestException($"Failed to fetch user: {errorContent}");
                 }
                 var user = await response.Content.ReadFromJsonAsync<UserDTO>();
+                _logger.LogDebug($"User fetched: {System.Text.Json.JsonSerializer.Serialize(user)}");
                 return user;
             }
             catch (HttpRequestException ex)
@@ -77,34 +74,24 @@ namespace ProfileService.Services
             }
         }
 
-        public async Task UpdateUserAsync(UserDTO user)
+        public async Task UpdateUserProfileAsync(int userId, UpdateOwnProfileRequest request)
         {
             try
             {
                 AddAuthorizationHeader();
-                var updateRequest = new UpdateUserRequest
-                {
-                    Email = user.Email,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    PhoneNumber = user.PhoneNumber,
-                    JobTitle = user.JobTitle,
-                    Entreprise = user.Entreprise,
-                    RoleId = user.RoleId,
-                    ClaimIds = user.ClaimIds
-                };
-
-                var response = await _httpClient.PutAsJsonAsync($"users/{user.Id}", updateRequest);
+                _logger.LogDebug($"Updating profile for user {userId} with data: {System.Text.Json.JsonSerializer.Serialize(request)}");
+                var response = await _httpClient.PatchAsJsonAsync($"users/{userId}/profile", request);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger.LogError($"Failed to update user {user.Id}. Status: {response.StatusCode}, Content: {errorContent}");
-                    throw new HttpRequestException($"Failed to update user: {errorContent}");
+                    _logger.LogError($"Failed to update profile for user {userId}. Status: {response.StatusCode}, Content: {errorContent}");
+                    throw new HttpRequestException($"Failed to update profile: {errorContent}");
                 }
+                _logger.LogDebug($"Profile updated successfully for user {userId}");
             }
             catch (HttpRequestException ex)
             {
-                _logger.LogError($"Error updating user {user.Id}: {ex.Message}");
+                _logger.LogError($"Error updating profile for user {userId}: {ex.Message}");
                 throw;
             }
         }
@@ -114,42 +101,34 @@ namespace ProfileService.Services
             try
             {
                 AddAuthorizationHeader();
-
-                // Fetch current user data to preserve other fields
-                var user = await GetUserByIdAsync(userId);
-                if (user == null)
+                var updatePasswordRequest = new UpdatePasswordRequest
                 {
-                    _logger.LogError($"User with ID {userId} not found.");
-                    throw new InvalidOperationException("Utilisateur non trouvé.");
-                }
-
-                var updateRequest = new UpdateUserRequest
-                {
-                    Email = user.Email,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    PhoneNumber = user.PhoneNumber,
-                    JobTitle = user.JobTitle,
-                    Entreprise = user.Entreprise,
-                    RoleId = user.RoleId,
-                    ClaimIds = user.ClaimIds,
-                    Password = newPassword // Only update password
+                    NewPassword = newPassword
                 };
-
-                var response = await _httpClient.PutAsJsonAsync($"users/{userId}", updateRequest);
-
+                _logger.LogDebug($"Updating password for user {userId}");
+                var response = await _httpClient.PatchAsJsonAsync($"users/{userId}/password", updatePasswordRequest);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError($"Failed to update password for user {userId}. Status: {response.StatusCode}, Content: {errorContent}");
                     throw new HttpRequestException($"Failed to update password: {errorContent}");
                 }
+                _logger.LogInformation($"Password updated successfully for user {userId}");
             }
             catch (HttpRequestException ex)
             {
                 _logger.LogError($"Error updating password for user {userId}: {ex.Message}");
                 throw;
             }
+        }
+
+        // Define the DTO to match the UsersController's UpdateOwnProfileRequest
+        public class UpdateOwnProfileRequest
+        {
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public string PhoneNumber { get; set; }
+            public string JobTitle { get; set; }
         }
     }
 }

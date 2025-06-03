@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProfileService.DTOs;
+using ProfileService.Services;
 
 namespace ProfileService.Controllers
 {
@@ -29,6 +30,7 @@ namespace ProfileService.Controllers
                 var userId = GetCurrentUserId();
                 _logger.LogInformation($"Retrieving profile for UserId: {userId}");
                 var profile = await _profileService.GetProfileByUserIdAsync(userId);
+                _logger.LogDebug($"Profile retrieved: {System.Text.Json.JsonSerializer.Serialize(profile)}");
                 return Ok(profile);
             }
             catch (InvalidOperationException ex)
@@ -49,8 +51,9 @@ namespace ProfileService.Controllers
             try
             {
                 var userId = GetCurrentUserId();
-                _logger.LogInformation($"Updating profile for UserId: {userId}");
+                _logger.LogInformation($"Updating profile for UserId: {userId} with data: {System.Text.Json.JsonSerializer.Serialize(request)}");
                 var profile = await _profileService.UpdateProfileAsync(userId, request);
+                _logger.LogDebug($"Profile updated: {System.Text.Json.JsonSerializer.Serialize(profile)}");
                 return Ok(profile);
             }
             catch (InvalidOperationException ex)
@@ -72,7 +75,14 @@ namespace ProfileService.Controllers
             {
                 var userId = GetCurrentUserId();
                 _logger.LogInformation($"Updating password for UserId: {userId}");
+                if (request == null || string.IsNullOrEmpty(request.NewPassword))
+                {
+                    _logger.LogWarning("Password update request is null or empty");
+                    return BadRequest("Le nouveau mot de passe est requis.");
+                }
+
                 await _profileService.UpdatePasswordAsync(userId, request.NewPassword);
+                _logger.LogDebug("Password updated successfully");
                 return NoContent();
             }
             catch (InvalidOperationException ex)
@@ -99,8 +109,9 @@ namespace ProfileService.Controllers
                     return BadRequest("Aucun fichier sélectionné.");
                 }
 
-                _logger.LogInformation($"Uploading profile photo for UserId: {userId}");
+                _logger.LogInformation($"Uploading profile photo for UserId: {userId}, File: {file.FileName}, Size: {file.Length} bytes");
                 var profile = await _profileService.UploadProfilePhotoAsync(userId, file);
+                _logger.LogDebug($"Profile photo uploaded: {System.Text.Json.JsonSerializer.Serialize(profile)}");
                 return Ok(profile);
             }
             catch (InvalidOperationException ex)

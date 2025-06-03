@@ -59,14 +59,15 @@ namespace DiscussionService.Controllers
         }
 
         [HttpPost("messages")]
-       
         [Authorize(Policy = "CanCommunicate")]
-        public async Task<ActionResult<MessageDTO>> SendMessage([FromForm] SendMessageRequest request, List<IFormFile> files)
+        public async Task<ActionResult<MessageDTO>> SendMessage(
+        [FromForm] SendMessageRequest request,
+        [FromForm] List<IFormFile> files) // Ajout de [FromForm] ici
         {
             var userId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
             try
             {
-                var message = await _discussionService.SendMessageAsync(request, userId, files);
+                var message = await _discussionService.SendMessageAsync(request, userId, files ?? new List<IFormFile>());
                 return Ok(message);
             }
             catch (UnauthorizedAccessException ex)
@@ -80,7 +81,6 @@ namespace DiscussionService.Controllers
                 return StatusCode(500, new { message = "Erreur lors de l'envoi du message.", error = ex.Message });
             }
         }
-
         [HttpGet("channels/{channelId}/messages")]
         [Authorize(Policy = "CanCommunicate")]
 
@@ -128,6 +128,62 @@ namespace DiscussionService.Controllers
                 _logger.LogError(ex, "Error deleting channel {ChannelId} by user {UserId}", channelId, userId);
                 return StatusCode(500, new { message = "Erreur lors de la suppression du canal.", error = ex.Message });
             }
+        }
+        [HttpGet("files/{fileName}")]
+        [Authorize(Policy = "CanCommunicate")]
+        public async Task<IActionResult> GetFile(string fileName)
+        {
+            try
+            {
+                // Valider le nom du fichier pour la sécurité
+                if (string.IsNullOrEmpty(fileName))
+                    return BadRequest(new { message = "Nom de fichier invalide." });
+
+                // Chemin sécurisé vers le dossier uploads
+                var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+                var filePath = Path.Combine(uploadsPath, fileName);
+
+                // Vérifier que le fichier existe
+                if (!System.IO.File.Exists(filePath))
+                    return NotFound(new { message = "Fichier introuvable." });
+
+                // Lire le fichier
+                var fileStream = System.IO.File.OpenRead(filePath);
+
+                // Déterminer le type de contenu
+                var contentType = GetContentType(fileName);
+
+                // Retourner le fichier avec option de téléchargement
+                return File(fileStream, contentType, fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error serving file {FileName}", fileName);
+                return StatusCode(500, new { message = "Erreur lors de la récupération du fichier." });
+            }
+        }
+
+        private string GetContentType(string fileName)
+        {
+            var extension = Path.GetExtension(fileName).ToLowerInvariant();
+            return extension switch
+            {
+                ".jpg" => "image/jpeg",
+                ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".pdf" => "application/pdf",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".ppt" => "application/vnd.ms-powerpoint",
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".txt" => "text/plain",
+                ".csv" => "text/csv",
+                ".zip" => "application/zip",
+                _ => "application/octet-stream" // Type par défaut pour téléchargement forcé
+            };
         }
 
         [HttpPut("channels/{channelId}")]

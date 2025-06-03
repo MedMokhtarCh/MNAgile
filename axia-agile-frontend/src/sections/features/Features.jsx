@@ -42,9 +42,7 @@ const Features = () => {
             </motion.div>
           ))}
         </div>
-        <motion.button className="start-button" whileHover={{ scale: 1.1 }}>
-          Commencer
-        </motion.button>
+    
       </section>
 
       <section className="features-slider">

@@ -20,7 +20,8 @@ namespace TaskService.Controllers
         }
 
         [HttpPost]
-     
+        [Authorize(Policy = "CanCreateKanbanColumns")]
+
         [ProducesResponseType(typeof(KanbanColumnDTO), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -97,7 +98,8 @@ namespace TaskService.Controllers
         }
 
         [HttpPut("{id}")]
-     
+        [Authorize(Policy = "CanUpdateKanbanColumns")]
+
         [ProducesResponseType(typeof(KanbanColumnDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -124,7 +126,8 @@ namespace TaskService.Controllers
         }
 
         [HttpDelete("{id}")]
-     
+        [Authorize(Policy = "CanDeleteKanbanColumns")]
+
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]

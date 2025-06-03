@@ -24,7 +24,11 @@ export const fetchAllTasks = createAsyncThunk(
       const params = [];
       if (projectId) params.push(`projectId=${projectId}`);
       if (backlogId) params.push(`backlogId=${backlogId}`);
-      if (sprintId) params.push(`sprintId=${sprintId}`);
+      if (sprintId && sprintId !== 'all' && sprintId !== 'none') {
+        params.push(`sprintId=${sprintId}`);
+      } else if (sprintId === 'none') {
+        params.push(`sprintId=null`);
+      }
       if (params.length) url += `?${params.join('&')}`;
       const response = await taskApi.get(url);
       console.log('[fetchAllTasks] Response:', response.data);
@@ -41,7 +45,6 @@ export const fetchAllTasks = createAsyncThunk(
     }
   }
 );
-
 // Fetch Kanban columns for a project
 export const fetchKanbanColumns = createAsyncThunk(
   'tasks/fetchKanbanColumns',
@@ -301,7 +304,7 @@ export const deleteSprint = createAsyncThunk(
 // Create a new task
 export const createTask = createAsyncThunk(
   'tasks/createTask',
-  async ({ taskData, attachments }, { rejectWithValue }) => {
+  async ({ taskData, attachments }, { rejectWithValue, dispatch }) => {
     try {
       const formData = new FormData();
       const metadata = { createdIn: taskData.createdIn || 'kanban' };
@@ -309,24 +312,32 @@ export const createTask = createAsyncThunk(
         ...taskData, 
         metadata,
         priority: normalizePriority(taskData.priority),
-        backlogIds: taskData.backlogIds || [],
-        subtasks: taskData.subtasks || [],
-        sprintId: taskData.sprintId || null
+        backlogIds: taskData.backlogIds?.filter(id => id) || [], // Filter out falsy values
+        subtasks: taskData.subtasks?.filter(title => title.trim()) || [], // Filter out empty strings
+        sprintId: taskData.sprintId || null,
+        assignedUserEmails: taskData.assignedUserEmails?.filter(email => email && email.trim()) || [], // Ensure valid emails
+        displayOrder: taskData.displayOrder || 0,
       };
 
       console.log('[createTask] Task Payload:', taskPayload);
 
       Object.keys(taskPayload).forEach((key) => {
-        if (key === 'subtasks') {
+        if (key === 'subtasks' && taskPayload[key].length > 0) {
           taskPayload[key].forEach((subtask, index) => {
-            formData.append(`subtasks[${index}]`, subtask.toString());
+            formData.append(`subtasks[${index}]`, subtask);
           });
           console.log('[createTask] Subtasks Sent:', taskPayload[key]);
-        } else if (Array.isArray(taskPayload[key])) {
-          taskPayload[key].forEach((item, index) => {
-            formData.append(`${key}[${index}]`, item ?? '');
+        } else if (key === 'assignedUserEmails' && taskPayload[key].length > 0) {
+          taskPayload[key].forEach((email, index) => {
+            formData.append(`assignedUserEmails[${index}]`, email);
           });
-        } else if (taskPayload[key] !== null && taskPayload[key] !== undefined) {
+        } else if (Array.isArray(taskPayload[key]) && taskPayload[key].length > 0) {
+          taskPayload[key].forEach((item, index) => {
+            if (item) {
+              formData.append(`${key}[${index}]`, item);
+            }
+          });
+        } else if (taskPayload[key] !== null && taskPayload[key] !== undefined && !Array.isArray(taskPayload[key])) {
           formData.append(key, typeof taskPayload[key] === 'object' ? JSON.stringify(taskPayload[key]) : taskPayload[key]);
         }
       });
@@ -338,13 +349,21 @@ export const createTask = createAsyncThunk(
       }
 
       for (let [key, value] of formData.entries()) {
-        console.log(`[createTask] FormData ${key}:`, value);
+        console.log(`[createTask] FormData ${key}:`, value instanceof File ? value.name : value);
       }
 
       const response = await taskApi.post('/Tasks', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       console.log('[createTask] Response:', response.data);
+
+      // After creating the task, update the backlog's taskIds
+      if (taskPayload.backlogIds && taskPayload.backlogIds.length > 0) {
+        taskPayload.backlogIds.forEach((backlogId) => {
+          dispatch(updateBacklogTaskIds({ backlogId, taskId: response.data.id }));
+        });
+      }
+
       return response.data;
     } catch (err) {
       console.error('[createTask] Error:', {
@@ -358,7 +377,6 @@ export const createTask = createAsyncThunk(
     }
   }
 );
-
 // Update an existing task
 export const updateTask = createAsyncThunk(
   'tasks/updateTask',
@@ -771,7 +789,8 @@ const taskSlice = createSlice({
       .addCase(deleteTask.rejected, (state, action) => {
         state.status = 'failed';
         state.error = action.payload || 'Failed to delete task';
-      });
+      })
+      
   },
 });
 

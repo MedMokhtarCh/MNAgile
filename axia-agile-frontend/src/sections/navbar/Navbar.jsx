@@ -12,6 +12,10 @@ import MenuItem from '@mui/material/MenuItem';
 import logo from '../../assets/logo.png';
 import { useNavigate } from 'react-router-dom'; 
 import { styled } from '@mui/material/styles';
+// Import l'icône pour l'abonnement
+import PaidIcon from '@mui/icons-material/Paid';
+// ou alternativement SubscriptionsIcon
+// import SubscriptionsIcon from '@mui/icons-material/Subscriptions';
 
 
 const LoginButton = styled(Button)(({ theme }) => ({
@@ -25,6 +29,22 @@ const LoginButton = styled(Button)(({ theme }) => ({
   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', 
   '&:hover': {
     backgroundColor: '#f8f9fa',
+  },
+}));
+
+// Styliser le bouton "Créer un compte"
+const SignupButton = styled(Button)(({ theme }) => ({
+  borderRadius: '20px',
+  padding: '6px 20px',
+  fontWeight: 600,
+  textTransform: 'none',
+  backgroundColor: '#5065f2',
+  color: 'white',
+  fontSize: '14px',
+  marginLeft: '10px',
+  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)', 
+  '&:hover': {
+    backgroundColor: '#3f51b5',
   },
 }));
 
@@ -56,6 +76,10 @@ function Navbar() {
   
   const handleNavigate = () => {
     navigate('/Login');
+  };
+
+  const handleSignup = () => {
+    navigate('/Subscribe');
   };
   
   return (
@@ -164,13 +188,39 @@ function Navbar() {
                   Se connecter
                 </Button>
               </MenuItem>
+
+              {/* Signup Button in Mobile Menu */}
+              <MenuItem onClick={handleCloseNavMenu}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  sx={{
+                    backgroundColor: '#5065f2',
+                    color: 'white',
+                    borderRadius: '20px',
+                    padding: '6px 16px', 
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    '&:hover': {
+                      backgroundColor: '#3f51b5',
+                    },
+                  }}
+                  onClick={handleSignup}
+                  startIcon={<PaidIcon fontSize="small" />}
+                >
+                  Créer un compte
+                </Button>
+              </MenuItem>
             </Menu>
 
-            {/* Desktop Login Button */}
+            {/* Desktop Login and Signup Buttons */}
             <Box sx={{ display: { xs: 'none', md: 'flex' } }}>
               <LoginButton onClick={handleNavigate}>
                 Se connecter
               </LoginButton>
+              <SignupButton onClick={handleSignup} startIcon={<PaidIcon fontSize="small" />}>
+                Créer un compte
+              </SignupButton>
             </Box>
           </Box>
         </Toolbar>

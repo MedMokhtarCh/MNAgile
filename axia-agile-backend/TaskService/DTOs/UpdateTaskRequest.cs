@@ -10,7 +10,7 @@ namespace TaskService.DTOs
         public string? Status { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public List<string?>? AssignedUserEmails { get; set; }
+        public List<string>? AssignedUserEmails { get; set; } // Nullable
         public int? ProjectId { get; set; }
         public List<int>? BacklogIds { get; set; }
         public List<string>? Subtasks { get; set; }
@@ -23,8 +23,15 @@ namespace TaskService.DTOs
                 throw new ArgumentException("Le titre ne peut pas être vide.");
             if (ProjectId.HasValue && ProjectId <= 0)
                 throw new ArgumentException("Un ID de projet valide est requis.");
-            if (AssignedUserEmails != null && AssignedUserEmails.Any(email => string.IsNullOrEmpty(email) || !IsValidEmail(email)))
-                throw new ArgumentException("Tous les emails fournis doivent être valides.");
+
+            // Validation optionnelle des emails seulement si fournis
+            if (AssignedUserEmails != null && AssignedUserEmails.Any(email => !string.IsNullOrEmpty(email)))
+            {
+                var validEmails = AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)).ToList();
+                if (validEmails.Any(email => !IsValidEmail(email)))
+                    throw new ArgumentException("Tous les emails fournis doivent être valides.");
+            }
+
             if (Subtasks != null && Subtasks.Any(s => string.IsNullOrWhiteSpace(s)))
                 throw new ArgumentException("Les sous-tâches ne peuvent pas être vides.");
             if (DisplayOrder.HasValue && DisplayOrder < 0)

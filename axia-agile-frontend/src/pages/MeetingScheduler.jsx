@@ -31,45 +31,22 @@ import PageTitle from '../components/common/PageTitle';
 
 const theme = createTheme({
   palette: {
-    primary: {
-      main: '#1a73e8', // Google Blue
-    },
-    secondary: {
-      main: '#ea4335', // Google Red
-    },
-    success: {
-      main: '#34a853', // Google Green
-    },
-    background: {
-      default: '#f1f3f4', // Light grey background
-    },
+    primary: { main: '#1a73e8' }, // Google Blue
+    secondary: { main: '#ea4335' }, // Google Red
+    success: { main: '#34a853' }, // Google Green
+    background: { default: '#f1f3f4' }, // Light grey background
   },
   typography: {
     fontFamily: ['Google Sans', 'Roboto', 'Arial', 'sans-serif'].join(','),
-    h4: {
-      fontWeight: 600,
-    },
-    h5: {
-      fontWeight: 500,
-    },
+    h4: { fontWeight: 600 },
+    h5: { fontWeight: 500 },
   },
   components: {
     MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          textTransform: 'none',
-          fontWeight: 500,
-        },
-      },
+      styleOverrides: { root: { borderRadius: 8, textTransform: 'none', fontWeight: 500 } },
     },
     MuiPaper: {
-      styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        },
-      },
+      styleOverrides: { root: { borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' } },
     },
   },
 });
@@ -87,150 +64,160 @@ export default function GoogleCalendarForm() {
     attendees: '',
     withMeet: true,
   });
-
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [notification, setNotification] = useState({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  const [notification, setNotification] = useState({ open: false, message: '', severity: 'success' });
   const [createdEvents, setCreatedEvents] = useState([]);
   const [tokenStored, setTokenStored] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [organizerEmail, setOrganizerEmail] = useState('');
 
-  const apiClientId = import.meta.env.VITE_CLIENT_ID
+  const apiClientId = import.meta.env.VITE_CLIENT_ID || '';
+  const API_KEY = import.meta.env.VITE_API_KEY || '';
   const SCOPES = 'https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email';
-   // Optional: Add your API key if needed
   let tokenClient;
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('googleCalendarToken');
+    if (!apiClientId) {
+      showNotification('Client ID manquant. Veuillez configurer VITE_CLIENT_ID.', 'error');
+      return;
+    }
 
-    const gisScript = document.createElement('script');
-    gisScript.src = 'https://accounts.google.com/gsi/client';
-    gisScript.async = true;
-    gisScript.onload = () => {
-      tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: apiClientId,
-        scope: SCOPES,
-        callback: async (tokenResponse) => {
-          if (tokenResponse && tokenResponse.access_token) {
-            setIsSignedIn(true);
-            window.gapi.client.setToken({ access_token: tokenResponse.access_token });
-            localStorage.setItem('googleCalendarToken', tokenResponse.access_token);
-            setTokenStored(true);
-
-            try {
-              const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                headers: {
-                  Authorization: `Bearer ${tokenResponse.access_token}`,
-                },
-              });
-              const userInfo = await response.json();
-              setOrganizerEmail(userInfo.email || '');
-              fetchEvents(tokenResponse.access_token);
-            } catch (error) {
-              showNotification("Erreur lors de la récupération de l'email de l'organisateur", 'error');
-            }
-          } else {
-            showNotification('Échec de l\'authentification', 'error');
-          }
-        },
-      });
+    const loadScript = (src, onLoad, onError) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = onLoad;
+      script.onerror = () => onError(`Échec du chargement du script : ${src}`);
+      document.body.appendChild(script);
+      return script;
     };
-    document.body.appendChild(gisScript);
 
-    const gapiScript = document.createElement('script');
-    gapiScript.src = 'https://apis.google.com/js/api.js';
-    gapiScript.async = true;
-    gapiScript.onload = () => {
-      window.gapi.load('client', () => {
-        window.gapi.client
-          .init({
-            apiKey: API_KEY,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
-          })
-          .then(() => {
-            if (storedToken) {
-              window.gapi.client.setToken({ access_token: storedToken });
+    const gisScript = loadScript(
+      'https://accounts.google.com/gsi/client',
+      () => {
+        tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: apiClientId,
+          scope: SCOPES,
+          callback: async (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
               setIsSignedIn(true);
+              window.gapi.client.setToken({ access_token: tokenResponse.access_token });
+              localStorage.setItem('googleCalendarToken', tokenResponse.access_token);
               setTokenStored(true);
-
-              window.gapi.client.calendar.calendarList
-                .list()
-                .then(() => {
-                  console.log('Token valide, session restaurée');
-                  fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-                    headers: {
-                      Authorization: `Bearer ${storedToken}`,
-                    },
-                  })
-                    .then((response) => response.json())
-                    .then((userInfo) => {
-                      setOrganizerEmail(userInfo.email || '');
-                      fetchEvents(storedToken);
-                    })
-                    .catch(() => {
-                      showNotification("Erreur lors de la récupération de l'email de l'organisateur", 'error');
-                    });
-                })
-                .catch(() => {
-                  localStorage.removeItem('googleCalendarToken');
-                  setIsSignedIn(false);
-                  setTokenStored(false);
-                  window.gapi.client.setToken(null);
+              try {
+                const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
                 });
+                if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                const userInfo = await response.json();
+                setOrganizerEmail(userInfo.email || '');
+                fetchEvents(tokenResponse.access_token);
+              } catch (error) {
+                console.error('Error fetching user info:', error);
+                showNotification(`Erreur lors de la récupération de l'email : ${error.message}`, 'error');
+              }
+            } else {
+              showNotification('Échec de l\'authentification', 'error');
             }
-          })
-          .catch((error) => {
-            showNotification(`Erreur d'initialisation de l'API: ${error.message}`, 'error');
-          });
-      });
-    };
-    document.body.appendChild(gapiScript);
+          },
+        });
+      },
+      (error) => showNotification(error, 'error')
+    );
+
+    const gapiScript = loadScript(
+      'https://apis.google.com/js/api.js',
+      () => {
+        window.gapi.load('client', () => {
+          window.gapi.client
+            .init({
+              discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'],
+              ...(API_KEY && { apiKey: API_KEY }), // Only include API_KEY if provided
+            })
+            .then(() => {
+              const storedToken = localStorage.getItem('googleCalendarToken');
+              if (storedToken) {
+                window.gapi.client.setToken({ access_token: storedToken });
+                window.gapi.client.calendar.calendarList
+                  .list()
+                  .then(() => {
+                    console.log('Token valide, session restaurée');
+                    setIsSignedIn(true);
+                    setTokenStored(true);
+                    fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                      headers: { Authorization: `Bearer ${storedToken}` },
+                    })
+                      .then((response) => {
+                        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+                        return response.json();
+                      })
+                      .then((userInfo) => {
+                        setOrganizerEmail(userInfo.email || '');
+                        fetchEvents(storedToken);
+                      })
+                      .catch((error) => {
+                        console.error('Error fetching user info:', error);
+                        showNotification(`Erreur lors de la récupération de l'email : ${error.message}`, 'error');
+                        localStorage.removeItem('googleCalendarToken');
+                        setIsSignedIn(false);
+                        setTokenStored(false);
+                        window.gapi.client.setToken(null);
+                      });
+                  })
+                  .catch((error) => {
+                    console.error('Invalid token:', error);
+                    localStorage.removeItem('googleCalendarToken');
+                    setIsSignedIn(false);
+                    setTokenStored(false);
+                    window.gapi.client.setToken(null);
+                  });
+              }
+            })
+            .catch((error) => {
+              console.error('Error initializing gapi client:', error);
+              showNotification(`Erreur d'initialisation de l'API : ${error.message}`, 'error');
+            });
+        });
+      },
+      (error) => showNotification(error, 'error')
+    );
 
     return () => {
       if (document.body.contains(gisScript)) document.body.removeChild(gisScript);
       if (document.body.contains(gapiScript)) document.body.removeChild(gapiScript);
     };
-  }, []);
+  }, [apiClientId, API_KEY]);
 
-  const fetchEvents = (accessToken) => {
+  const fetchEvents = async (accessToken) => {
     setLoading(true);
-    window.gapi.client.calendar.events
-      .list({
+    try {
+      const response = await window.gapi.client.calendar.events.list({
         calendarId: 'primary',
         timeMin: new Date().toISOString(),
         showDeleted: false,
         singleEvents: true,
         orderBy: 'startTime',
-      })
-      .then((response) => {
-        const events = response.result.items.map((evt) => ({
-          id: evt.id,
-          summary: evt.summary || '',
-          description: evt.description || '',
-          location: evt.location || '',
-          start: evt.start,
-          end: evt.end || evt.start,
-          attendees: evt.attendees || [],
-          meetLink:
-            evt.conferenceData?.entryPoints?.find((ep) => ep.entryPointType === 'video')?.uri || '',
-          htmlLink: evt.htmlLink,
-          conferenceData: evt.conferenceData,
-        }));
-        setCreatedEvents(events);
-        setLoading(false);
-      })
-      .catch((error) => {
-        showNotification(
-          `Erreur lors de la récupération des événements: ${error.result?.error?.message || error.message}`,
-          'error'
-        );
-        setLoading(false);
       });
+      const events = response.result.items.map((evt) => ({
+        id: evt.id,
+        summary: evt.summary || '',
+        description: evt.description || '',
+        location: evt.location || '',
+        start: evt.start,
+        end: evt.end || evt.start,
+        attendees: evt.attendees || [],
+        meetLink: evt.conferenceData?.entryPoints?.find((ep) => ep.entryPointType === 'video')?.uri || '',
+        htmlLink: evt.htmlLink,
+        conferenceData: evt.conferenceData,
+      }));
+      setCreatedEvents(events);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+      showNotification(`Erreur lors de la récupération des événements : ${error.result?.error?.message || error.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAuthClick = () => {
@@ -243,7 +230,7 @@ export default function GoogleCalendarForm() {
 
   const handleSignoutClick = () => {
     const token = window.gapi.client.getToken();
-    if (token && window.google && window.google.accounts && window.google.accounts.oauth2) {
+    if (token && window.google?.accounts?.oauth2) {
       window.google.accounts.oauth2.revoke(token.access_token, () => {
         setIsSignedIn(false);
         setTokenStored(false);
@@ -275,6 +262,10 @@ export default function GoogleCalendarForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!event.summary || !event.startDate || !event.startTime || !event.endDate || !event.endTime) {
+      showNotification('Veuillez remplir tous les champs obligatoires', 'error');
+      return;
+    }
     if (!isSignedIn) {
       handleAuthClick();
       return;
@@ -286,163 +277,142 @@ export default function GoogleCalendarForm() {
     }
   };
 
-  const createEvent = () => {
+  const createEvent = async () => {
     setLoading(true);
+    try {
+      const startDateTime = new Date(`${event.startDate}T${event.startTime}`);
+      const endDateTime = new Date(`${event.endDate}T${event.endTime}`);
+      if (isNaN(startDateTime) || isNaN(endDateTime)) {
+        throw new Error('Dates invalides');
+      }
 
-    const startDateTime = new Date(`${event.startDate}T${event.startTime}`);
-    const endDateTime = new Date(`${event.endDate}T${event.endTime}`);
+      const attendeesList = event.attendees
+        .split(',')
+        .map((email) => email.trim())
+        .filter((email) => email)
+        .map((email) => ({ email }));
 
-    const attendeesList = event.attendees
-      .split(',')
-      .map((email) => email.trim())
-      .filter((email) => email)
-      .map((email) => ({ email }));
+      if (organizerEmail && !attendeesList.some((attendee) => attendee.email === organizerEmail)) {
+        attendeesList.push({ email: organizerEmail });
+      }
 
-    if (organizerEmail && !attendeesList.some((attendee) => attendee.email === organizerEmail)) {
-      attendeesList.push({ email: organizerEmail });
-    }
+      const calendarEvent = {
+        summary: event.summary,
+        location: event.location,
+        description: event.description,
+        start: {
+          dateTime: startDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        end: {
+          dateTime: endDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        attendees: attendeesList,
+        conferenceData: event.withMeet
+          ? { createRequest: { requestId: `meet-${Date.now()}` } }
+          : undefined,
+      };
 
-    const calendarEvent = {
-      summary: event.summary,
-      location: event.location,
-      description: event.description,
-      start: {
-        dateTime: startDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      attendees: attendeesList,
-      conferenceData: event.withMeet
-        ? {
-            createRequest: {
-              requestId: `meet-${Date.now()}`,
-            },
-          }
-        : undefined,
-    };
-
-    window.gapi.client.calendar.events
-      .insert({
+      await window.gapi.client.calendar.events.insert({
         calendarId: 'primary',
         resource: calendarEvent,
         conferenceDataVersion: event.withMeet ? 1 : 0,
         sendUpdates: 'all',
-      })
-      .then((response) => {
-        showNotification('Événement créé avec succès!', 'success');
-        fetchEvents(window.gapi.client.getToken().access_token);
-        resetForm();
-        setLoading(false);
-      })
-      .catch((error) => {
-        showNotification(
-          `Erreur lors de la création de l'événement: ${error.result?.error?.message || error.message}`,
-          'error'
-        );
-        setLoading(false);
       });
+      showNotification('Événement créé avec succès!', 'success');
+      fetchEvents(window.gapi.client.getToken().access_token);
+      resetForm();
+    } catch (error) {
+      console.error('Error creating event:', error);
+      showNotification(`Erreur lors de la création de l'événement : ${error.result?.error?.message || error.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateEvent = () => {
+  const updateEvent = async () => {
     setLoading(true);
+    try {
+      const startDateTime = new Date(`${event.startDate}T${event.startTime}`);
+      const endDateTime = new Date(`${event.endDate}T${event.endTime}`);
+      if (isNaN(startDateTime) || isNaN(endDateTime)) {
+        throw new Error('Dates invalides');
+      }
 
-    const startDateTime = new Date(`${event.startDate}T${event.startTime}`);
-    const endDateTime = new Date(`${event.endDate}T${event.endTime}`);
+      const attendeesList = event.attendees
+        .split(',')
+        .map((email) => email.trim())
+        .filter((email) => email)
+        .map((email) => ({ email }));
 
-    const attendeesList = event.attendees
-      .split(',')
-      .map((email) => email.trim())
-      .filter((email) => email)
-      .map((email) => ({ email }));
+      if (organizerEmail && !attendeesList.some((attendee) => attendee.email === organizerEmail)) {
+        attendeesList.push({ email: organizerEmail });
+      }
 
-    if (organizerEmail && !attendeesList.some((attendee) => attendee.email === organizerEmail)) {
-      attendeesList.push({ email: organizerEmail });
-    }
+      const calendarEvent = {
+        summary: event.summary,
+        location: event.location,
+        description: event.description,
+        start: {
+          dateTime: startDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        end: {
+          dateTime: endDateTime.toISOString(),
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
+        attendees: attendeesList,
+        conferenceData: event.withMeet
+          ? { createRequest: { requestId: `meet-${Date.now()}` } }
+          : undefined,
+      };
 
-    const calendarEvent = {
-      summary: event.summary,
-      location: event.location,
-      description: event.description,
-      start: {
-        dateTime: startDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      attendees: attendeesList,
-      conferenceData: event.withMeet
-        ? {
-            createRequest: {
-              requestId: `meet-${Date.now()}`,
-            },
-          }
-        : undefined,
-    };
-
-    window.gapi.client.calendar.events
-      .update({
+      await window.gapi.client.calendar.events.update({
         calendarId: 'primary',
         eventId: event.id,
         resource: calendarEvent,
         conferenceDataVersion: event.withMeet ? 1 : 0,
         sendUpdates: 'all',
-      })
-      .then((response) => {
-        showNotification('Événement mis à jour avec succès!', 'success');
-        fetchEvents(window.gapi.client.getToken().access_token);
-        resetForm();
-        setLoading(false);
-      })
-      .catch((error) => {
-        showNotification(
-          `Erreur lors de la mise à jour de l'événement: ${error.result?.error?.message || error.message}`,
-          'error'
-        );
-        setLoading(false);
       });
+      showNotification('Événement mis à jour avec succès!', 'success');
+      fetchEvents(window.gapi.client.getToken().access_token);
+      resetForm();
+    } catch (error) {
+      console.error('Error updating event:', error);
+      showNotification(`Erreur lors de la mise à jour de l'événement : ${error.result?.error?.message || error.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteEvent = (eventId) => {
+  const deleteEvent = async (eventId) => {
     if (!isSignedIn) {
       showNotification('Veuillez vous connecter pour supprimer un événement', 'error');
       return;
     }
-
     setLoading(true);
-    window.gapi.client.calendar.events
-      .delete({
+    try {
+      await window.gapi.client.calendar.events.delete({
         calendarId: 'primary',
-        eventId: eventId,
+        eventId,
         sendUpdates: 'all',
-      })
-      .then(() => {
-        showNotification('Événement supprimé avec succès!', 'success');
-        fetchEvents(window.gapi.client.getToken().access_token);
-        setLoading(false);
-      })
-      .catch((error) => {
-        showNotification(
-          `Erreur lors de la suppression de l'événement: ${error.result?.error?.message || error.message}`,
-          'error'
-        );
-        setLoading(false);
       });
+      showNotification('Événement supprimé avec succès!', 'success');
+      fetchEvents(window.gapi.client.getToken().access_token);
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      showNotification(`Erreur lors de la suppression de l'événement : ${error.result?.error?.message || error.message}`, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const copyMeetLink = (meetLink) => {
     navigator.clipboard
       .writeText(meetLink)
-      .then(() => {
-        showNotification('Lien de réunion copié dans le presse-papiers!', 'success');
-      })
-      .catch(() => {
-        showNotification('Erreur lors de la copie du lien', 'error');
-      });
+      .then(() => showNotification('Lien de réunion copié dans le presse-papiers!', 'success'))
+      .catch(() => showNotification('Erreur lors de la copie du lien', 'error'));
   };
 
   const editEvent = (evt) => {
@@ -481,11 +451,7 @@ export default function GoogleCalendarForm() {
   };
 
   const showNotification = (message, severity) => {
-    setNotification({
-      open: true,
-      message,
-      severity,
-    });
+    setNotification({ open: true, message, severity });
   };
 
   const closeNotification = () => {
@@ -519,22 +485,20 @@ export default function GoogleCalendarForm() {
         </Snackbar>
 
         <Box sx={{ mb: 4, textAlign: 'center' }}>
-      <PageTitle>
+          <PageTitle>
             <EventIcon sx={{ mr: 1 }} />
             Gestionnaire d'événements Google Calendar
-      </PageTitle>
-
+          </PageTitle>
           <Alert severity="info" sx={{ mt: 2, mx: 'auto', maxWidth: 600 }}>
             Seul l'organisateur doit se connecter à Google. Votre email (
             {organizerEmail || 'non connecté'}) sera automatiquement ajouté comme participant.
           </Alert>
-
           {!isSignedIn ? (
             <Button
               variant="contained"
               color="primary"
               onClick={handleAuthClick}
-              disabled={loading}
+              disabled={loading || !apiClientId}
               startIcon={<GoogleIcon />}
               sx={{ mt: 3, py: 1.5, px: 4, fontSize: '1.1rem' }}
             >
@@ -572,7 +536,6 @@ export default function GoogleCalendarForm() {
             variant="outlined"
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
           />
-
           <TextField
             fullWidth
             label="Description"
@@ -586,7 +549,6 @@ export default function GoogleCalendarForm() {
             variant="outlined"
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
           />
-
           <TextField
             fullWidth
             label="Lieu (optionnel)"
@@ -598,7 +560,6 @@ export default function GoogleCalendarForm() {
             variant="outlined"
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
           />
-
           <Box sx={{ display: 'flex', gap: 2, mt: 2, flexWrap: 'wrap' }}>
             <TextField
               label="Date de début *"
@@ -627,7 +588,6 @@ export default function GoogleCalendarForm() {
               sx={{ flex: 1, minWidth: 200, '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
             />
           </Box>
-
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
             <TextField
               label="Date de fin *"
@@ -656,7 +616,6 @@ export default function GoogleCalendarForm() {
               sx={{ flex: 1, minWidth: 200, '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
             />
           </Box>
-
           <TextField
             fullWidth
             label="Participants supplémentaires (emails séparés par des virgules)"
@@ -670,7 +629,6 @@ export default function GoogleCalendarForm() {
             helperText={`Votre email (${organizerEmail || 'non connecté'}) est automatiquement ajouté. Ajoutez d'autres emails ici si nécessaire.`}
             sx={{ '& .MuiOutlinedInput-root': { borderRadius: 8 } }}
           />
-
           <FormGroup sx={{ mt: 2, mb: 3 }}>
             <FormControlLabel
               control={
@@ -690,7 +648,6 @@ export default function GoogleCalendarForm() {
               }
             />
           </FormGroup>
-
           <Stack direction="row" spacing={2} justifyContent="center" sx={{ mt: 3 }}>
             <Button
               type="submit"
@@ -732,9 +689,7 @@ export default function GoogleCalendarForm() {
             </Typography>
           )}
         </Box>
-
         <Divider sx={{ mb: 3 }} />
-
         {createdEvents.length === 0 ? (
           <Alert severity="info" sx={{ mt: 2 }}>
             Aucune réunion n'a encore été créée
@@ -756,24 +711,13 @@ export default function GoogleCalendarForm() {
                 }}
               >
                 <Box sx={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 1 }}>
-                  <IconButton
-                    aria-label="modifier"
-                    onClick={() => editEvent(evt)}
-                    size="small"
-                    color="primary"
-                  >
+                  <IconButton aria-label="modifier" onClick={() => editEvent(evt)} size="small" color="primary">
                     <EditIcon />
                   </IconButton>
-                  <IconButton
-                    aria-label="supprimer"
-                    onClick={() => deleteEvent(evt.id)}
-                    size="small"
-                    color="secondary"
-                  >
+                  <IconButton aria-label="supprimer" onClick={() => deleteEvent(evt.id)} size="small" color="secondary">
                     <DeleteIcon />
                   </IconButton>
                 </Box>
-
                 <Typography variant="h6" gutterBottom>
                   {evt.summary}
                 </Typography>
@@ -801,7 +745,6 @@ export default function GoogleCalendarForm() {
                     Les participants n'ont pas besoin de compte Google pour rejoindre
                   </Typography>
                 </Alert>
-
                 <Stack spacing={1}>
                   {evt.meetLink && (
                     <>

@@ -298,7 +298,8 @@ namespace DiscussionService.Services
 
         public async Task<MessageDTO> SendMessageAsync(SendMessageRequest request, int senderId, List<IFormFile> files)
         {
-            _logger.LogInformation("Sending message to channel {ChannelId} by user {SenderId}.", request.ChannelId, senderId);
+            _logger.LogInformation("Sending message to channel {ChannelId} by user {SenderId}. Content: {Content}, Files: {FileCount}",
+                request.ChannelId, senderId, request.Content ?? "null", files?.Count ?? 0);
 
             var channel = await _context.Channels
                 .Include(c => c.Members)
@@ -306,17 +307,27 @@ namespace DiscussionService.Services
 
             if (channel == null)
             {
+                _logger.LogWarning("Channel {ChannelId} not found.", request.ChannelId);
                 throw new InvalidOperationException("Canal non trouvé.");
             }
 
             if (!channel.Members.Any(m => m.UserId == senderId))
             {
+                _logger.LogWarning("User {SenderId} is not a member of channel {ChannelId}.", senderId, request.ChannelId);
                 throw new UnauthorizedAccessException("Vous n'êtes pas membre de ce canal.");
             }
 
             if (channel.Type == "dm" && request.RecipientId.HasValue && !channel.Members.Any(m => m.UserId == request.RecipientId))
             {
+                _logger.LogWarning("Recipient {RecipientId} is not a member of DM channel {ChannelId}.", request.RecipientId, request.ChannelId);
                 throw new ArgumentException("Recipient is not a member of this DM channel.");
+            }
+
+            // Validate: require either content or files
+            if (string.IsNullOrEmpty(request.Content) && (files == null || !files.Any()))
+            {
+                _logger.LogWarning("No content or files provided for message in channel {ChannelId}.", request.ChannelId);
+                throw new ArgumentException("Un message ou une pièce jointe est requis.");
             }
 
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -326,7 +337,7 @@ namespace DiscussionService.Services
                 {
                     ChannelId = request.ChannelId,
                     SenderId = senderId,
-                    Content = request.Content,
+                    Content = request.Content ?? "", // Ensure empty string
                     Timestamp = DateTime.UtcNow,
                     ReplyToId = request.ReplyToId,
                     RecipientId = request.RecipientId,
@@ -345,17 +356,20 @@ namespace DiscussionService.Services
                 {
                     if (file.Length > maxFileSize)
                     {
+                        _logger.LogWarning("File {FileName} exceeds maximum size of 10 MB.", file.FileName);
                         throw new ArgumentException($"File {file.FileName} exceeds maximum size of 10 MB.");
                     }
 
                     if (!allowedFileTypes.Contains(file.ContentType))
                     {
+                        _logger.LogWarning("File type {FileType} is not allowed for file {FileName}.", file.ContentType, file.FileName);
                         throw new ArgumentException($"File type {file.ContentType} is not allowed.");
                     }
 
                     var fileName = Guid.NewGuid().ToString() + Path.GetExtension(SanitizeFileName(file.FileName));
                     var filePath = Path.Combine(uploadPath, fileName);
 
+                    _logger.LogInformation("Saving file {FileName} to {FilePath}", file.FileName, filePath);
                     using (var stream = new FileStream(filePath, FileMode.Create))
                     {
                         await file.CopyToAsync(stream);
@@ -373,7 +387,17 @@ namespace DiscussionService.Services
                 }
 
                 _context.Messages.Add(message);
-                await _context.SaveChangesAsync();
+                try
+                {
+                    await _context.SaveChangesAsync();
+                    _logger.LogInformation("Message {MessageId} saved successfully to channel {ChannelId}.", message.Id, request.ChannelId);
+                }
+                catch (DbUpdateException ex)
+                {
+                    _logger.LogError(ex, "Database error while saving message to channel {ChannelId}. InnerException: {InnerException}",
+                        request.ChannelId, ex.InnerException?.Message);
+                    throw new InvalidOperationException($"Erreur lors de l'enregistrement du message: {ex.InnerException?.Message ?? ex.Message}", ex);
+                }
 
                 foreach (var member in channel.Members.Where(m => m.UserId != senderId))
                 {
@@ -404,6 +428,7 @@ namespace DiscussionService.Services
 
                 await transaction.CommitAsync();
 
+                _logger.LogInformation("Notifying clients for message {MessageId} in channel {ChannelId}.", message.Id, message.ChannelId);
                 await _hubContext.Clients.Group($"channel_{message.ChannelId}").SendAsync("ReceiveMessage", messageDTO);
 
                 _logger.LogInformation("Message {MessageId} sent to channel {ChannelId} by user {SenderId}.", message.Id, message.ChannelId, senderId);

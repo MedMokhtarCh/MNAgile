@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using UserService.Data;
+using UserService.Models;
 using Claim = System.Security.Claims.Claim;
 
 namespace UserService.Services
@@ -26,17 +27,58 @@ namespace UserService.Services
                 .Include(u => u.Role)
                 .Include(u => u.UserClaims)
                 .ThenInclude(uc => uc.Claim)
+                .Include(u => u.Subscription)
+                .Include(u => u.RootAdmin)
+                .ThenInclude(ra => ra.Subscription)
                 .FirstOrDefaultAsync(u => u.Email == email);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             {
-                return null;
+                return null; // Email ou mot de passe incorrect
             }
 
-            // Vérifiez si l'utilisateur est actif
+            // Vérifier si l'utilisateur est inactif
             if (!user.IsActive)
             {
-                return null;
+                if (user.Subscription?.Status == "Pending")
+                {
+                    throw new UnauthorizedAccessException("Votre compte est en attente de validation. Vous recevrez un email une fois votre abonnement validé.");
+                }
+                throw new UnauthorizedAccessException("Votre compte est désactivé. Veuillez contacter l'administrateur pour plus d'informations.");
+            }
+
+            // Vérifier l'abonnement de l'utilisateur
+            if (user.Subscription != null)
+            {
+                if (user.Subscription.Status == "Pending")
+                {
+                    throw new UnauthorizedAccessException("Votre compte est en attente de validation. Vous recevrez un email une fois votre abonnement validé.");
+                }
+                if (user.Subscription.Status != "Active" || user.Subscription.EndDate <= DateTime.UtcNow)
+                {
+                    throw new UnauthorizedAccessException("Votre compte a expiré. Veuillez renouveler votre abonnement pour vous connecter.");
+                }
+            }
+
+            // Vérifier l'abonnement du root admin si applicable
+            if (user.RootAdminId.HasValue)
+            {
+                var rootAdmin = await _context.Users
+                    .Include(u => u.Subscription)
+                    .FirstOrDefaultAsync(u => u.Id == user.RootAdminId);
+                if (rootAdmin != null && rootAdmin.Subscription != null)
+                {
+                    if (rootAdmin.Subscription.Status == "Pending")
+                    {
+                        throw new UnauthorizedAccessException("Votre compte est en attente de validation. Vous recevrez un email une fois votre abonnement validé.");
+                    }
+                    if (rootAdmin.Subscription.Status != "Active" || rootAdmin.Subscription.EndDate <= DateTime.UtcNow)
+                    {
+                        user.IsActive = false;
+                        await _context.SaveChangesAsync();
+                        throw new UnauthorizedAccessException("Votre compte a expiré. Veuillez renouveler votre abonnement pour vous connecter.");
+                    }
+                }
             }
 
             user.LastLogin = DateTime.UtcNow;
@@ -81,7 +123,7 @@ namespace UserService.Services
 
         public bool IsValidEmail(string email)
         {
-            if (string.IsNullOrWhiteSpace(email))
+            if (string.IsNullOrEmpty(email))
                 return false;
 
             try

@@ -25,21 +25,47 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
+                // Check for duplicate email
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email))
                 {
+                    _logger.LogWarning("Email already exists: {Email}", user.Email);
                     throw new InvalidOperationException("Un compte avec cet email existe déjà.");
                 }
 
                 user.DateCreated = DateTime.UtcNow;
-                user.IsActive = true;
+                user.IsActive = user.IsActive; // Respect the IsActive value from input (false for signup)
+
+                // Handle RootAdminId after saving user to ensure user.Id is assigned
+                int? tempRootAdminId = null;
+                if (user.CreatedById.HasValue)
+                {
+                    var creator = await _context.Users
+                        .Include(u => u.Subscription)
+                        .FirstOrDefaultAsync(u => u.Id == user.CreatedById);
+                    if (creator != null)
+                    {
+                        user.RootAdminId = creator.RootAdminId ?? creator.Id;
+                    }
+                }
+
+                // Add user to context
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-                if (user.RoleId == 1)
+                // Set RootAdminId for self-created admin (RoleId = 2)
+                if (user.RoleId == 2 && !user.CreatedById.HasValue)
+                {
+                    user.RootAdminId = user.Id;
+                    _context.Users.Update(user);
+                    await _context.SaveChangesAsync();
+                }
+
+                // Assign claims based on role
+                if (user.RoleId == 1) // SuperAdmin
                 {
                     claimIds = await _context.Claims.Select(c => c.Id).ToListAsync();
                 }
-                else if (user.RoleId == 2)
+                else if (user.RoleId == 2) // Admin
                 {
                     var defaultAdminClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers" || c.Name == "CanCreateUsers")
@@ -47,7 +73,7 @@ namespace UserService.Services
                         .ToListAsync();
                     claimIds.AddRange(defaultAdminClaims);
                 }
-                else if (user.RoleId == 3)
+                else if (user.RoleId == 3) // ChefProjet
                 {
                     var defaultChefProjetClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers")
@@ -56,11 +82,15 @@ namespace UserService.Services
                     claimIds.AddRange(defaultChefProjetClaims);
                 }
 
+                // Ensure unique claim IDs
                 claimIds = claimIds.Distinct().ToList();
+
+                // Validate and assign claims
                 foreach (var claimId in claimIds)
                 {
                     if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
                     {
+                        _logger.LogWarning("Claim ID {ClaimId} does not exist for user {Email}.", claimId, user.Email);
                         throw new InvalidOperationException($"Claim ID {claimId} n'existe pas.");
                     }
                     _context.UserClaims.Add(new UserClaim { UserId = user.Id, ClaimId = claimId });
@@ -69,34 +99,38 @@ namespace UserService.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"User {user.Email} created successfully.");
+                _logger.LogInformation("User {Email} created successfully with RootAdminId {RootAdminId}.", user.Email, user.RootAdminId);
                 return user;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError($"Error creating user {user.Email}: {ex.Message}");
+                _logger.LogError(ex, "Error creating user {Email}. InnerException: {InnerException}", user.Email, ex.InnerException?.Message);
                 throw;
             }
         }
 
         public async Task<List<User>> GetAllUsersAsync(int createdById)
         {
-            _logger.LogInformation($"Fetching users created by ID {createdById}");
+            _logger.LogInformation("Fetching users created by ID {CreatedById}", createdById);
             return await _context.Users
                 .Where(u => u.CreatedById == createdById)
                 .Include(u => u.UserClaims)
                 .ThenInclude(uc => uc.Claim)
+                .Include(u => u.Subscription)
                 .ToListAsync();
         }
 
         public async Task<User> GetUserByIdAsync(int id)
         {
-            _logger.LogInformation($"Fetching user by ID {id}");
+            _logger.LogInformation("Fetching user by ID {Id}", id);
             return await _context.Users
                 .Include(u => u.Role)
                 .Include(u => u.UserClaims)
                 .ThenInclude(uc => uc.Claim)
+                .Include(u => u.Subscription)
+                .Include(u => u.RootAdmin)
+                .ThenInclude(ra => ra.Subscription)
                 .FirstOrDefaultAsync(u => u.Id == id);
         }
 
@@ -107,6 +141,9 @@ namespace UserService.Services
                 .Include(u => u.Role)
                 .Include(u => u.UserClaims)
                 .ThenInclude(uc => uc.Claim)
+                .Include(u => u.Subscription)
+                .Include(u => u.RootAdmin)
+                .ThenInclude(ra => ra.Subscription)
                 .ToListAsync();
         }
 
@@ -117,13 +154,26 @@ namespace UserService.Services
             {
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email && u.Id != user.Id))
                 {
+                    _logger.LogWarning("Email {Email} already exists for another user.", user.Email);
                     throw new InvalidOperationException("Un compte avec cet email existe déjà.");
+                }
+
+                if (user.CreatedById.HasValue)
+                {
+                    var creator = await _context.Users
+                        .Include(u => u.Subscription)
+                        .FirstOrDefaultAsync(u => u.Id == user.CreatedById);
+                    if (creator != null)
+                    {
+                        user.RootAdminId = creator.RootAdminId ?? creator.Id;
+                    }
                 }
 
                 foreach (var claimId in claimIds)
                 {
                     if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
                     {
+                        _logger.LogWarning("Claim ID {ClaimId} does not exist for user {Email}.", claimId, user.Email);
                         throw new InvalidOperationException($"Claim ID {claimId} does not exist.");
                     }
                 }
@@ -141,13 +191,13 @@ namespace UserService.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"User {user.Email} updated successfully with claimIds: {string.Join(", ", claimIds)}");
+                _logger.LogInformation("User {Email} updated successfully with claimIds: {ClaimIds}", user.Email, string.Join(", ", claimIds));
                 return user;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError($"Error updating user {user.Email}: {ex.Message}");
+                _logger.LogError(ex, "Error updating user {Email}. InnerException: {InnerException}", user.Email, ex.InnerException?.Message);
                 throw;
             }
         }
@@ -161,6 +211,7 @@ namespace UserService.Services
                 {
                     if (!await _context.Claims.AnyAsync(c => c.Id == claimId))
                     {
+                        _logger.LogWarning("Claim ID {ClaimId} does not exist for user {Email}.", claimId, user.Email);
                         throw new InvalidOperationException($"Claim ID {claimId} n'existe pas.");
                     }
                 }
@@ -176,13 +227,13 @@ namespace UserService.Services
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                _logger.LogInformation($"User {user.Email} claims patched successfully with claimIds: {string.Join(", ", claimIds)}");
+                _logger.LogInformation("User {Email} claims patched successfully with claimIds: {ClaimIds}", user.Email, string.Join(", ", claimIds));
                 return user;
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError($"Error patching user {user.Email} claims: {ex.Message}");
+                _logger.LogError(ex, "Error patching user {Email} claims. InnerException: {InnerException}", user.Email, ex.InnerException?.Message);
                 throw;
             }
         }
@@ -198,13 +249,13 @@ namespace UserService.Services
                     _context.Users.Remove(user);
                     await _context.SaveChangesAsync();
                     await transaction.CommitAsync();
-                    _logger.LogInformation($"User {user.Email} deleted successfully.");
+                    _logger.LogInformation("User {Email} deleted successfully.", user.Email);
                 }
             }
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError($"Error deleting user with ID {id}: {ex.Message}");
+                _logger.LogError(ex, "Error deleting user with ID {Id}. InnerException: {InnerException}", id, ex.InnerException?.Message);
                 throw;
             }
         }
@@ -212,6 +263,20 @@ namespace UserService.Services
         public async Task<bool> UserExistsAsync(string email)
         {
             return await _context.Users.AnyAsync(u => u.Email == email);
+        }
+
+        public async Task DeactivateUsersByRootAdminAsync(int rootAdminId)
+        {
+            var users = await _context.Users
+                .Where(u => u.RootAdminId == rootAdminId && u.Id != rootAdminId)
+                .ToListAsync();
+            foreach (var user in users)
+            {
+                user.IsActive = false;
+                _context.Users.Update(user);
+            }
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Deactivated {Count} users under root admin ID {RootAdminId}.", users.Count, rootAdminId);
         }
     }
 }

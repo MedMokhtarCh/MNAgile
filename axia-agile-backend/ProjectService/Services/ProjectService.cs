@@ -91,7 +91,7 @@ namespace ProjectService.Services
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
-            // Attempt to create default "À faire" Kanban column in TaskService
+            // default "À faire" Kanban column in TaskService
             try
             {
                 var createColumnRequest = new CreateKanbanColumnRequest
@@ -116,7 +116,7 @@ namespace ProjectService.Services
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError($"Failed to create Kanban column: {errorContent}");
-                    // Do not throw; log the error and continue
+                    
                 }
                 else
                 {
@@ -126,7 +126,7 @@ namespace ProjectService.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error while creating Kanban column for project ID: {ProjectId}", project.Id);
-                // Do not throw; log the error and continue
+                
             }
 
             return MapToDto(project);

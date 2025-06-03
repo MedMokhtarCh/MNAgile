@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -9,7 +10,7 @@ import {
   IconButton,
   Tooltip,
 } from '@mui/material';
-import { FaChartBar, FaUsers, FaSignOutAlt, FaShieldAlt, FaKey, FaProjectDiagram, FaRegCommentDots } from 'react-icons/fa';
+import { FaChartBar, FaUsers, FaSignOutAlt, FaShieldAlt, FaKey, FaProjectDiagram, FaRegCommentDots, FaCreditCard } from 'react-icons/fa';
 import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import logo from '../../assets/logo.png';
@@ -105,6 +106,19 @@ const AdminSidebar = ({ collapsed }) => {
                 </Tooltip>
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Utilisateurs" />}
+            </ListItem>
+            <ListItem
+              button
+              component={Link}
+              to="/SuperAdminSubscriptionManagement"
+              className={`menu-item ${isActive('/SuperAdminSubscriptionManagement')}`}
+            >
+              <ListItemIcon className="menu-icon">
+                <Tooltip title="Abonnements" placement="right">
+                  <FaCreditCard />
+                </Tooltip>
+              </ListItemIcon>
+              {!collapsed && <ListItemText primary="Abonnements" />}
             </ListItem>
             <ListItem
               button

@@ -15,7 +15,7 @@ namespace TaskService.Models
         public DateTime? UpdatedAt { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public string AssignedUserIds { get; set; }
+        public string? AssignedUserIds { get; set; } // Rendre nullable
         public string? Attachments { get; set; }
         [Required]
         public int ProjectId { get; set; }
@@ -23,5 +23,7 @@ namespace TaskService.Models
         public string? Subtasks { get; set; } // JSON-serialized list of subtask titles
         public int? SprintId { get; set; } // Link to Sprint
         public int DisplayOrder { get; set; } // Order within a Kanban column
+ 
+
     }
 }

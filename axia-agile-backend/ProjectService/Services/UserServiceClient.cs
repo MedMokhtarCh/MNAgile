@@ -23,7 +23,7 @@ namespace ProjectService.Services
                     var content = await response.Content.ReadAsStringAsync();
                     _logger.LogInformation($"Réponse de UserService pour l'email {email} : {content}");
 
-                    // Parse the correct response structure from UserService
+                   
                     var userExistenceResponse = JsonSerializer.Deserialize<UserExistenceResponse>(content,
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 

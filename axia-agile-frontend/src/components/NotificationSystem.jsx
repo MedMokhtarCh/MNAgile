@@ -29,10 +29,13 @@ import {
   FiUser,
 } from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { useNotification } from '../hooks/useNotifications';
+import { notificationHubService } from '../services/notificationHub';
+import { DateTime } from 'luxon';
 import './NotificationSystem.css';
 
-const NotificationSystem = ({ currentUser }) => {
+const NotificationSystem = ({ userId }) => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -41,36 +44,44 @@ const NotificationSystem = ({ currentUser }) => {
   const [showFilterOptions, setShowFilterOptions] = useState(false);
   const [fullViewMode, setFullViewMode] = useState(false);
 
-  const { getUserNotifications, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } = useNotification();
+  const { getNotificationsByUserId, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } = useNotification();
+  const currentUser = useSelector((state) => state.auth.currentUser);
   const notificationRef = useRef(null);
   const navigate = useNavigate();
 
-  // Load notifications on mount and listen for updates
+  const isOwnNotifications = currentUser?.id && parseInt(userId) === currentUser.id;
+
   useEffect(() => {
-    if (currentUser?.email) {
+    if (userId) {
       fetchNotifications();
 
-      const handleNotificationUpdate = () => {
-        fetchNotifications();
-      };
+      if (isOwnNotifications) {
+        notificationHubService.startConnection(userId);
 
-      window.addEventListener('newNotification', handleNotificationUpdate);
-      window.addEventListener('notificationUpdated', handleNotificationUpdate);
+        const handleNotificationUpdate = () => {
+          fetchNotifications();
+        };
 
-      return () => {
-        window.removeEventListener('newNotification', handleNotificationUpdate);
-        window.removeEventListener('notificationUpdated', handleNotificationUpdate);
-      };
+        window.addEventListener('newNotification', handleNotificationUpdate);
+        window.addEventListener('notificationUpdated', handleNotificationUpdate);
+
+        return () => {
+          window.removeEventListener('newNotification', handleNotificationUpdate);
+          window.removeEventListener('notificationUpdated', handleNotificationUpdate);
+          notificationHubService.stopConnection();
+        };
+      }
     }
-  }, [currentUser, getUserNotifications]);
+  }, [userId, isOwnNotifications]);
 
-  const fetchNotifications = () => {
+  const fetchNotifications = async () => {
     setNotificationsLoading(true);
-    setTimeout(() => {
-      const userNotifications = getUserNotifications(currentUser.email);
+    try {
+      const userNotifications = await getNotificationsByUserId(userId);
       setNotifications(userNotifications);
+    } finally {
       setNotificationsLoading(false);
-    }, 500);
+    }
   };
 
   const handleToggleNotifications = () => {
@@ -88,19 +99,48 @@ const NotificationSystem = ({ currentUser }) => {
     setFullViewMode(false);
   };
 
-  const handleViewNotification = (id, metadata) => {
-    markNotificationAsRead(id);
-    if (metadata?.projectId) {
-      if (metadata?.taskId) {
-        navigate(`/project/${metadata.projectId}?task=${metadata.taskId}`);
-      } else {
-        navigate(`/project/${metadata.projectId}`);
+  const handleViewNotification = async (notification, e) => {
+    if (e) e.stopPropagation();
+    
+    try {
+      if (isOwnNotifications && !notification.isRead) {
+        await markNotificationAsRead(notification.id);
+        setNotifications(prev => prev.map(n => 
+          n.id === notification.id ? { ...n, isRead: true } : n
+        ));
+      }
+      
+      if (notification.relatedEntityType === 'Project' && notification.relatedEntityId) {
+        if (notification.relatedEntityType === 'Task') {
+          navigate(`/project/${notification.relatedEntityId}?task=${notification.relatedEntityId}`);
+        } else {
+          navigate(`/project/${notification.relatedEntityId}`);
+        }
+      }
+    } catch (error) {
+      console.error("Error handling notification:", error);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    if (isOwnNotifications) {
+      try {
+        await markAllNotificationsAsRead();
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      } catch (error) {
+        console.error("Failed to mark all as read:", error);
       }
     }
   };
 
-  const handleMarkAllAsRead = () => {
-    markAllNotificationsAsRead(currentUser.email);
+  const handleDeleteNotification = async (notificationId, e) => {
+    e.stopPropagation();
+    try {
+      await deleteNotification(notificationId);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+    }
   };
 
   const handleViewAll = () => {
@@ -124,10 +164,10 @@ const NotificationSystem = ({ currentUser }) => {
     setShowFilterOptions(false);
   };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   const filteredNotifications = notifications.filter((notification) => {
-    if (showOnlyUnread && notification.read) return false;
+    if (showOnlyUnread && notification.isRead) return false;
     if (filterType !== 'all' && notification.type !== filterType) return false;
     return true;
   });
@@ -137,28 +177,42 @@ const NotificationSystem = ({ currentUser }) => {
     : filteredNotifications.slice(0, 4);
 
   const formatTimeDisplay = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInSeconds = Math.floor((now - date) / 1000);
+    if (!dateString) return 'Date inconnue';
 
-    if (diffInSeconds < 60) return 'À l’instant';
-    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} min`;
-    if (diffInSeconds < 7200) return `1 heure`;
-    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} heures`;
-    if (diffInSeconds < 172800) return `Hier`;
-    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} jours`;
+    try {
+      const date = DateTime.fromISO(dateString, { zone: 'utc' });
+      if (!date.isValid) return 'Date invalide';
 
-    return date.toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+      const now = DateTime.now().setZone('Europe/Paris');
+      const diffSec = Math.round(now.diff(date, 'seconds').seconds);
+      const diffMin = Math.round(diffSec / 60);
+      const diffHours = Math.round(diffMin / 60);
+      const diffDays = Math.round(diffHours / 24);
+
+      if (diffSec < -5) return 'Dans le futur';
+      if (diffSec < 5) return 'À l\'instant';
+      if (diffSec < 60) return `Il y a ${diffSec} secondes`;
+      if (diffMin < 60) return `Il y a ${diffMin} minutes`;
+      if (diffHours < 24) return `Il y a ${diffHours} heures`;
+      if (diffDays === 1) return 'Hier';
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+
+      return date.setZone('Europe/Paris').toLocaleString({
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      console.error('Error formatting date:', e);
+      return 'Date invalide';
+    }
   };
 
-  const getInitials = (name) => {
-    if (!name) return '?';
-    return name
+  const getInitials = (message) => {
+    const senderName = message.split(':')[0]?.trim() || '?';
+    return senderName
       .split(' ')
       .map((n) => n[0])
       .join('')
@@ -172,7 +226,7 @@ const NotificationSystem = ({ currentUser }) => {
       case 'system': return '#f59e0b';
       case 'project': return '#8b5cf6';
       case 'task': return '#059669';
-      case 'user': return '#ef4444';
+      case 'canal': return '#ef4444';
       default: return '#2563eb';
     }
   };
@@ -184,7 +238,7 @@ const NotificationSystem = ({ currentUser }) => {
       case 'system': return <FiInfo size={14} />;
       case 'project': return <FiFolderPlus size={14} />;
       case 'task': return <FiCheckCircle size={14} />;
-      case 'user': return <FiUser size={14} />;
+      case 'canal': return <FiUser size={14} />;
       default: return null;
     }
   };
@@ -259,14 +313,16 @@ const NotificationSystem = ({ currentUser }) => {
                               {showOnlyUnread ? <FiEyeOff size={16} /> : <FiEye size={16} />}
                             </span>
                           </Tooltip>
-                          <Tooltip title="Tout marquer comme lu">
-                            <span
-                              onClick={handleMarkAllAsRead}
-                              className="action-icon header-action"
-                            >
-                              <FiCheck size={16} />
-                            </span>
-                          </Tooltip>
+                          {isOwnNotifications && (
+                            <Tooltip title="Tout marquer comme lu">
+                              <span
+                                onClick={handleMarkAllAsRead}
+                                className="action-icon header-action"
+                              >
+                                <FiCheck size={16} />
+                              </span>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </div>
@@ -335,20 +391,20 @@ const NotificationSystem = ({ currentUser }) => {
                       </Button>
                       <Button
                         size="small"
-                        variant={filterType === 'user' ? 'contained' : 'outlined'}
-                        onClick={() => handleFilterChange('user')}
+                        variant={filterType === 'canal' ? 'contained' : 'outlined'}
+                        onClick={() => handleFilterChange('canal')}
                         style={{
                           textTransform: 'none',
                           minWidth: 'auto',
-                          backgroundColor: filterType === 'user' ? '#ef4444' : 'transparent',
-                          color: filterType === 'user' ? 'white' : '#ef4444',
+                          backgroundColor: filterType === 'canal' ? '#ef4444' : 'transparent',
+                          color: filterType === 'canal' ? 'white' : '#ef4444',
                           borderColor: '#ef4444',
                           padding: '4px 12px',
                           fontSize: '13px',
                         }}
                         startIcon={<FiUser size={14} />}
                       >
-                        Utilisateurs
+                        Canal
                       </Button>
                     </Box>
                   </Fade>
@@ -362,8 +418,8 @@ const NotificationSystem = ({ currentUser }) => {
                       displayedNotifications.map((notification) => (
                         <div
                           key={notification.id}
-                          className={`notification-card ${!notification.read ? 'unread' : ''}`}
-                          onClick={() => handleViewNotification(notification.id, notification.metadata)}
+                          className={`notification-card ${!notification.isRead ? 'unread' : ''}`}
+                          onClick={(e) => handleViewNotification(notification, e)}
                           style={{
                             '--notification-accent-color': getNotificationTypeColor(notification.type),
                           }}
@@ -372,24 +428,17 @@ const NotificationSystem = ({ currentUser }) => {
                             <Avatar
                               className="notification-avatar"
                               style={{
-                                backgroundColor: notification.read
+                                backgroundColor: notification.isRead
                                   ? '#e5e7eb'
                                   : getNotificationTypeColor(notification.type) + '15',
                               }}
                             >
-                              {notification.sender.avatar ? (
-                                <img
-                                  src={notification.sender.avatar}
-                                  alt={notification.sender.name}
-                                />
-                              ) : (
-                                getInitials(notification.sender.name)
-                              )}
+                              {getInitials(notification.message)}
                             </Avatar>
                           </div>
                           <div className="notification-content">
                             <Typography variant="subtitle2" className="notification-sender">
-                              {notification.sender.name}
+                              {notification.message.split(':')[0]?.trim()}
                               <span
                                 style={{
                                   marginLeft: '8px',
@@ -411,39 +460,38 @@ const NotificationSystem = ({ currentUser }) => {
                               </span>
                             </Typography>
                             <Typography variant="body2" className="notification-message">
-                              {notification.message}
+                              {notification.message.split(':').slice(1).join(':').trim()}
                             </Typography>
                           </div>
                           <div className="notification-meta">
                             <Typography variant="caption" className="notification-time">
-                              {formatTimeDisplay(notification.timestamp)}
+                              {formatTimeDisplay(notification.createdAt)}
                             </Typography>
-                            <div className="notification-actions">
-                              {!notification.read && (
-                                <Tooltip title="Marquer comme lu">
-                                  <span
-                                    className="action-icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      markNotificationAsRead(notification.id);
-                                    }}
-                                  >
-                                    <FiCheckCircle size={14} />
-                                  </span>
+                            {isOwnNotifications && (
+                              <div className="notification-actions">
+                                {!notification.isRead && (
+                                  <Tooltip title="Marquer comme lu">
+                                    <span
+                                      className="action-icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        markNotificationAsRead(notification.id);
+                                      }}
+                                    >
+                                      <FiCheckCircle size={14} />
+                                    </span>
+                                  </Tooltip>
+                                )}
+                                <Tooltip title="Supprimer">
+                              <span
+  className="action-icon"
+  onClick={(e) => handleDeleteNotification(notification.id, e)}
+>
+  <FiTrash2 size={14} />
+</span>
                                 </Tooltip>
-                              )}
-                              <Tooltip title="Supprimer">
-                                <span
-                                  className="action-icon"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteNotification(notification.id);
-                                  }}
-                                >
-                                  <FiTrash2 size={14} />
-                                </span>
-                              </Tooltip>
-                            </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       ))

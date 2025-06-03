@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using UserService.Data;
 using UserService.DTOs;
+using UserService.Models;
 using UserService.Services;
 
 namespace UserService.Controllers
@@ -451,9 +452,128 @@ namespace UserService.Controllers
                 LastLogin = user.LastLogin,
                 RoleId = user.RoleId,
                 CreatedById = user.CreatedById,
-                ClaimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>()
+                RootAdminId = user.RootAdminId,
+                ClaimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>(),
+                 Subscription = user.Subscription != null ? new Subscription
+                 {
+                     Id = user.Subscription.Id,
+                     UserId = user.Subscription.UserId,
+                     Plan = user.Subscription.Plan,
+                     Status = user.Subscription.Status,
+                     StartDate = user.Subscription.StartDate,
+                     EndDate = user.Subscription.EndDate
+                 } : null
             };
         }
+        [HttpPatch("{id}/password")]
+        [Authorize] // N'importe quel utilisateur authentifié peut modifier son propre mot de passe
+        public async Task<ActionResult> UpdateUserPassword(int id, [FromBody] UpdatePasswordRequest request)
+        {
+            try
+            {
+                var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
+
+                // Vérifier que l'utilisateur modifie son propre mot de passe
+                if (id != currentUserId)
+                {
+                    return Forbid("Vous ne pouvez modifier que votre propre mot de passe.");
+                }
+
+                if (string.IsNullOrEmpty(request.NewPassword))
+                {
+                    return BadRequest("Le nouveau mot de passe est requis.");
+                }
+
+                var user = await _userService.GetUserByIdAsync(id);
+                if (user == null)
+                {
+                    return NotFound("Utilisateur non trouvé.");
+                }
+
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+                await _context.SaveChangesAsync();
+
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error updating password: {ex.Message}");
+                return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
+            }
+        }
+        [HttpPatch("{id}/profile")]
+        [Authorize] // Only requires authentication
+        public async Task<ActionResult<UserDTO>> UpdateOwnProfile(int id, [FromBody] UpdateOwnProfileRequest request)
+        {
+            try
+            {
+                var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                    ?? throw new InvalidOperationException("User ID not found in JWT token"));
+
+                // Ensure the user is updating their own profile
+                if (id != currentUserId)
+                {
+                    _logger.LogWarning($"User {currentUserId} attempted to update profile of user {id}.");
+                    return Forbid("Vous ne pouvez modifier que votre propre profil.");
+                }
+
+                var user = await _userService.GetUserByIdAsync(id);
+                if (user == null)
+                {
+                    _logger.LogWarning($"User with ID {id} not found.");
+                    return NotFound("Utilisateur non trouvé.");
+                }
+
+                // Update only provided fields
+                if (!string.IsNullOrEmpty(request.FirstName))
+                    user.FirstName = request.FirstName;
+                if (!string.IsNullOrEmpty(request.LastName))
+                    user.LastName = request.LastName;
+                if (!string.IsNullOrEmpty(request.PhoneNumber))
+                {
+                    if (!Regex.IsMatch(request.PhoneNumber, @"^\+?[1-9]\d{1,14}$"))
+                    {
+                        _logger.LogWarning("Invalid phone number for user: {Email}", user.Email);
+                        return BadRequest("Un numéro de téléphone valide est requis.");
+                    }
+                    user.PhoneNumber = request.PhoneNumber;
+                }
+                if (!string.IsNullOrEmpty(request.JobTitle))
+                    user.JobTitle = request.JobTitle;
+
+                // Validate role-specific requirements
+                if (new[] { 3, 4 }.Contains(user.RoleId) && string.IsNullOrEmpty(user.JobTitle))
+                {
+                    _logger.LogWarning($"JobTitle is required for RoleId {user.RoleId}.");
+                    return BadRequest("JobTitle est requis pour ce rôle.");
+                }
+
+                var claimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>();
+                var updatedUser = await _userService.UpdateUserAsync(user, claimIds);
+                _logger.LogInformation($"User {user.Email} profile updated successfully.");
+                return Ok(MapUserToDTO(updatedUser));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error updating profile for user {id}: {ex.Message}");
+                return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
+            }
+        }
+
+       
+        public class UpdateOwnProfileRequest
+        {
+            public string FirstName { get; set; }
+            public string LastName { get; set; }
+            public string PhoneNumber { get; set; }
+            public string JobTitle { get; set; }
+        }
+
+        public class UpdatePasswordRequest
+        {
+            public string NewPassword { get; set; }
+        }
+
 
         public class UpdateUserStatusRequest
         {
