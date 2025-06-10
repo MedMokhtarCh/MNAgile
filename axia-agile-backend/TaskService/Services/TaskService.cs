@@ -148,6 +148,13 @@ namespace TaskService.Services
                     }
                 }
 
+                double? totalCost = null;
+                if (request.EstimatedHours.HasValue && request.AssignedUserEmails.Any())
+                {
+                    var assignedUsers = await _userServiceClient.GetUsersByEmailsAsync(validAssignedUserEmails);
+                    totalCost = CalculateTaskCost(assignedUsers, request.EstimatedHours.Value);
+                }
+
                 var task = new Task
                 {
                     Title = request.Title,
@@ -163,7 +170,9 @@ namespace TaskService.Services
                     ProjectId = request.ProjectId,
                     Subtasks = request.Subtasks != null && request.Subtasks.Any() ? JsonSerializer.Serialize(request.Subtasks) : null,
                     SprintId = request.SprintId,
-                    DisplayOrder = (int)request.DisplayOrder
+                    DisplayOrder = (int)request.DisplayOrder,
+                    EstimatedHours = request.EstimatedHours,
+                    TotalCost = totalCost
                 };
 
                 _context.Tasks.Add(task);
@@ -195,7 +204,9 @@ namespace TaskService.Services
                     BacklogIds = request.BacklogIds,
                     Subtasks = request.Subtasks ?? new List<string>(),
                     SprintId = task.SprintId,
-                    DisplayOrder = task.DisplayOrder
+                    DisplayOrder = task.DisplayOrder,
+                    EstimatedHours = task.EstimatedHours,
+                    TotalCost = task.CreatedByUserId == userId ? task.TotalCost : null // Only include for creator
                 };
 
                 _logger.LogInformation($"Task {task.Title} created for user {userId} in project {task.ProjectId}.");
@@ -249,6 +260,7 @@ namespace TaskService.Services
                     : JsonSerializer.Deserialize<List<string>>(task.Subtasks);
 
                 var backlogIds = task.TaskBacklogs.Select(tb => tb.BacklogId).ToList();
+                var userId = GetUserIdFromContext() ?? 0;
 
                 return new TaskDTO
                 {
@@ -269,7 +281,9 @@ namespace TaskService.Services
                     BacklogIds = backlogIds,
                     Subtasks = subtasks,
                     SprintId = task.SprintId,
-                    DisplayOrder = task.DisplayOrder
+                    DisplayOrder = task.DisplayOrder,
+                    EstimatedHours = task.EstimatedHours,
+                    TotalCost = task.CreatedByUserId == userId ? task.TotalCost : null // Only include for creator
                 };
             }
             catch (Exception ex)
@@ -308,6 +322,7 @@ namespace TaskService.Services
                 var tasks = await query.ToListAsync();
                 _logger.LogDebug($"Retrieved {tasks.Count} tasks from database.");
 
+                var userId = GetUserIdFromContext() ?? 0;
                 var taskDtos = new List<TaskDTO>();
                 foreach (var task in tasks)
                 {
@@ -358,7 +373,9 @@ namespace TaskService.Services
                         BacklogIds = backlogIds,
                         Subtasks = subtasks,
                         SprintId = task.SprintId,
-                        DisplayOrder = task.DisplayOrder
+                        DisplayOrder = task.DisplayOrder,
+                        EstimatedHours = task.EstimatedHours,
+                        TotalCost = task.CreatedByUserId == userId ? task.TotalCost : null // Only include for creator
                     });
                 }
 
@@ -464,6 +481,13 @@ namespace TaskService.Services
                     }
                 }
 
+                double? totalCost = task.TotalCost;
+                if (request.EstimatedHours.HasValue || request.AssignedUserEmails != null)
+                {
+                    var assignedUsers = await _userServiceClient.GetUsersByEmailsAsync(validAssignedUserEmails.Any() ? validAssignedUserEmails : (task.AssignedUserIds?.Split(',').Select(id => id).ToList() ?? new List<string>()));
+                    totalCost = CalculateTaskCost(assignedUsers, request.EstimatedHours ?? task.EstimatedHours ?? 0);
+                }
+
                 task.Title = request.Title ?? task.Title;
                 task.Description = request.Description ?? task.Description;
                 task.Priority = request.Priority ?? task.Priority;
@@ -479,6 +503,8 @@ namespace TaskService.Services
                 task.Subtasks = request.Subtasks != null ? JsonSerializer.Serialize(request.Subtasks) : task.Subtasks;
                 task.SprintId = request.SprintId ?? task.SprintId;
                 task.DisplayOrder = request.DisplayOrder ?? task.DisplayOrder;
+                task.EstimatedHours = request.EstimatedHours ?? task.EstimatedHours;
+                task.TotalCost = totalCost;
 
                 if (request.BacklogIds != null)
                 {
@@ -522,7 +548,9 @@ namespace TaskService.Services
                     BacklogIds = updatedBacklogIds,
                     Subtasks = request.Subtasks ?? JsonSerializer.Deserialize<List<string>>(task.Subtasks ?? "[]"),
                     SprintId = task.SprintId,
-                    DisplayOrder = task.DisplayOrder
+                    DisplayOrder = task.DisplayOrder,
+                    EstimatedHours = task.EstimatedHours,
+                    TotalCost = task.CreatedByUserId == userId ? task.TotalCost : null // Only include for creator
                 };
             }
             catch (Exception ex)
@@ -648,7 +676,9 @@ namespace TaskService.Services
                     BacklogIds = backlogIds,
                     Subtasks = subtasks,
                     SprintId = task.SprintId,
-                    DisplayOrder = task.DisplayOrder
+                    DisplayOrder = task.DisplayOrder,
+                    EstimatedHours = task.EstimatedHours,
+                    TotalCost = task.CreatedByUserId == userId ? task.TotalCost : null // Only include for creator
                 };
             }
             catch (InvalidOperationException ex)
@@ -679,6 +709,55 @@ namespace TaskService.Services
             {
                 _logger.LogError(ex, "Error retrieving user ID from context");
                 return null;
+            }
+        }
+
+        private double CalculateTaskCost(List<UserDTO> assignedUsers, double estimatedHours)
+        {
+            if (!assignedUsers.Any() || estimatedHours <= 0)
+            {
+                _logger.LogWarning("CalculateTaskCost: Missing users or invalid estimated hours.");
+                return 0;
+            }
+
+            try
+            {
+                double totalCost = 0;
+                bool missingCostData = false;
+
+                foreach (var user in assignedUsers)
+                {
+                    if (user == null)
+                    {
+                        _logger.LogWarning("CalculateTaskCost: Null user encountered");
+                        continue;
+                    }
+
+                    double userCost = 0;
+                    if (user.CostPerHour != null)
+                    {
+                        userCost = user.CostPerHour.Value * estimatedHours;
+                        _logger.LogDebug($"CalculateTaskCost: User {user.Email}, CostPerHour: {user.CostPerHour}, Hours: {estimatedHours}, UserCost: {userCost}");
+                    }
+                    else
+                    {
+                        missingCostData = true;
+                        _logger.LogWarning($"CalculateTaskCost: No cost data for user {user.Email}");
+                    }
+                    totalCost += userCost;
+                }
+
+                if (missingCostData)
+                {
+                    _logger.LogWarning("CalculateTaskCost: Some users lack cost data, contributing 0 to total cost.");
+                }
+
+                return Math.Round(totalCost * 100) / 100;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "CalculateTaskCost: Error calculating cost");
+                return 0;
             }
         }
     }

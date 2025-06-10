@@ -28,6 +28,7 @@ import {
   Security as SecurityIcon,
   SupervisorAccount as SupervisorAccountIcon,
   Close as CloseIcon,
+  AttachMoney as MoneyIcon,
 } from '@mui/icons-material';
 import PermissionForm from '../permissions/PermissionForm';
 import { styled, keyframes } from '@mui/system';
@@ -93,7 +94,6 @@ const PlanSelector = styled(Box)({
   justifyContent: 'space-between',
   marginBottom: '16px',
   gap: '12px',
-
 });
 
 const PlanOption = styled(Box)(({ selected }) => ({
@@ -105,7 +105,6 @@ const PlanOption = styled(Box)(({ selected }) => ({
   backgroundColor: selected ? 'rgba(26, 35, 126, 0.05)' : 'transparent',
   cursor: 'pointer',
   transition: 'all 0.2s ease-in-out',
-   
   '&:hover': {
     borderColor: '#5B9BD5',
     transform: 'translateY(-2px)',
@@ -234,7 +233,7 @@ const UserForm = ({
   claims,
   disabledFields = [],
   requiredFields = ['email', 'firstName', 'lastName'],
-  showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'jobTitle', 'entreprise', 'role', 'permissions', 'subscription'],
+  showFields = ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'jobTitle', 'costHour', 'costDay', 'entreprise', 'role', 'permissions', 'subscription'],
   loading = false,
   setLocalAlert,
 }) => {
@@ -292,8 +291,16 @@ const UserForm = ({
       newErrors.phoneNumber = 'Le numéro de téléphone doit être au format international (+33123456789).';
     }
 
-    if (requiredFields.includes('jobTitle') && [3, 4].includes(user.roleId) && !user.jobTitle) {
-      newErrors.jobTitle = 'Le titre de poste est requis pour les chefs de projet ou utilisateurs.';
+    if (requiredFields.includes('jobTitle') && !user.jobTitle) {
+      newErrors.jobTitle = 'Le titre de poste est requis.';
+    }
+
+    if (requiredFields.includes('costHour') && (!user.costHour || user.costHour <= 0)) {
+      newErrors.costHour = 'Le coût horaire doit être un nombre positif.';
+    }
+
+    if (requiredFields.includes('costDay') && (!user.costDay || user.costDay <= 0)) {
+      newErrors.costDay = 'Le coût journalier doit être un nombre positif.';
     }
 
     if (requiredFields.includes('entreprise') && user.roleId === 2 && !user.entreprise) {
@@ -392,46 +399,44 @@ const UserForm = ({
           <Grid item xs={12} md={user.roleId === 1 ? 12 : 6}>
             <Grid container spacing={2}>
               {showFields.includes('subscription') && user.roleId === 2 && (
-  <Grid item xs={12}>
-    <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>
-      Plan d'abonnement
-    </Typography>
-    <PlanSelector>
-      {['monthly', 'quarterly', 'semiannual', 'annual'].map((plan) => (
-        <PlanOption
-          key={plan}
-          selected={user.subscription?.plan === plan}
-          onClick={() => !disabledFields.includes('subscription.plan') && handleSubscriptionPlanChange(plan)}
-          sx={{
-            cursor: disabledFields.includes('subscription.plan') ? 'not-allowed' : 'pointer',
-            opacity: disabledFields.includes('subscription.plan') ? 0.7 : 1,
-            pointerEvents: disabledFields.includes('subscription.plan') ? 'none' : 'auto'
-          }}
-        >
-          <Typography variant="subtitle2" fontWeight={600} color="#1A237e">
-            {getPlanLabel(plan)}
-          </Typography>
-          <Typography variant="body2" color="#5c7999" sx={{ my: 0.5 }}>
-            {getPlanBilling(plan)}
-          </Typography>
-          <Typography variant="caption" color="#4CAF50" fontWeight={500} sx={{ mt: 0.5, display: 'block' }}>
-            {getPlanFeature(plan)}
-          </Typography>
-          {disabledFields.includes('subscription.plan') && user.subscription?.plan === plan && (
-            <Typography variant="caption" color="textSecondary">
-            
-            </Typography>
-          )}
-        </PlanOption>
-      ))}
-    </PlanSelector>
-    {errors['subscription.plan'] && (
-      <Typography color="error" variant="caption">
-        {errors['subscription.plan']}
-      </Typography>
-    )}
-  </Grid>
-)}
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2" color="primary" sx={{ mb: 1 }}>
+                    Plan d'abonnement
+                  </Typography>
+                  <PlanSelector>
+                    {['monthly', 'quarterly', 'semiannual', 'annual'].map((plan) => (
+                      <PlanOption
+                        key={plan}
+                        selected={user.subscription?.plan === plan}
+                        onClick={() => !disabledFields.includes('subscription.plan') && handleSubscriptionPlanChange(plan)}
+                        sx={{
+                          cursor: disabledFields.includes('subscription.plan') ? 'not-allowed' : 'pointer',
+                          opacity: disabledFields.includes('subscription.plan') ? 0.7 : 1,
+                          pointerEvents: disabledFields.includes('subscription.plan') ? 'none' : 'auto',
+                        }}
+                      >
+                        <Typography variant="subtitle2" fontWeight={600} color="#1A237e">
+                          {getPlanLabel(plan)}
+                        </Typography>
+                        <Typography variant="body2" color="#5c7999" sx={{ my: 0.5 }}>
+                          {getPlanBilling(plan)}
+                        </Typography>
+                        <Typography variant="caption" color="#4CAF50" fontWeight={500} sx={{ mt: 0.5, display: 'block' }}>
+                          {getPlanFeature(plan)}
+                        </Typography>
+                        {disabledFields.includes('subscription.plan') && user.subscription?.plan === plan && (
+                          <Typography variant="caption" color="textSecondary"></Typography>
+                        )}
+                      </PlanOption>
+                    ))}
+                  </PlanSelector>
+                  {errors['subscription.plan'] && (
+                    <Typography color="error" variant="caption">
+                      {errors['subscription.plan']}
+                    </Typography>
+                  )}
+                </Grid>
+              )}
               {showFields.includes('email') && (
                 <Grid item xs={12}>
                   <StyledTextField
@@ -538,7 +543,7 @@ const UserForm = ({
                   />
                 </Grid>
               )}
-              {showFields.includes('jobTitle') && [3, 4].includes(user.roleId) && (
+              {showFields.includes('jobTitle') && (
                 <Grid item xs={12}>
                   <StyledTextField
                     label="Titre de poste"
@@ -556,6 +561,52 @@ const UserForm = ({
                     disabled={disabledFields.includes('jobTitle')}
                     error={!!errors.jobTitle}
                     helperText={errors.jobTitle}
+                  />
+                </Grid>
+              )}
+              {showFields.includes('costHour') && (
+                <Grid item xs={12} sm={6}>
+                  <StyledTextField
+                    label="Coût horaire"
+                    type="number"
+                    fullWidth
+                    value={user.costHour || ''}
+                    onChange={(e) => handleChange('costHour', parseFloat(e.target.value))}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <MoneyIcon />
+                        </InputAdornment>
+                      ),
+                      inputProps: { min: 0, step: 0.01 },
+                    }}
+                    required={requiredFields.includes('costHour')}
+                    disabled={disabledFields.includes('costHour')}
+                    error={!!errors.costHour}
+                    helperText={errors.costHour}
+                  />
+                </Grid>
+              )}
+              {showFields.includes('costDay') && (
+                <Grid item xs={12} sm={6}>
+                  <StyledTextField
+                    label="Coût journalier"
+                    type="number"
+                    fullWidth
+                    value={user.costDay || ''}
+                    onChange={(e) => handleChange('costDay', parseFloat(e.target.value))}
+                    InputProps={{
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <MoneyIcon />
+                        </InputAdornment>
+                      ),
+                      inputProps: { min: 0, step: 0.01 },
+                    }}
+                    required={requiredFields.includes('costDay')}
+                    disabled={disabledFields.includes('costDay')}
+                    error={!!errors.costDay}
+                    helperText={errors.costDay}
                   />
                 </Grid>
               )}

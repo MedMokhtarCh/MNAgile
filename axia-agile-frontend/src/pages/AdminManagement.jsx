@@ -12,7 +12,9 @@ import {
   DialogTitle,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
-import { signup, fetchUsers, deleteUser, toggleUserActive, setSnackbar, fetchRoles, fetchClaims, updateUser } from '../store/slices/usersSlice';
+import { fetchUsers, deleteUser, toggleUserActive, setSnackbar, updateUser } from '../store/slices/usersSlice';
+import { fetchClaims, clearSelectedClaim } from '../store/slices/claimsSlice';
+import { signup } from '../store/slices/signupSlice';
 import UserForm from '../components/users/UserForm';
 import TableUsers from '../components/users/TableUsers';
 import PermissionsModal from '../components/permissions/PermissionsModal';
@@ -29,7 +31,13 @@ const AdminManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const { users, roles, claims, usersLoading, snackbar } = useSelector((state) => state.users);
+
+  // Access state from Redux store
+  const usersState = useSelector((state) => state.users || { users: [], usersLoading: false, snackbar: { open: false, message: '', severity: 'success' } });
+  const { users, usersLoading, snackbar } = usersState;
+  const claimsState = useSelector((state) => state.claims || { claims: [], loading: false, error: null });
+  const { claims, loading: claimsLoading, error: claimsError } = claimsState;
+  const { signupLoading } = useSelector((state) => state.signup);
 
   // State for modals, dialogs, and form
   const [openModal, setOpenModal] = useState(false);
@@ -40,14 +48,16 @@ const AdminManagement = () => {
   const [editMode, setEditMode] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [localAlert, setLocalAlert] = useState({ open: false, message: '', severity: 'info', title: '' });
-  const [newUser, setNewUser] = useState({
+
+  // Initialize newUser state
+  const resetNewUser = () => ({
     email: '',
     password: '',
     firstName: '',
     lastName: '',
     phoneNumber: '',
     entreprise: '',
-    roleId: 2,
+    roleId: 2, // Fixed admin role
     claimIds: [],
     isActive: true,
     subscription: {
@@ -57,6 +67,8 @@ const AdminManagement = () => {
       endDate: '',
     },
   });
+
+  const [newUser, setNewUser] = useState(resetNewUser());
 
   // State for filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,27 +82,25 @@ const AdminManagement = () => {
       (admin) =>
         admin &&
         admin.roleId === 2 &&
-        (admin.email
-          ? admin.email.toLowerCase().includes(searchTerm.toLowerCase())
-          : false || admin.entreprise
-          ? admin.entreprise.toLowerCase().includes(searchTerm.toLowerCase())
-          : false) &&
+        (admin?.email?.toLowerCase()?.includes(searchTerm.toLowerCase()) ||
+         admin?.entreprise?.toLowerCase()?.includes(searchTerm.toLowerCase())) &&
         (filterStatus === 'all' ||
           (filterStatus === 'active' && admin.isActive) ||
           (filterStatus === 'inactive' && !admin.isActive)) &&
         (filterPlan === 'all' ||
-          (admin.subscription && admin.subscription.plan === filterPlan)) &&
+          (filterPlan === 'none' ? !admin.subscription : admin.subscription?.plan === filterPlan)) &&
         (filterSubscriptionStatus === 'all' ||
-          (admin.subscription && admin.subscription.status === filterSubscriptionStatus))
+          (filterSubscriptionStatus === 'none'
+            ? !admin.subscription
+            : admin.subscription?.status === filterSubscriptionStatus))
     );
   }, [users, searchTerm, filterStatus, filterPlan, filterSubscriptionStatus]);
 
-  // Fetch users, roles, and claims
+  // Fetch users and claims
   const fetchAdmins = useCallback(async () => {
     try {
       await Promise.all([
         dispatch(fetchUsers()).unwrap(),
-        dispatch(fetchRoles()).unwrap(),
         dispatch(fetchClaims()).unwrap(),
       ]);
     } catch (error) {
@@ -106,7 +116,10 @@ const AdminManagement = () => {
 
   useEffect(() => {
     fetchAdmins();
-  }, [fetchAdmins]);
+    return () => {
+      dispatch(clearSelectedClaim());
+    };
+  }, [fetchAdmins, dispatch]);
 
   // Handle create or update admin
   const handleSaveUser = async () => {
@@ -119,7 +132,7 @@ const AdminManagement = () => {
           lastName: newUser.lastName,
           phoneNumber: newUser.phoneNumber,
           entreprise: newUser.entreprise,
-          roleId: 2,
+          roleId: 2, // Fixed admin role
           claimIds: newUser.claimIds,
           isActive: newUser.isActive,
           subscription: {
@@ -144,8 +157,8 @@ const AdminManagement = () => {
             lastName: newUser.lastName,
             phoneNumber: newUser.phoneNumber,
             entreprise: newUser.entreprise,
+            roleId: 2, // Fixed admin role
             plan: newUser.subscription.plan,
-            roleId: 2,
             claimIds: newUser.claimIds,
             autoValidate: false,
           })
@@ -159,22 +172,20 @@ const AdminManagement = () => {
         );
       }
       handleCloseModal();
-      // Keep fetchAdmins to ensure backend sync
       fetchAdmins();
     } catch (error) {
       dispatch(
         setSnackbar({
           open: true,
-          message: error.message || 'Erreur lors de la sauvegarde de l’administrateur',
+          message: error.message || 'Erreur lors de la création ou modification de l\'administrateur',
           severity: 'error',
         })
       );
     }
   };
 
-  // Handle edit admin
   const handleEditUser = (user) => {
-    if (!user || !user.email) {
+    if (!user?.email) {
       dispatch(
         setSnackbar({
           open: true,
@@ -217,7 +228,7 @@ const AdminManagement = () => {
         dispatch(
           setSnackbar({
             open: true,
-            message: error.message || 'Erreur lors de la suppression de l’administrateur',
+            message: error.message || 'Erreur lors de la suppression de l\'administrateur',
             severity: 'error',
           })
         );
@@ -226,53 +237,61 @@ const AdminManagement = () => {
     handleCloseDeleteDialog();
   };
 
-  // Handle toggle active status
   const handleToggleActive = async (id) => {
     const user = users.find((u) => u.id === id);
     if (!user) return;
     try {
       await dispatch(toggleUserActive({ id, isActive: !user.isActive })).unwrap();
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: `Administrateur ${user.isActive ? 'désactivé' : 'activé'} avec succès`,
+          severity: 'success',
+        })
+      );
       fetchAdmins();
     } catch (error) {
       dispatch(
         setSnackbar({
           open: true,
-          message: error.message || 'Erreur lors de la mise à jour du statut',
+          message: error.message || 'Erreur lors de la mise à jour du statut de l\'administrateur',
           severity: 'error',
         })
       );
     }
   };
 
-  // Handle permissions change (update local state only)
-  const handlePermissionChange = (permissionId) => {
+  const handlePermissionChange = async (permissionId) => {
     if (!selectedAdmin) return;
     const updatedClaimIds = selectedAdmin.claimIds.includes(permissionId)
       ? selectedAdmin.claimIds.filter((id) => id !== permissionId)
       : [...selectedAdmin.claimIds, permissionId];
-    setSelectedAdmin({ ...selectedAdmin, claimIds: updatedClaimIds });
+    try {
+      await dispatch(updateUser({ id: selectedAdmin.id, userData: { claimIds: updatedClaimIds } })).unwrap();
+      setSelectedAdmin({ ...selectedAdmin, claimIds: updatedClaimIds });
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: 'Permissions mises à jour avec succès',
+          severity: 'success',
+        })
+      );
+      fetchAdmins();
+    } catch (error) {
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: error.message || 'Erreur lors de la mise à jour des permissions',
+          severity: 'error',
+        })
+      );
+    }
   };
 
   // Modal and dialog handlers
   const handleCloseModal = () => {
     setOpenModal(false);
-    setNewUser({
-      email: '',
-      password: '',
-      firstName: '',
-      lastName: '',
-      phoneNumber: '',
-      entreprise: '',
-      roleId: 2,
-      claimIds: [],
-      isActive: true,
-      subscription: {
-        plan: 'annual',
-        status: 'Pending',
-        startDate: new Date().toISOString(),
-        endDate: '',
-      },
-    });
+    setNewUser(resetNewUser());
     setEditMode(false);
     setCurrentUserId(null);
   };
@@ -291,14 +310,27 @@ const AdminManagement = () => {
     dispatch(setSnackbar({ open: false, message: '', severity: 'success' }));
   };
 
-  const availableRoles = roles
-    .filter((role) => role.id === 2)
-    .map((role) => ({
-      id: role.id,
-      label: role.label,
-      iconName: role.iconName,
+  useEffect(() => {
+    if (claimsError) {
+      dispatch(
+        setSnackbar({
+          open: true,
+          message: claimsError,
+          severity: 'error',
+        })
+      );
+    }
+  }, [claimsError, dispatch]);
+
+  // Define admin role (roleId === 2)
+  const availableRoles = useMemo(() => [
+    {
+      id: 2,
+      label: 'Administrateur',
+      iconName: 'SupervisorAccount',
       disabled: false,
-    }));
+    },
+  ], []);
 
   return (
     <ThemeProvider theme={theme}>
@@ -312,23 +344,7 @@ const AdminManagement = () => {
             startIcon={<AddIcon />}
             onClick={() => {
               setEditMode(false);
-              setNewUser({
-                email: '',
-                password: '',
-                firstName: '',
-                lastName: '',
-                phoneNumber: '',
-                entreprise: '',
-                roleId: 2,
-                claimIds: [],
-                isActive: true,
-                subscription: {
-                  plan: 'annual',
-                  status: 'Pending',
-                  startDate: new Date().toISOString(),
-                  endDate: '',
-                },
-              });
+              setNewUser(resetNewUser());
               setOpenModal(true);
             }}
             sx={{ px: 3 }}
@@ -355,9 +371,11 @@ const AdminManagement = () => {
               label: 'Plan',
               options: [
                 { value: 'all', label: 'Tous' },
-                { value: 'annual', label: 'Annuel' },
-                { value: 'quarterly', label: 'Trimestriel' },
+                { value: 'none', label: 'Aucun' },
                 { value: 'monthly', label: 'Mensuel' },
+                { value: 'quarterly', label: 'Trimestriel' },
+                { value: 'semiannual', label: 'Semestriel' },
+                { value: 'annual', label: 'Annuel' },
               ],
             },
             {
@@ -365,6 +383,7 @@ const AdminManagement = () => {
               label: 'Statut Abonnement',
               options: [
                 { value: 'all', label: 'Tous' },
+                { value: 'none', label: 'Aucun' },
                 { value: 'Active', label: 'Validé' },
                 { value: 'Pending', label: 'En attente' },
               ],
@@ -381,7 +400,7 @@ const AdminManagement = () => {
 
         <TableUsers
           users={filteredAdmins}
-          loading={usersLoading}
+          loading={usersLoading || signupLoading || claimsLoading}
           onEdit={handleEditUser}
           onDelete={handleOpenDeleteDialog}
           onToggleActive={handleToggleActive}
@@ -395,30 +414,31 @@ const AdminManagement = () => {
           setOpenModal={setOpenModal}
           columns={adminColumns}
           generateInitials={generateInitials}
-          getAvatarColor={(admin) => getAvatarColor(admin.email || '')}
+          getAvatarColor={(admin) => getAvatarColor(admin?.email || '')}
         />
 
-        <UserForm
-          open={openModal}
-          onClose={handleCloseModal}
-          user={newUser}
-          setUser={setNewUser}
-          onSave={handleSaveUser}
-          isEditMode={editMode}
-          roles={availableRoles}
-          claims={claims}
-          requiredFields={['email', 'firstName', 'lastName', 'entreprise', 'subscription.plan']}
-          showFields={['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'entreprise', 'role', 'permissions', 'subscription']}
-          disabledFields={editMode ? ['role', 'subscription.plan'] : []}
-          loading={usersLoading}
-          setLocalAlert={setLocalAlert}
-        />
+     <UserForm
+  open={openModal}
+  onClose={handleCloseModal}
+  user={newUser}
+  setUser={setNewUser}
+  onSave={handleSaveUser}
+  isEditMode={editMode}
+  roles={availableRoles}
+  claims={claims}
+  requiredFields={['email', 'firstName', 'lastName', 'entreprise', 'subscription.plan']}
+  showFields={['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'entreprise', 'role', 'permissions', 'subscription']}
+  disabledFields={editMode ? ['role', 'subscription.plan'] : ['role']} 
+  loading={editMode ? usersLoading : signupLoading}
+  setLocalAlert={setLocalAlert}
+/>
 
         <PermissionsModal
           open={openPermissionsModal}
           onClose={() => {
             setOpenPermissionsModal(false);
             setSelectedAdmin(null);
+            dispatch(clearSelectedClaim());
             fetchAdmins();
           }}
           user={selectedAdmin}

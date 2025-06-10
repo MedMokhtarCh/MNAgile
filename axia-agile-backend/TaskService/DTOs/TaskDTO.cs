@@ -6,7 +6,7 @@ namespace TaskService.DTOs
     {
         public int Id { get; set; }
         public string Title { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; } // Nullable
         public string Priority { get; set; }
         public string Status { get; set; }
         public int CreatedByUserId { get; set; }
@@ -22,6 +22,9 @@ namespace TaskService.DTOs
         public List<string>? Subtasks { get; set; } = new List<string>();
         public int? SprintId { get; set; }
         public int DisplayOrder { get; set; }
+        public double? EstimatedHours { get; set; } // New field
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public double? TotalCost { get; set; } // Conditionally included
     }
 
     public class AttachmentDTO

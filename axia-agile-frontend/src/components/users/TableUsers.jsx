@@ -53,11 +53,11 @@ const TableUsers = ({
       >
         <Table
           sx={{
-            minWidth: '100%', // Use 100% width instead of max-content to fit screen
-            tableLayout: 'fixed', // Ensure columns adhere to specified widths
+            minWidth: '100%',
+            tableLayout: 'fixed',
             '& .MuiTableCell-root': {
-              padding: '8px 12px', // Reduce padding for compactness
-              fontSize: '0.85rem', // Smaller font size
+              padding: '8px 12px',
+              fontSize: '0.85rem',
             },
           }}
         >
@@ -68,14 +68,14 @@ const TableUsers = ({
                   key={col.id}
                   align={col.align || 'left'}
                   sx={{
-                    width: col.width || 'auto', // Use provided width or auto
-                    minWidth: col.minWidth || '100px', // Ensure minimum width for readability
-                    padding: '6px 12px', // Reduced padding for header
-                    fontSize: '0.9rem', // Slightly smaller header font
+                    width: col.width || 'auto',
+                    minWidth: col.minWidth || '100px',
+                    padding: '6px 12px',
+                    fontSize: '0.9rem',
                     fontWeight: 'bold',
-                    whiteSpace: 'nowrap', // Prevent text wrapping
+                    whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis', // Truncate long text
+                    textOverflow: 'ellipsis',
                   }}
                 >
                   {col.label}
@@ -117,11 +117,11 @@ const TableUsers = ({
                       key={`${user.id}-${column.id}`}
                       align={column.align || 'left'}
                       sx={{
-                        padding: '6px 12px', // Reduced padding for body cells
-                        fontSize: '0.85rem', // Smaller font size
-                        whiteSpace: 'nowrap', // Prevent text wrapping
+                        padding: '6px 12px',
+                        fontSize: '0.85rem',
+                        whiteSpace: 'nowrap',
                         overflow: 'hidden',
-                        textOverflow: 'ellipsis', // Truncate long text
+                        textOverflow: 'ellipsis',
                       }}
                     >
                       {renderCell(column, user)}

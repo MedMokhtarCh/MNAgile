@@ -1,78 +1,75 @@
-import React, { useState, useEffect, useCallback, createContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useMemo } from 'react';
 import {
-  Box, Typography, Paper, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, Button, FormControl, InputLabel, Select as MuiSelect, OutlinedInput,
-  useMediaQuery, useTheme, Grid, Container, Alert, CircularProgress, Autocomplete,
-  MenuItem, Chip, Avatar, List, ListItem, ListItemText, IconButton, Divider,
-  Checkbox, ListItemIcon
+  Box, Typography, Paper, useMediaQuery, useTheme, Grid, Container, Alert, CircularProgress, Button
 } from '@mui/material';
-import { styled } from '@mui/material/styles';
 import AddIcon from '@mui/icons-material/Add';
-import Flag from '@mui/icons-material/Flag';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import AttachFileIcon from '@mui/icons-material/AttachFile';
-import DeleteIcon from '@mui/icons-material/Delete';
-import CloseIcon from '@mui/icons-material/Close';
-import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
 import { DndContext, closestCorners, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
+import { createSelector } from 'reselect';
 import KanbanColumn from '../components/kanban/KanbanColumn';
 import KanbanCard from '../components/kanban/KanbanCard';
 import KanbanFilters from '../components/kanban/KanbanFilters';
-import InputUserAssignment from '../components/common/InputUserAssignment';
+import { TaskDialog } from '../components/kanban/TaskDialog';
+import { DeleteColumnDialog } from '../components/kanban/DeleteColumnDialog';
 import { useAvatar } from '../hooks/useAvatar';
 import { useNotification } from '../hooks/useNotifications';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
-import { fetchAllTasks, fetchKanbanColumns, createKanbanColumn, updateKanbanColumn, deleteKanbanColumn, createTask, updateTask, deleteTask, clearTasksError, fetchBacklogs } from '../store/slices/taskSlice';
+import { useTask } from '../hooks/useTask';
+import { fetchKanbanColumns, createKanbanColumn, updateKanbanColumn, deleteKanbanColumn } from '../store/slices/kanbanColumnSlice';
+import { fetchBacklogs } from '../store/slices/backlogSlice';
 import { fetchUsers } from '../store/slices/usersSlice';
 import { useAuth } from '../contexts/AuthContext';
 import { projectApi } from '../services/api';
 import { normalizeProject } from '../store/slices/projectsSlice';
 import PageTitle from '../components/common/PageTitle';
+import { fetchSprints, clearSprintsError } from '../store/slices/sprintSlice';
+import { StyledButton } from '../components/kanban/theme';
+import { normalizePriority } from '../utils/normalize';
 
 export const KanbanContext = createContext();
 
-// Styled components
-const StyledButton = styled(Button)(({ theme }) => ({
-  textTransform: 'none',
-  borderRadius: 8,
-  padding: theme.spacing(0.8, 1.8),
-  fontWeight: 500,
-}));
+// Define input selectors
+const selectTasksState = (state) => state.tasks;
+const selectColumnsState = (state) => state.kanbanColumns;
+const selectBacklogsState = (state) => state.backlogs;
+const selectUsersState = (state) => state.users;
+const selectSprintsState = (state) => state.sprints;
 
-const StyledDialog = styled(Dialog)(({ theme }) => ({
-  '& .MuiDialogContent-root': {
-    overflowY: 'auto',
-    scrollbarWidth: 'none',
-    '&::-webkit-scrollbar': {
-      display: 'none',
-    },
-    msOverflowStyle: 'none',
-  },
-  '& .MuiDialog-paper': {
-    borderRadius: 12,
-    padding: theme.spacing(2),
-    backgroundColor: theme.palette.background.paper,
-    boxShadow: theme.shadows[10],
-  },
-}));
+// Memoized selectors for state slices
+const selectTasks = createSelector(
+  [selectTasksState],
+  (tasks) => ({
+    tasks: tasks.tasks,
+    status: tasks.status,
+    error: tasks.error,
+  })
+);
 
-// Normalize priority value
-const normalizePriority = (priority) => {
-  if (!priority) return 'MEDIUM';
-  const priorityMap = {
-    high: 'HIGH',
-    medium: 'MEDIUM',
-    low: 'LOW',
-    HIGH: 'HIGH',
-    MEDIUM: 'MEDIUM',
-    LOW: 'LOW',
-  };
-  return priorityMap[priority.toUpperCase()] || 'MEDIUM';
-};
+const selectColumns = createSelector(
+  [selectColumnsState],
+  (columns) => ({
+    columns: columns.columns,
+    status: columns.status,
+    error: columns.error,
+  })
+);
+
+const selectBacklogs = createSelector(
+  [selectBacklogsState],
+  (backlogs) => backlogs.backlogs || []
+);
+
+const selectUsers = createSelector(
+  [selectUsersState],
+  (users) => users.users || []
+);
+
+const selectSprints = createSelector(
+  [selectSprintsState],
+  (sprints) => sprints.sprints || []
+);
 
 function Kanban() {
   const theme = useTheme();
@@ -89,46 +86,70 @@ function Kanban() {
   const { createNotification } = useNotification();
   const { currentUser } = useAuth();
 
-  // Redux state
-  const { tasks, columns, backlogs, status: taskStatus, error: taskError } = useSelector((state) => state.tasks);
-  const users = useSelector((state) => state.users.users) || [];
+  // Use memoized selectors
+  const { tasks } = useSelector(selectTasks); // Only use tasks, as status and error come from useTask
+  const { columns, status: columnStatus, error: columnError } = useSelector(selectColumns);
+  const backlogs = useSelector(selectBacklogs);
+  const users = useSelector(selectUsers);
+  const sprints = useSelector(selectSprints);
 
   // Local state
   const [project, setProject] = useState(null);
   const [projectUsers, setProjectUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [kanbanError, setKanbanError] = useState('');
   const [activeId, setActiveId] = useState(null);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [selectedUser, setSelectedUser] = useState('');
   const [selectedPriority, setSelectedPriority] = useState('');
   const [backlogFilter, setBacklogFilter] = useState('all');
   const [selectedBacklog, setSelectedBacklog] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [currentColumn, setCurrentColumn] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingTask, setEditingTask] = useState(null);
-  const [dialogMode, setDialogMode] = useState('view');
-  const [formValues, setFormValues] = useState({
-    title: '',
-    description: '',
-    assignedUsers: [],
-    priority: 'MEDIUM',
-    startDate: '',
-    endDate: '',
-    attachments: [],
-    columnName: '',
-    columnId: null,
-    backlogIds: [],
-  });
-  const [subtasks, setSubtasks] = useState([]);
-  const [newSubtask, setNewSubtask] = useState('');
-  const [editingSubtaskIndex, setEditingSubtaskIndex] = useState(null);
-  const [editingSubtaskText, setEditingSubtaskText] = useState('');
-  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false); 
-  const [columnToDelete, setColumnToDelete] = useState(null); 
+  const [sprintFilter, setSprintFilter] = useState('all');
+  const [selectedSprint, setSelectedSprint] = useState(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [columnToDelete, setColumnToDelete] = useState(null);
 
-  // Drag-and-drop 
+  // Use the useTask hook
+  const {
+    isCreatingTask,
+    kanbanError,
+    setKanbanError,
+    dialogOpen,
+    setDialogOpen,
+    currentColumn,
+    setCurrentColumn,
+    isEditing,
+    setIsEditing,
+    editingTask,
+    setEditingTask,
+    dialogMode,
+    setDialogMode,
+    formValues,
+    setFormValues,
+    subtasks,
+    setSubtasks,
+    newSubtask,
+    setNewSubtask,
+    editingSubtaskIndex,
+    editingSubtaskText,
+    setEditingSubtaskText,
+    handleAddSubtask,
+    handleRemoveSubtask,
+    handleToggleSubtask,
+    handleEditSubtask,
+    handleSaveSubtaskEdit,
+    handleCancelSubtaskEdit,
+    handleAddTask,
+    handleEditTask,
+    handleFormChange,
+    handleRemoveAttachment,
+    handleCreateTask,
+    handleUpdateTask,
+    handleDialogClose,
+    fetchTasks, // Use fetchTasks from useTask
+    taskStatus, // Use taskStatus from useTask
+    taskError, // Use taskError from useTask
+  } = useTask({ projectId, project, currentUser, projectUsers, createNotification });
+
+  // Drag-and-drop
   const { handleDragStart, handleDragEnd, getActiveTask, getActiveColumn } = useDragAndDrop({
     columns,
     tasks,
@@ -140,41 +161,55 @@ function Kanban() {
     setKanbanError,
   });
 
+  // Memoized selector for columnsByStatus
+  const selectColumnsByStatus = createSelector(
+    [selectColumns, selectTasks, () => currentUser.id, () => backlogFilter, () => selectedBacklog],
+    (columnsState, tasksState, userId, backlogFilter, selectedBacklog) => {
+      return columnsState.columns.reduce((acc, col) => {
+        acc[col.name] = tasksState.tasks.filter((task) => {
+          const isCreatedByUser = task.createdByUserId === userId;
+          const isAssignedToUser = task.assignedUserIds?.includes(userId);
+          const matchesUserCriteria = isCreatedByUser || isAssignedToUser;
+          const matchesStatus = task.status === col.name;
+          let matchesBacklog = true;
 
-  // Map tasks to columns, filtered by user (created or assigned), backlogFilter
-const columnsByStatus = columns.reduce((acc, col) => {
-  acc[col.name] = tasks.filter((task) => {
-    // Check if the task was created by the authenticated user or the user is assigned
-    const isCreatedByUser = task.createdByUserId === currentUser.id;
-    const isAssignedToUser = task.assignedUserIds?.includes(currentUser.id);
-    const matchesUserCriteria = isCreatedByUser || isAssignedToUser;
+          if (backlogFilter === 'none') {
+            matchesBacklog = !task.backlogIds || task.backlogIds.length === 0;
+          } else if (backlogFilter === 'all') {
+            matchesBacklog = task.backlogIds && task.backlogIds.length > 0;
+          } else if (backlogFilter !== 'all' && selectedBacklog) {
+            matchesBacklog = task.backlogIds?.includes(parseInt(selectedBacklog.id));
+          }
 
-    // Check status and backlog filter
-    const matchesStatus = task.status === col.name;
-    let matchesBacklog = true;
-    if (backlogFilter === 'none') {
-      matchesBacklog = !task.backlogIds || task.backlogIds.length === 0;
-    } else if (backlogFilter !== 'all' && selectedBacklog) {
-      matchesBacklog = task.backlogIds?.includes(parseInt(selectedBacklog.id));
+          return matchesUserCriteria && matchesStatus && matchesBacklog;
+        });
+        return acc;
+      }, {});
     }
+  );
 
-    return matchesUserCriteria && matchesStatus && matchesBacklog;
-  });
-  return acc;
-}, {});
+  const columnsByStatus = useSelector(selectColumnsByStatus);
 
-// Filter tasks by selected user and priority
-const filteredColumns = columns.reduce((acc, col) => {
-  acc[col.name] = (columnsByStatus[col.name] || []).filter((task) => {
-    const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
-    const matchesPriority = selectedPriority
-      ? normalizePriority(task.priority).toLowerCase() === selectedPriority.toLowerCase()
-      : true;
-    return matchesUser && matchesPriority;
-  });
-  return acc;
-}, {});
-  // Fetch project, tasks, columns, backlogs, and users
+  // Memoized selector for filteredColumns
+  const selectFilteredColumns = createSelector(
+    [selectColumns, () => columnsByStatus, () => selectedUser, () => selectedPriority],
+    (columnsState, columnsByStatus, selectedUser, selectedPriority) => {
+      return columnsState.columns.reduce((acc, col) => {
+        acc[col.name] = (columnsByStatus[col.name] || []).filter((task) => {
+          const matchesUser = selectedUser ? task.assignedUserEmails?.includes(selectedUser) : true;
+          const matchesPriority = selectedPriority
+            ? normalizePriority(task.priority).toLowerCase() === selectedPriority.toLowerCase()
+            : true;
+          return matchesUser && matchesPriority;
+        });
+        return acc;
+      }, {});
+    }
+  );
+
+  const filteredColumns = useSelector(selectFilteredColumns);
+
+  // Fetch project, columns, backlogs, and users
   const loadData = useCallback(async () => {
     setLoading(true);
     setKanbanError('');
@@ -195,24 +230,19 @@ const filteredColumns = columns.reduce((acc, col) => {
       }
 
       await Promise.all([
-        dispatch(fetchAllTasks({ projectId: parseInt(projectId) }))
-          .unwrap()
-          .catch((err) => {
-            console.error('[loadData] Failed to fetch tasks:', err);
-            return [];
-          }),
-        dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) }))
-          .unwrap()
-          .catch((err) => {
-            console.error('[loadData] Failed to fetch columns:', err);
-            return [];
-          }),
-        dispatch(fetchBacklogs({ projectId: parseInt(projectId) }))
-          .unwrap()
-          .catch((err) => {
-            console.error('[loadData] Failed to fetch backlogs:', err);
-            return [];
-          }),
+        fetchTasks(), // Use fetchTasks from useTask hook
+        dispatch(fetchKanbanColumns({ projectId: parseInt(projectId) })).unwrap().catch((err) => {
+          console.error('[loadData] Failed to fetch columns:', err);
+          return [];
+        }),
+        dispatch(fetchBacklogs({ projectId: parseInt(projectId) })).unwrap().catch((err) => {
+          console.error('[loadData] Failed to fetch backlogs:', err);
+          return [];
+        }),
+        dispatch(fetchSprints({ projectId: parseInt(projectId) })).unwrap().catch((err) => {
+          console.error('[loadData] Failed to fetch sprints:', err);
+          return [];
+        }),
       ]);
 
       const projectUserEmails = [
@@ -228,12 +258,11 @@ const filteredColumns = columns.reduce((acc, col) => {
         .map((email) => {
           const user = users.find((u) => u.email?.toLowerCase() === email.toLowerCase());
           return user
-            ? { id: user.id, email: user.email, firstName: user.firstName || '', lastName: user.lastName || '', name: user.firstName ? `${user.firstName} ${user.lastName}` : email }
-            : { id: null, email, firstName: '', lastName: '', name: email };
+            ? { id: user.id, email: user.email, firstName: user.firstName || '', lastName: user.lastName || '', name: user.firstName ? `${user.firstName} ${user.lastName}` : email, costPerHour: user.costPerHour, costPerDay: user.costPerDay }
+            : { id: null, email, firstName: '', lastName: '', name: email, costPerHour: null, costPerDay: null };
         })
         .filter((user) => user.email);
 
-      console.log('[loadData] projectUsersData:', projectUsersData);
       setProjectUsers(projectUsersData);
     } catch (err) {
       console.error('[loadData] Error:', err);
@@ -249,114 +278,16 @@ const filteredColumns = columns.reduce((acc, col) => {
     } finally {
       setLoading(false);
     }
-  }, [projectId, navigate, dispatch, users]);
+  }, [projectId, navigate, dispatch, users, setKanbanError, fetchTasks]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Handle subtasks
-  const handleAddSubtask = () => {
-    if (newSubtask.trim()) {
-      setSubtasks([...subtasks, { title: newSubtask, completed: false }]);
-      setNewSubtask('');
-    }
-  };
-
-  const handleRemoveSubtask = (index) => {
-    const updatedSubtasks = [...subtasks];
-    updatedSubtasks.splice(index, 1);
-    setSubtasks(updatedSubtasks);
-    if (editingSubtaskIndex === index) {
-      setEditingSubtaskIndex(null);
-      setEditingSubtaskText('');
-    }
-  };
-
-  const handleToggleSubtask = (index) => {
-    const updatedSubtasks = [...subtasks];
-    updatedSubtasks[index].completed = !updatedSubtasks[index].completed;
-    setSubtasks(updatedSubtasks);
-  };
-
-  const handleEditSubtask = (index) => {
-    setEditingSubtaskIndex(index);
-    setEditingSubtaskText(subtasks[index].title);
-  };
-
-  const handleSaveSubtaskEdit = (index) => {
-    if (editingSubtaskText.trim()) {
-      const updatedSubtasks = [...subtasks];
-      updatedSubtasks[index].title = editingSubtaskText.trim();
-      setSubtasks(updatedSubtasks);
-      setEditingSubtaskIndex(null);
-      setEditingSubtaskText('');
-    }
-  };
-
-  const handleCancelSubtaskEdit = () => {
-    setEditingSubtaskIndex(null);
-    setEditingSubtaskText('');
-  };
-
-  // Handle task creation dialog
-  const handleAddTask = (columnName) => {
-    try {
-      setCurrentColumn(columnName);
-      setIsEditing(false);
-      setDialogMode('edit');
-      setEditingTask(null);
-      setFormValues({
-        title: '',
-        description: '',
-        assignedUsers: [],
-        priority: 'MEDIUM',
-        startDate: '',
-        endDate: '',
-        attachments: [],
-        backlogIds: backlogFilter !== 'all' && backlogFilter !== 'none' && selectedBacklog ? [parseInt(selectedBacklog.id)] : [],
-      });
-      setSubtasks([]);
-      setEditingSubtaskIndex(null);
-      setEditingSubtaskText('');
-      setDialogOpen(true);
-    } catch (err) {
-      console.error('[handleAddTask] Error:', err);
-      setKanbanError('Erreur lors de l\'ouverture du formulaire de tâche.');
-    }
-  };
-
-  // Handle edit task
-  const handleEditTask = (task) => {
-    try {
-      setCurrentColumn(task.status);
-      setIsEditing(true);
-      setDialogMode('edit');
-      setEditingTask(task);
-      setFormValues({
-        title: task.title || '',
-        description: task.description || '',
-        assignedUsers: projectUsers.filter((u) => task.assignedUserEmails?.includes(u.email)) || [],
-        priority: normalizePriority(task.priority),
-        startDate: task.startDate ? new Date(task.startDate).toISOString().split('T')[0] : '',
-        endDate: task.endDate ? new Date(task.endDate).toISOString().split('T')[0] : '',
-        attachments: [],
-        backlogIds: task.backlogIds || [],
-      });
-      setSubtasks(task.subtasks?.map(title => ({ title, completed: false })) || []);
-      setEditingSubtaskIndex(null);
-      setEditingSubtaskText('');
-      setDialogOpen(true);
-    } catch (err) {
-      console.error('[handleEditTask] Error:', err);
-      setKanbanError('Erreur lors de l\'ouverture du formulaire de modification.');
-    }
-  };
-
   // Handle edit column
   const handleEditColumn = (column) => {
     setDialogMode('editColumn');
-    setFormValues({ ...formValues, columnName: column.name, columnId: column.id });
+    setFormValues({ ...formValues, columnName: column.name, columnId: column.id, totalCost: formValues.totalCost ?? 0 });
     setDialogOpen(true);
   };
 
@@ -386,251 +317,6 @@ const filteredColumns = columns.reduce((acc, col) => {
     }
   };
 
-  // Handle form changes
-  const handleFormChange = (field) => (event, value) => {
-    try {
-      if (field === 'assignedUsers') {
-        setFormValues((prev) => ({ ...prev, [field]: value || [] }));
-      } else if (field === 'attachments') {
-        const files = Array.from(event.target.files);
-        setFormValues((prev) => ({ ...prev, attachments: [...prev.attachments, ...files] }));
-      } else if (field === 'columnName') {
-        setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
-      } else if (field === 'priority') {
-        setFormValues((prev) => ({ ...prev, [field]: normalizePriority(event.target.value) }));
-      } else {
-        setFormValues((prev) => ({ ...prev, [field]: event.target.value }));
-      }
-    } catch (err) {
-      console.error('[Kanban] Error handling form change:', err);
-      setKanbanError('Erreur lors de la mise à jour du formulaire.');
-    }
-  };
-
-  // Remove attachment
-  const handleRemoveAttachment = (attachmentId) => {
-    setFormValues((prev) => ({
-      ...prev,
-      attachments: prev.attachments.filter((_, index) => `file-${index}` !== attachmentId),
-    }));
-  };
-
-  // Safe date parsing
-  const parseDate = (dateStr) => {
-    if (!dateStr) return null;
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return null;
-      return date.toISOString();
-    } catch {
-      return null;
-    }
-  };
-
-  // Create task
-  const handleCreateTask = async () => {
-    if (!currentColumn || !formValues.title || !projectId) {
-      setKanbanError('Le titre, la colonne et l\'ID du projet sont requis.');
-      return;
-    }
-
-    const validColumn = columns.find(col => col.name === currentColumn);
-    if (!validColumn) {
-      setKanbanError(`Le statut "${currentColumn}" n'est pas valide pour ce projet.`);
-      return;
-    }
-
-    setIsCreatingTask(true);
-    setKanbanError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description,
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean),
-        priority: normalizePriority(formValues.priority),
-        startDate: parseDate(formValues.startDate),
-        endDate: parseDate(formValues.endDate),
-        status: currentColumn,
-        projectId: parseInt(projectId),
-        backlogIds: formValues.backlogIds.filter(id => id),
-        subtasks: subtasks.map(subtask => subtask.title).filter(title => title.trim()),
-        metadata: { createdIn: 'kanban' },
-        displayOrder: formValues.displayOrder || 0,
-      };
-
-      console.log('[handleCreateTask] Sending taskData:', taskData);
-
-      const result = await dispatch(createTask({ taskData, attachments: formValues.attachments })).unwrap();
-
-      // Notify all assigned users
-      for (const user of formValues.assignedUsers) {
-        if (user.email) {
-          try {
-            const userId = projectUsers.find(u => u.email === user.email)?.id;
-            console.log('[handleCreateTask] Notifying user:', { email: user.email, userId });
-            if (!userId) {
-              console.warn(`No user ID found for email: ${user.email}. Skipping notification.`);
-              continue;
-            }
-            await createNotification({
-              userId,
-              type: 'task',
-              message: `Vous avez été assigné à la tâche "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}".`,
-              relatedEntityType: 'Task',
-              relatedEntityId: result.id,
-            });
-            console.log(`Notification sent to ${user.email} (ID: ${userId}) for task ${result.id}`);
-          } catch (error) {
-            console.error(`Failed to send notification to ${user.email}:`, error);
-            setKanbanError(`Erreur lors de l'envoi de la notification à ${user.email}: ${error.message}`);
-          }
-        }
-      }
-
-      window.dispatchEvent(new Event('newNotification'));
-
-      setFormValues({
-        title: '',
-        description: '',
-        assignedUsers: [],
-        priority: 'MEDIUM',
-        startDate: '',
-        endDate: '',
-        attachments: [],
-        backlogIds: [],
-      });
-      setSubtasks([]);
-      setEditingTask({ ...result, attachments: result.attachments || [] });
-      setDialogMode('view');
-      setIsEditing(false);
-      setDialogOpen(false);
-    } catch (err) {
-      console.error('[handleCreateTask] Error:', err);
-      const errorMessage =
-        typeof err === 'string' ? err :
-        err.message ||
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-        'Erreur lors de la création de la tâche';
-      setKanbanError(errorMessage);
-    } finally {
-      setIsCreatingTask(false);
-    }
-  };
-
-  // Update task
-  const handleUpdateTask = async () => {
-    if (!editingTask || !formValues.title || !projectId) {
-      setKanbanError('Le titre et l\'ID du projet sont requis.');
-      return;
-    }
-    setIsCreatingTask(true);
-    setKanbanError('');
-    try {
-      const taskData = {
-        title: formValues.title,
-        description: formValues.description,
-        assignedUserEmails: formValues.assignedUsers.map((user) => user.email).filter(Boolean) || [],
-        priority: normalizePriority(formValues.priority),
-        startDate: parseDate(formValues.startDate),
-        endDate: parseDate(formValues.endDate),
-        status: currentColumn || editingTask.status || 'À faire',
-        projectId: parseInt(projectId),
-        backlogIds: formValues.backlogIds || [],
-        subtasks: subtasks.map(subtask => subtask.title),
-        metadata: { createdIn: 'kanban' },
-      };
-
-      const previousAssignees = editingTask.assignedUserEmails || [];
-      const newAssignees = formValues.assignedUsers.map(user => user.email).filter(Boolean);
-      const newlyAssignedUsers = newAssignees.filter(email => !previousAssignees.includes(email));
-
-      const result = await dispatch(updateTask({ taskId: editingTask.id, taskData, attachments: formValues.attachments })).unwrap();
-
-      // Notify all assigned users (not just newly assigned ones)
-      for (const user of formValues.assignedUsers) {
-        if (user.email) {
-          try {
-            const userId = projectUsers.find(u => u.email === user.email)?.id;
-            console.log('[handleUpdateTask] Notifying user:', { email: user.email, userId });
-            if (!userId) {
-              console.warn(`No user ID found for email: ${user.email}. Skipping notification.`);
-              continue;
-            }
-            await createNotification({
-              userId,
-              type: 'task',
-              message: `La tâche "${formValues.title}" dans le projet "${project?.title || 'Projet inconnu'}" a été mise à jour et vous y êtes assigné.`,
-              relatedEntityType: 'Task',
-              relatedEntityId: result.id,
-            });
-            console.log(`Notification sent to ${user.email} (ID: ${userId}) for task ${result.id}`);
-          } catch (error) {
-            console.error(`Failed to send notification to ${user.email}:`, error);
-            setKanbanError(`Erreur lors de l'envoi de la notification à ${user.email}: ${error.message}`);
-          }
-        }
-      }
-
-      window.dispatchEvent(new Event('newNotification'));
-
-      setFormValues({
-        title: result.title || '',
-        description: result.description || '',
-        assignedUsers: projectUsers.filter((u) => result.assignedUserEmails?.includes(u.email)) || [],
-        priority: normalizePriority(result.priority),
-        startDate: result.startDate ? new Date(result.startDate).toISOString().split('T')[0] : '',
-        endDate: result.endDate ? new Date(result.endDate).toISOString().split('T')[0] : '',
-        attachments: [],
-        backlogIds: result.backlogIds || [],
-      });
-      setSubtasks(result.subtasks?.map(title => ({ title, completed: false })) || []);
-      setEditingTask({ ...result, attachments: result.attachments || [] });
-      setDialogMode('view');
-      setIsEditing(false);
-    } catch (err) {
-      console.error('[handleUpdateTask] Error:', err);
-      const errorMessage =
-        typeof err === 'string' ? err :
-        err.message ||
-        err.errors?.join(', ') ||
-        err.response?.data?.message ||
-        err.response?.data?.title ||
-        (err.response?.data?.errors ? Object.values(err.response.data.errors).flat().join(', ') : null) ||
-        'Erreur lors de la mise à jour de la tâche';
-      setKanbanError(errorMessage);
-    } finally {
-      setIsCreatingTask(false);
-    }
-  };
-
-  // Handle dialog close
-  const handleDialogClose = () => {
-    setDialogOpen(false);
-    setFormValues({
-      title: '',
-      description: '',
-      assignedUsers: [],
-      priority: 'MEDIUM',
-      startDate: '',
-      endDate: '',
-      attachments: [],
-      columnName: '',
-      columnId: null,
-      backlogIds: [],
-    });
-    setSubtasks([]);
-    setNewSubtask('');
-    setEditingSubtaskIndex(null);
-    setEditingSubtaskText('');
-    setCurrentColumn(null);
-    setIsEditing(false);
-    setEditingTask(null);
-    setDialogMode('view');
-    setKanbanError('');
-  };
-
   // Handle form submission for columns
   const handleFormSubmit = async () => {
     try {
@@ -655,7 +341,7 @@ const filteredColumns = columns.reduce((acc, col) => {
       if (isEditing) {
         await handleUpdateTask();
       } else {
-        await handleCreateTask();
+        await handleCreateTask(columns);
       }
     } catch (err) {
       console.error('[handleFormSubmit] Error:', err);
@@ -687,7 +373,6 @@ const filteredColumns = columns.reduce((acc, col) => {
 
   // Retry fetching data
   const handleRetryFetch = () => {
-    dispatch(clearTasksError());
     setKanbanError('');
     loadData();
   };
@@ -716,22 +401,22 @@ const filteredColumns = columns.reduce((acc, col) => {
 
   return (
     <KanbanContext.Provider value={{ setDialogOpen, setFormValues, setCurrentColumn, setIsEditing, setEditingTask, setDialogMode, handleEditTask }}>
-      <Box sx={{ 
+      <Box sx={{
         minHeight: '100vh',
-        width: '100%', 
+        width: '100%',
       }}>
         <Container maxWidth={false} sx={{ mt: 4, mb: 6 }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <PageTitle>
               Tableau Kanban pour le projet : {project.title || 'Projet sans titre'}
             </PageTitle>
-        {currentUser?.claims?.includes('CanCreateKanbanColumns') && (
+            {currentUser?.claims?.includes('CanCreateKanbanColumns') && (
               <StyledButton
                 variant="contained"
                 startIcon={<AddIcon />}
                 onClick={() => {
                   setDialogMode('addColumn');
-                  setFormValues((prev) => ({ ...prev, columnName: '' }));
+                  setFormValues((prev) => ({ ...prev, columnName: '', totalCost: 0 }));
                   setDialogOpen(true);
                 }}
                 disabled={columns.length === 0}
@@ -760,7 +445,7 @@ const filteredColumns = columns.reduce((acc, col) => {
             </Alert>
           )}
           <KanbanFilters
-            backlogs={backlogs}
+            backlogs={backlogs || []}
             projectUsers={projectUsers}
             selectedUser={selectedUser}
             selectedPriority={selectedPriority}
@@ -818,7 +503,7 @@ const filteredColumns = columns.reduce((acc, col) => {
                         columns={columns}
                         filteredColumns={filteredColumns}
                         users={projectUsers}
-                        handleAddTask={handleAddTask}
+                        handleAddTask={() => handleAddTask(column.name, backlogFilter, selectedBacklog)}
                         handleEditColumn={handleEditColumn}
                         handleDeleteColumn={handleDeleteColumn}
                         handleEditTask={handleEditTask}
@@ -848,7 +533,7 @@ const filteredColumns = columns.reduce((acc, col) => {
                     columns={columns}
                     filteredColumns={filteredColumns}
                     users={projectUsers}
-                    handleAddTask={handleAddTask}
+                    handleAddTask={() => handleAddTask(getActiveColumn(activeId).name, backlogFilter, selectedBacklog)}
                     handleEditColumn={handleEditColumn}
                     handleDeleteColumn={handleDeleteColumn}
                     handleEditTask={handleEditTask}
@@ -860,490 +545,43 @@ const filteredColumns = columns.reduce((acc, col) => {
               ) : null}
             </DragOverlay>
           </DndContext>
-          <StyledDialog
+          <TaskDialog
             open={dialogOpen}
-            onClose={(event, reason) => {
-              if (reason !== 'backdropClick') {
-                handleDialogClose();
-              }
-            }}
-            maxWidth="md"
-            fullWidth
-            fullScreen={isMobile}
-          >
-            <DialogTitle sx={{ fontWeight: 700, fontSize: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              {dialogMode === 'addColumn' ? 'Ajouter une colonne' : 
-               dialogMode === 'editColumn' ? `Modifier la colonne: ${formValues.columnName}` : 
-               dialogMode === 'view' ? `Détails de la tâche: ${editingTask?.title || ''}` : 
-               isEditing ? `Modifier la tâche: ${editingTask?.title || ''}` : 
-               `Nouvelle tâche dans ${currentColumn || 'À faire'}`}
-              <IconButton onClick={handleDialogClose} disabled={isCreatingTask}>
-                <CloseIcon />
-              </IconButton>
-            </DialogTitle>
-            <DialogContent>
-              {isCreatingTask && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-                  <CircularProgress size={30} />
-                </Box>
-              )}
-              {kanbanError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {kanbanError}
-                </Alert>
-              )}
-              <Box sx={{ my: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {dialogMode === 'addColumn' || dialogMode === 'editColumn' ? (
-                  <TextField
-                    autoFocus
-                    label="Nom de la colonne"
-                    variant="outlined"
-                    fullWidth
-                    required
-                    value={formValues.columnName}
-                    onChange={handleFormChange('columnName')}
-                    sx={{ bgcolor: 'white', borderRadius: 1 }}
-                    disabled={isCreatingTask}
-                    error={!formValues.columnName}
-                    helperText={!formValues.columnName ? 'Le nom de la colonne est requis' : ''}
-                  />
-                ) : dialogMode === 'view' ? (
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Paper elevation={2} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default' }}>
-                        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Informations principales</Typography>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Titre</Typography>
-                          <Typography variant="body1">{formValues.title || 'Non défini'}</Typography>
-                        </Box>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Description</Typography>
-                          <Typography variant="body1">{formValues.description || 'Aucune description'}</Typography>
-                        </Box>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Priorité</Typography>
-                          <Typography variant="body1">{getPriorityLabel(formValues.priority)}</Typography>
-                        </Box>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Backlog associé</Typography>
-                          <Typography variant="body1">
-                            {formValues.backlogIds?.length > 0
-                              ? backlogs.find((b) => formValues.backlogIds.includes(b.id))?.name || 'Backlog inconnu'
-                              : 'Aucun backlog'}
-                          </Typography>
-                        </Box>
-                      </Paper>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Paper elevation={2} sx={{ p: 2, borderRadius: 2, bgcolor: 'background.default' }}>
-                        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Détails supplémentaires</Typography>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Date de début</Typography>
-                          <Typography variant="body1">{formValues.startDate || 'Non définie'}</Typography>
-                        </Box>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Date de fin</Typography>
-                          <Typography variant="body1">{formValues.endDate || 'Non définie'}</Typography>
-                        </Box>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Assigné à</Typography>
-                          {formValues.assignedUsers.length > 0 ? (
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                              {formValues.assignedUsers.map((user) => (
-                                <Chip
-                                  key={user.email}
-                                  avatar={<Avatar sx={{ bgcolor: getAvatarColor(user.email) }}>{generateInitials(user.email)}</Avatar>}
-                                  label={user.email}
-                                  size="small"
-                                />
-                              ))}
-                            </Box>
-                          ) : (
-                            <Typography variant="body1">Aucun utilisateur assigné</Typography>
-                          )}
-                        </Box>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="subtitle2" color="text.secondary">Sous-tâches</Typography>
-                          {editingTask?.subtasks?.length > 0 ? (
-                            <List dense>
-                              {editingTask.subtasks.map((subtask, index) => (
-                                <ListItem key={`view-subtask-${index}`}>
-                                  <ListItemIcon>
-                                    <Checkbox edge="start" checked={false} disabled />
-                                  </ListItemIcon>
-                                  <ListItemText primary={subtask} />
-                                </ListItem>
-                              ))}
-                            </List>
-                          ) : (
-                            <Typography variant="body1">Aucune sous-tâche</Typography>
-                          )}
-                        </Box>
-                        <Box>
-                          <Typography variant="subtitle2" color="text.secondary">Pièces jointes</Typography>
-                          {editingTask?.attachments?.length > 0 ? (
-                            <List dense>
-                              {editingTask.attachments.map((attachment, index) => (
-                                <ListItem
-                                  key={`server-attachment-${index}`}
-                                  secondaryAction={
-                                    <IconButton
-                                      edge="end"
-                                      onClick={() => window.open(`${attachment.filePath}`, '_blank')}
-                                      disabled={isCreatingTask}
-                                    >
-                                      <FileDownloadIcon fontSize="small" />
-                                    </IconButton>
-                                  }
-                                >
-                                  <ListItemText
-                                    primary={attachment.fileName}
-                                    secondary={`Uploaded on ${new Date(attachment.uploadedAt).toLocaleString()}`}
-                                  />
-                                </ListItem>
-                              ))}
-                            </List>
-                          ) : (
-                            <Typography variant="body1">Aucune pièce jointe</Typography>
-                          )}
-                        </Box>
-                      </Paper>
-                    </Grid>
-                  </Grid>
-                ) : (
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <TextField
-                          label="Titre"
-                          variant="outlined"
-                          fullWidth
-                          required
-                          value={formValues.title}
-                          onChange={handleFormChange('title')}
-                          sx={{ bgcolor: 'white', borderRadius: 1 }}
-                          disabled={isCreatingTask}
-                          error={!formValues.title}
-                          helperText={!formValues.title ? 'Le titre est requis' : ''}
-                        />
-                        <TextField
-                          label="Description"
-                          variant="outlined"
-                          fullWidth
-                          multiline
-                          rows={4}
-                          value={formValues.description}
-                          onChange={handleFormChange('description')}
-                          sx={{ bgcolor: 'white', borderRadius: 1 }}
-                          disabled={isCreatingTask}
-                        />
-                        <FormControl fullWidth>
-                          <InputLabel id="task-priority-label">Priorité</InputLabel>
-                          <MuiSelect
-                            labelId="task-priority-label"
-                            value={formValues.priority}
-                            onChange={handleFormChange('priority')}
-                            input={<OutlinedInput label="Priorité" />}
-                            sx={{ bgcolor: 'white', borderRadius: 1 }}
-                            disabled={isCreatingTask}
-                          >
-                            <MenuItem value="HIGH">
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Flag sx={{ color: theme.palette.error.main, mr: 1 }} fontSize="small" />
-                                Haute
-                              </Box>
-                            </MenuItem>
-                            <MenuItem value="MEDIUM">
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Flag sx={{ color: theme.palette.warning.main, mr: 1 }} fontSize="small" />
-                                Moyenne
-                              </Box>
-                            </MenuItem>
-                            <MenuItem value="LOW">
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Flag sx={{ color: theme.palette.success.main, mr: 1 }} fontSize="small" />
-                                Basse
-                              </Box>
-                            </MenuItem>
-                          </MuiSelect>
-                        </FormControl>
-                        <Autocomplete
-                          options={[{ id: 'none', name: 'Aucun backlog' }, ...backlogs]}
-                          getOptionLabel={(option) => option.name}
-                          renderOption={(props, option) => (
-                            <li {...props}>
-                              <Typography variant="body2">{option.name}</Typography>
-                            </li>
-                          )}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              label="Backlog associé"
-                              variant="outlined"
-                              sx={{ bgcolor: 'white', borderRadius: 1 }}
-                            />
-                          )}
-                          value={
-                            formValues.backlogIds.length === 0
-                              ? { id: 'none', name: 'Aucun backlog' }
-                              : backlogs.find((b) => formValues.backlogIds.includes(b.id)) || { id: 'none', name: 'Aucun backlog' }
-                          }
-                          onChange={(event, value) => {
-                            setFormValues((prev) => ({
-                              ...prev,
-                              backlogIds: value && value.id !== 'none' ? [parseInt(value.id)] : [],
-                            }));
-                          }}
-                          isOptionEqualToValue={(option, value) => option.id === value.id}
-                          disabled={isCreatingTask}
-                        />
-                        <Box sx={{ mt: 2 }}>
-                          <Typography variant="subtitle2" sx={{ mb: 1 }}>Sous-tâches</Typography>
-                          <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              value={newSubtask}
-                              onChange={(e) => setNewSubtask(e.target.value)}
-                              placeholder="Ajouter une sous-tâche"
-                              disabled={isCreatingTask}
-                            />
-                            <Button
-                              variant="outlined"
-                              onClick={handleAddSubtask}
-                              disabled={!newSubtask.trim() || isCreatingTask}
-                            >
-                              Ajouter
-                            </Button>
-                          </Box>
-                          <List dense>
-                            {subtasks.map((subtask, index) => (
-                              <ListItem
-                                key={`subtask-${index}`}
-                                secondaryAction={
-                                  <Box>
-                                    {editingSubtaskIndex === index ? (
-                                      <>
-                                        <IconButton
-                                          edge="end"
-                                          onClick={() => handleSaveSubtaskEdit(index)}
-                                          disabled={!editingSubtaskText.trim() || isCreatingTask}
-                                        >
-                                          <CheckIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton
-                                          edge="end"
-                                          onClick={handleCancelSubtaskEdit}
-                                          disabled={isCreatingTask}
-                                        >
-                                          <CloseIcon fontSize="small" />
-                                        </IconButton>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <IconButton
-                                          edge="end"
-                                          onClick={() => handleEditSubtask(index)}
-                                          disabled={isCreatingTask}
-                                        >
-                                          <EditIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton
-                                          edge="end"
-                                          onClick={() => handleRemoveSubtask(index)}
-                                          disabled={isCreatingTask}
-                                        >
-                                          <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                      </>
-                                    )}
-                                  </Box>
-                                }
-                              >
-                                <ListItemIcon>
-                                  <Checkbox
-                                    edge="start"
-                                    checked={subtask.completed}
-                                    onChange={() => handleToggleSubtask(index)}
-                                    disabled={isCreatingTask || editingSubtaskIndex === index}
-                                  />
-                                </ListItemIcon>
-                                {editingSubtaskIndex === index ? (
-                                  <TextField
-                                    size="small"
-                                    value={editingSubtaskText}
-                                    onChange={(e) => setEditingSubtaskText(e.target.value)}
-                                    autoFocus
-                                    fullWidth
-                                    disabled={isCreatingTask}
-                                  />
-                                ) : (
-                                  <ListItemText
-                                    primary={subtask.title}
-                                    sx={{ textDecoration: subtask.completed ? 'line-through' : 'none' }}
-                                  />
-                                )}
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      </Box>
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        <TextField
-                          label="Date de début"
-                          type="date"
-                          variant="outlined"
-                          fullWidth
-                          value={formValues.startDate}
-                          onChange={handleFormChange('startDate')}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{ bgcolor: 'white', borderRadius: 1 }}
-                          disabled={isCreatingTask}
-                        />
-                        <TextField
-                          label="Date de fin"
-                          type="date"
-                          variant="outlined"
-                          fullWidth
-                          value={formValues.endDate}
-                          onChange={handleFormChange('endDate')}
-                          InputLabelProps={{ shrink: true }}
-                          sx={{ bgcolor: 'white', borderRadius: 1 }}
-                          disabled={isCreatingTask}
-                        />
-                        <InputUserAssignment
-                          options={projectUsers}
-                          value={formValues.assignedUsers}
-                          onChange={(event, value) => handleFormChange('assignedUsers')(event, value)}
-                          label="Assigné à"
-                          placeholder="Sélectionner des utilisateurs"
-                          getAvatarColor={getAvatarColor}
-                          generateInitials={generateInitials}
-                          disabled={isCreatingTask}
-                          sx={{ bgcolor: 'white', borderRadius: 1 }}
-                        />
-                        <Box>
-                          <Typography variant="subtitle2" sx={{ mb: 1 }}>Pièces jointes</Typography>
-                          {editingTask?.attachments?.length > 0 && (
-                            <List dense>
-                              {editingTask.attachments.map((attachment, index) => (
-                                <ListItem
-                                  key={`server-attachment-${index}`}
-                                  secondaryAction={
-                                    <IconButton
-                                      edge="end"
-                                      onClick={() => window.open(`${attachment.filePath}`, '_blank')}
-                                      disabled={isCreatingTask}
-                                    >
-                                      <FileDownloadIcon fontSize="small" />
-                                    </IconButton>
-                                  }
-                                >
-                                  <ListItemText
-                                    primary={attachment.fileName}
-                                    secondary={`Uploaded on ${new Date(attachment.uploadedAt).toLocaleString()}`}
-                                  />
-                                </ListItem>
-                              ))}
-                            </List>
-                          )}
-                          <Button
-                            variant="outlined"
-                            component="label"
-                            startIcon={<AttachFileIcon />}
-                            sx={{ mb: 1, borderRadius: 1 }}
-                            disabled={isCreatingTask}
-                          >
-                            Ajouter un fichier
-                            <input
-                              type="file"
-                              hidden
-                              multiple
-                              onChange={handleFormChange('attachments')}
-                              accept="image/*,.pdf,.doc,.docx"
-                              disabled={isCreatingTask}
-                            />
-                          </Button>
-                          <List dense>
-                            {formValues.attachments.map((attachment, index) => (
-                              <ListItem
-                                key={`file-${index}`}
-                                secondaryAction={
-                                  <IconButton edge="end" onClick={() => handleRemoveAttachment(`file-${index}`)} disabled={isCreatingTask}>
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                }
-                              >
-                                <ListItemText
-                                  primary={attachment.name}
-                                  secondary={`${(attachment.size / 1024).toFixed(2)} KB`}
-                                />
-                              </ListItem>
-                            ))}
-                          </List>
-                        </Box>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                )}
-              </Box>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 3, gap: 2 }}>
-              <StyledButton
-                onClick={handleDialogClose}
-                variant="outlined"
-                sx={{ bgcolor: 'white', borderRadius: 1 }}
-                disabled={isCreatingTask}
-              >
-                {dialogMode === 'view' ? 'Fermer' : 'Annuler'}
-              </StyledButton>
-              {dialogMode !== 'view' && (
-                <StyledButton
-                  onClick={handleFormSubmit}
-                  variant="contained"
-                  disabled={isCreatingTask || (dialogMode === 'edit' && !formValues.title) || (dialogMode === 'addColumn' && !formValues.columnName) || (dialogMode === 'editColumn' && !formValues.columnName)}
-                  sx={{ borderRadius: 1 }}
-                >
-                  {isCreatingTask ? 'Traitement...' : dialogMode === 'addColumn' ? 'Créer' : dialogMode === 'editColumn' ? 'Modifier' : isEditing ? 'Mettre à jour la tâche' : 'Créer la tâche'}
-                </StyledButton>
-              )}
-            </DialogActions>
-          </StyledDialog>
-          {/* Confirmation Dialog for Deleting Column */}
-          <StyledDialog
+            onClose={handleDialogClose}
+            dialogMode={dialogMode}
+            isEditing={isEditing}
+            isCreatingTask={isCreatingTask}
+            kanbanError={kanbanError}
+            formValues={formValues}
+            handleFormChange={handleFormChange}
+            handleFormSubmit={handleFormSubmit}
+            currentColumn={currentColumn}
+            editingTask={editingTask}
+            projectUsers={projectUsers}
+            backlogs={backlogs}
+            getAvatarColor={getAvatarColor}
+            generateInitials={generateInitials}
+            getPriorityLabel={getPriorityLabel}
+            subtasks={subtasks}
+            newSubtask={newSubtask}
+            setNewSubtask={setNewSubtask}
+            handleAddSubtask={handleAddSubtask}
+            handleRemoveSubtask={handleRemoveSubtask}
+            handleToggleSubtask={handleToggleSubtask}
+            handleEditSubtask={handleEditSubtask}
+            handleSaveSubtaskEdit={handleSaveSubtaskEdit}
+            editingSubtaskIndex={editingSubtaskIndex}
+            editingSubtaskText={editingSubtaskText}
+            setEditingSubtaskText={setEditingSubtaskText}
+            handleCancelSubtaskEdit={handleCancelSubtaskEdit}
+            theme={theme}
+            handleRemoveAttachment={handleRemoveAttachment}
+          />
+          <DeleteColumnDialog
             open={confirmDeleteOpen}
             onClose={() => setConfirmDeleteOpen(false)}
-            maxWidth="sm"
-            fullWidth
-          >
-            <DialogTitle sx={{ fontWeight: 700, fontSize: '1.5rem' }}>
-              Confirmer la suppression de la colonne
-            </DialogTitle>
-            <DialogContent>
-              <Typography>
-                Êtes-vous sûr de vouloir supprimer cette colonne ? Toutes les tâches associées seront également supprimées.
-              </Typography>
-            </DialogContent>
-            <DialogActions sx={{ px: 3, pb: 3, gap: 2 }}>
-              <StyledButton
-                onClick={() => setConfirmDeleteOpen(false)}
-                variant="outlined"
-                sx={{ bgcolor: 'white', borderRadius: 1 }}
-              >
-                Annuler
-              </StyledButton>
-              <StyledButton
-                onClick={confirmDeleteColumn}
-                variant="contained"
-                color="error"
-                sx={{ borderRadius: 1 }}
-              >
-                Supprimer
-              </StyledButton>
-            </DialogActions>
-          </StyledDialog>
+            onConfirm={confirmDeleteColumn}
+          />
         </Container>
       </Box>
     </KanbanContext.Provider>

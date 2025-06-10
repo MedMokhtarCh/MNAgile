@@ -4,7 +4,8 @@ import HeaderDashboard from '../components/header/HeaderDashboard';
 import AdminSidebar from '../components/sidebar/AdminSidebar';
 import Sidebar from '../components/sidebar/Sidebar';
 import { useSelector } from 'react-redux';
-import { mapRoleIdToRole } from '../routes/ProtectedRoute';
+
+import { mapRoleIdToRole } from '../utils/roles';
 import './DashboardLayout.css';
 
 const DashboardLayout = () => {

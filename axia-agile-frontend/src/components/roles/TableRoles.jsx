@@ -18,7 +18,6 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Security as SecurityIcon, SupervisorAccount as SupervisorAccountIcon, Person as PersonIcon } from '@mui/icons-material';
 
-// Default roles that cannot be modified
 const DEFAULT_ROLE_IDS = [1, 2, 3, 4];
 
 const getIconComponent = (iconName) => {
@@ -36,7 +35,7 @@ const getIconComponent = (iconName) => {
 
 const isDefaultRole = (roleId) => DEFAULT_ROLE_IDS.includes(roleId);
 
-const TableRoles = ({ roles, loading, onEdit, onDelete, setOpenModal }) => {
+const TableRoles = ({ roles, loading, onEdit, onDelete, setOpenModal, setEditMode, setNewRole }) => {
   const columns = [
     {
       id: 'name',
@@ -154,7 +153,11 @@ const TableRoles = ({ roles, loading, onEdit, onDelete, setOpenModal }) => {
                   <Button
                     variant="outlined"
                     startIcon={<AddIcon />}
-                    onClick={() => setOpenModal(true)}
+                    onClick={() => {
+                      setEditMode(false); // Ensure creation mode
+                      setNewRole({ name: '' }); // Reset role form
+                      setOpenModal(true); // Open modal
+                    }}
                     sx={{ mt: 2 }}
                   >
                     Ajouter un rôle

@@ -1,8 +1,8 @@
-// ClaimManagement.jsx
+
 import React, { useEffect } from 'react';
 import { Box, ThemeProvider, CssBaseline } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchClaims } from '../store/slices/usersSlice';
+import { fetchClaims } from '../store/slices/claimsSlice'; 
 import TableClaims from '../components/claims/TableClaims';
 import { theme } from '../components/users/themes';
 import PageTitle from '../components/common/PageTitle';
@@ -11,7 +11,11 @@ import { useAuth } from '../contexts/AuthContext';
 const ClaimManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
-  const { claims, loading } = useSelector((state) => state.users);
+
+  const { claims, loading } = useSelector((state) => ({
+    claims: state.claims.claims,
+    loading: state.claims.loading
+  }));
 
   useEffect(() => {
     if (currentUser) {

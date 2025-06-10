@@ -25,14 +25,12 @@ namespace UserService.Data
                 entity.Property(s => s.EndDate).IsRequired();
                 entity.Property(s => s.UserId).IsRequired();
 
-                // Relationship with User
                 entity.HasOne(s => s.User)
                       .WithOne(u => u.Subscription)
                       .HasForeignKey<Subscription>(s => s.UserId)
                       .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // Configure Role entity
             modelBuilder.Entity<Role>(entity =>
             {
                 entity.Property(r => r.Id)
@@ -42,7 +40,6 @@ namespace UserService.Data
                       .HasMaxLength(100);
             });
 
-            // Configure Claim entity
             modelBuilder.Entity<Claim>(entity =>
             {
                 entity.Property(c => c.Id)
@@ -55,7 +52,6 @@ namespace UserService.Data
                       .HasMaxLength(500);
             });
 
-            // Configure User entity
             modelBuilder.Entity<User>(entity =>
             {
                 entity.Property(u => u.RoleId)
@@ -74,26 +70,26 @@ namespace UserService.Data
                       .HasMaxLength(20);
                 entity.Property(u => u.PasswordHash)
                       .IsRequired();
+                entity.Property(u => u.CostPerHour)
+                      .HasColumnType("decimal(18,2)"); 
+                entity.Property(u => u.CostPerDay)
+                      .HasColumnType("decimal(18,2)"); 
 
-                // Configure RootAdmin relationship
                 entity.HasOne(u => u.RootAdmin)
                       .WithMany()
                       .HasForeignKey(u => u.RootAdminId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // Configure User-Role relationship
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Role)
                 .WithMany(r => r.Users)
                 .HasForeignKey(u => u.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Configure composite key for UserClaim
             modelBuilder.Entity<UserClaim>()
                 .HasKey(uc => new { uc.UserId, uc.ClaimId });
 
-            // Configure UserClaim relationships
             modelBuilder.Entity<UserClaim>()
                 .HasOne(uc => uc.User)
                 .WithMany(u => u.UserClaims)
@@ -106,7 +102,6 @@ namespace UserService.Data
                 .HasForeignKey(uc => uc.ClaimId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Seed roles
             modelBuilder.Entity<Role>().HasData(
                 new Role { Id = 1, Name = "SuperAdmin" },
                 new Role { Id = 2, Name = "Admin" },
@@ -114,7 +109,7 @@ namespace UserService.Data
                 new Role { Id = 4, Name = "User" }
             );
 
-            // Seed claims
+
             // Seed claims
             modelBuilder.Entity<Claim>().HasData(
                 new Claim { Id = 1, Name = "CanViewUsers", Description = "Permission de voir les utilisateurs" },

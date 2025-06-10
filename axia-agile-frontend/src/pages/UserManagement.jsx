@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Button,
@@ -9,13 +9,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Tooltip, // Added for actions column
-  IconButton, // Added for actions column
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon, // Added for actions column
-  Delete as DeleteIcon, // Added for actions column
+  Edit as EditIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { useUsers } from '../hooks/useUsers';
 import UserForm from '../components/users/UserForm';
@@ -30,12 +30,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useAvatar } from '../hooks/useAvatar';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchUsersByCreatedById } from '../store/slices/usersSlice';
+import { fetchRolesByUserId } from '../store/slices/rolesSlice';
 
 const UserManagement = () => {
   const dispatch = useDispatch();
   const { currentUser } = useAuth();
   const { generateInitials, getAvatarColor } = useAvatar();
-  const { claims } = useSelector((state) => state.users);
+
+  // Access roles state from Redux store
+  const rolesState = useSelector((state) => state.roles || { roles: [], usersLoading: false });
+  const { roles, usersLoading: rolesLoading } = rolesState;
 
   const {
     users,
@@ -47,10 +51,12 @@ const UserManagement = () => {
     currentUserId,
     setCurrentUserId,
     availableRoles,
+    claims,
     handleCreateUser,
     handleEditUser,
     handleDeleteUser,
     handleToggleActive,
+    handleCloseModal,
     snackbar,
     handleCloseSnackbar,
     openModal,
@@ -66,35 +72,62 @@ const UserManagement = () => {
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
 
-  // Check for specific claims
-  const hasCreateUserClaim = currentUser?.claims?.includes('CanCreateUsers');
-  const hasUpdateUserClaim = currentUser?.claims?.includes('CanUpdateUsers');
-  const hasDeleteUserClaim = currentUser?.claims?.includes('CanDeleteUsers');
+  // Derive permissions from currentUser's claims
+  const hasCreateUserClaim = currentUser?.claims?.includes('CanCreateUsers') || false;
+  const hasUpdateUserClaim = currentUser?.claims?.includes('CanUpdateUsers') || false;
+  const hasDeleteUserClaim = currentUser?.claims?.includes('CanDeleteUsers') || false;
+
+  // Define available roles: default user roles (roleId 3 and 4) and roles created by the current user
+  const filteredRoles = useMemo(() => {
+    const defaultRoles = [
+      { id: 3, label: 'Chef de projet', iconName: 'ManageAccounts' },
+      { id: 4, label: 'Utilisateur', iconName: 'Person' },
+    ];
+    const userCreatedRoles = roles.filter((role) => role.createdByUserId === currentUser?.id);
+    const combinedRoles = [...defaultRoles, ...userCreatedRoles].filter(Boolean);
+    return combinedRoles.map((role) => ({
+      id: role.id,
+      label: role.label,
+      iconName: role.iconName || 'Person',
+      disabled: false,
+    }));
+  }, [roles, currentUser]);
+
+  // Role filter options for FilterBar
+  const roleFilterOptions = useMemo(() => {
+    return [
+      { value: 'all', label: 'Tous' },
+      { value: 'user', label: 'Utilisateurs' },
+      { value: 'chef_projet', label: 'Chefs de projet' },
+      ...filteredRoles
+        .filter((role) => role.id > 4)
+        .map((role) => ({
+          value: `role_${role.id}`,
+          label: role.label,
+        })),
+    ];
+  }, [filteredRoles]);
+
+  // Fetch users and roles
+  const fetchData = useCallback(async () => {
+    try {
+      if (currentUser?.id) {
+        await Promise.all([
+          dispatch(fetchUsersByCreatedById(currentUser.id)).unwrap(),
+          dispatch(fetchRolesByUserId(currentUser.id)).unwrap(),
+        ]);
+      }
+    } catch (error) {
+      // Error handling is managed by useUsers hook
+    }
+  }, [dispatch, currentUser]);
 
   useEffect(() => {
-    console.log('UserManagement openModal state:', openModal);
-  }, [openModal]);
-
-  const handleCloseModal = () => {
-    setOpenModal(false);
-    setNewUser({
-      email: '',
-      password: '',
-      firstName: '',
-      lastName: '',
-      phoneNumber: '',
-      roleId: 4,
-      jobTitle: '',
-      entreprise: '',
-      claimIds: [],
-      isActive: true,
-      createdById: currentUser?.id || null,
-    });
-    setEditMode(false);
-    setCurrentUserId(null);
-  };
+    fetchData();
+  }, [fetchData]);
 
   const handleOpenDeleteDialog = (id) => {
+    if (!hasDeleteUserClaim) return;
     setUserToDelete(id);
     setOpenDeleteDialog(true);
   };
@@ -107,10 +140,10 @@ const UserManagement = () => {
   const handleConfirmDelete = async () => {
     if (userToDelete) {
       try {
-        await dispatch(handleDeleteUser(userToDelete)).unwrap();
+        await handleDeleteUser(userToDelete);
         dispatch(fetchUsersByCreatedById(currentUser.id));
       } catch (error) {
-        // Error handled in usersSlice
+        // Error handled in useUsers
       }
     }
     handleCloseDeleteDialog();
@@ -130,19 +163,18 @@ const UserManagement = () => {
     const matchesRole =
       filterRole === 'all' ||
       (filterRole === 'user' && user.roleId === 4) ||
-      (filterRole === 'chef_projet' && user.roleId === 3);
+      (filterRole === 'chef_projet' && user.roleId === 3) ||
+      (filterRole.startsWith('role_') && user.roleId === Number(filterRole.split('_')[1]));
     return matchesSearch && matchesFilter && matchesRole;
   });
 
   const getRequiredFields = () => {
-    return ['email', 'firstName', 'lastName', 'jobTitle'];
+    return ['email', 'firstName', 'lastName'];
   };
 
   const getShowFields = () => {
-    return ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'jobTitle', 'role', 'permissions'];
+    return ['email', 'password', 'firstName', 'lastName', 'phoneNumber', 'jobTitle', 'role', 'permissions', 'costPerHour', 'costPerDay'];
   };
-
-  const filteredRoles = availableRoles.filter((role) => [3, 4].includes(role.id));
 
   return (
     <ThemeProvider theme={theme}>
@@ -162,12 +194,14 @@ const UserManagement = () => {
                   firstName: '',
                   lastName: '',
                   phoneNumber: '',
+                 jobTitle: '',
+                  entreprise: currentUser?.entreprise || '',
                   roleId: 4,
-                  jobTitle: '',
-                  entreprise: '',
                   claimIds: [],
                   isActive: true,
                   createdById: currentUser?.id || null,
+                  costPerHour: '',
+                  costPerDay: '',
                 });
                 setOpenModal(true);
               }}
@@ -184,11 +218,7 @@ const UserManagement = () => {
             {
               id: 'role',
               label: 'Rôle',
-              options: [
-                { value: 'all', label: 'Tous' },
-                { value: 'user', label: 'Utilisateurs' },
-                { value: 'chef_projet', label: 'Chefs de projet' },
-              ],
+              options: roleFilterOptions,
             },
             {
               id: 'status',
@@ -208,61 +238,68 @@ const UserManagement = () => {
           onRefresh={() => dispatch(fetchUsersByCreatedById(currentUser?.id))}
         />
 
-        <TableUsers
-          users={filteredUsers}
-          loading={loading}
-          onEdit={hasUpdateUserClaim ? handleEditUser : () => {}}
-          onDelete={hasDeleteUserClaim ? handleOpenDeleteDialog : () => {}}
-          onToggleActive={handleToggleActive}
-          onManagePermissions={(user) => {
-            setSelectedUser({
-              ...user,
-              claimIds: user.claimIds || [],
-            });
-            setOpenPermissionsModal(true);
-          }}
-          setOpenModal={setOpenModal}
-          columns={userColumns.map((column) => {
-            if (column.id === 'actions') {
-              return {
-                ...column,
-                render: (user, { onEdit, onDelete }) => (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    {hasUpdateUserClaim && (
-                      <Tooltip title="Modifier">
-                        <IconButton
-                          size="small"
-                          sx={{ mr: 1 }}
-                          onClick={() => {
-                            console.log('Edit icon clicked for user:', user);
-                            onEdit(user);
-                          }}
-                          color="primary"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                    {hasDeleteUserClaim && (
-                      <Tooltip title="Supprimer">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => onDelete(user.id)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </Box>
-                ),
-              };
-            }
-            return column;
-          })}
-          generateInitials={generateInitials}
-          getAvatarColor={(user) => getAvatarColor(user.email)}
-        />
+       <TableUsers
+  users={filteredUsers}
+  loading={loading || rolesLoading}
+  onEdit={hasUpdateUserClaim ? handleEditUser : () => {}}
+  onDelete={hasDeleteUserClaim ? handleOpenDeleteDialog : () => {}}
+  onToggleActive={handleToggleActive}
+  onManagePermissions={(user) => {
+    setSelectedUser({
+      ...user,
+      claimIds: user.claimIds || [],
+    });
+    setOpenPermissionsModal(true);
+  }}
+  setOpenModal={setOpenModal}
+  columns={userColumns.map((column) => {
+    if (column.id === 'actions') {
+      return {
+        ...column,
+        render: (user, { onEdit, onDelete }) => (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            {hasUpdateUserClaim && (
+              <Tooltip title="Modifier">
+                <IconButton
+                  size="small"
+                  sx={{ mr: 1 }}
+                  onClick={() => {
+                    console.log('Edit icon clicked for user:', user);
+                    onEdit(user);
+                  }}
+                  color="primary"
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {hasDeleteUserClaim && (
+              <Tooltip title="Supprimer">
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => onDelete(user.id)}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        ),
+      };
+    }
+    // Pass roles to the role column
+    if (column.id === 'role') {
+      return {
+        ...column,
+        render: (user, props) => column.render(user, { ...props, roles: filteredRoles }),
+      };
+    }
+    return column;
+  })}
+  generateInitials={generateInitials}
+  getAvatarColor={(user) => getAvatarColor(user.email)}
+/>
 
         <UserForm
           open={openModal}

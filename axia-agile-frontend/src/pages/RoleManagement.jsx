@@ -4,11 +4,12 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchRoles,
+  fetchRolesByUserId,
   createRole,
   updateRole,
   deleteRole,
-  setSnackbar,
-} from '../store/slices/usersSlice';
+} from '../store/slices/rolesSlice';
+import { setSnackbar } from '../store/slices/usersSlice';
 import FilterBar from '../components/users/FilterBarUsers';
 import TableRoles from '../components/roles/TableRoles';
 import RoleForm from '../components/roles/RoleForm';
@@ -19,28 +20,31 @@ import { useAuth } from '../contexts/AuthContext';
 
 const RoleManagement = () => {
   const dispatch = useDispatch();
-  const { currentUser } = useAuth();
-  const { roles, loading, snackbar } = useSelector((state) => state.users);
+  const { currentUser, hasRole } = useAuth();
+  const rolesState = useSelector((state) => state.roles || { roles: [], usersLoading: false });
+  const { roles, usersLoading: loading } = rolesState;
+  const usersState = useSelector((state) => state.users || { snackbar: { open: false, message: '', severity: 'success' } });
+  const { snackbar } = usersState;
 
   const [openModal, setOpenModal] = useState(false);
-  const [newRole, setNewRole] = useState({
-    name: '',
-  });
+  const [newRole, setNewRole] = useState({ name: '' });
   const [editMode, setEditMode] = useState(false);
   const [currentRoleId, setCurrentRoleId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (currentUser) {
-      dispatch(fetchRoles());
+      if (hasRole('SuperAdmin')) {
+        dispatch(fetchRoles());
+      } else {
+        dispatch(fetchRolesByUserId(currentUser.id));
+      }
     }
-  }, [dispatch, currentUser]);
+  }, [dispatch, currentUser, hasRole]);
 
   const handleCloseModal = () => {
     setOpenModal(false);
-    setNewRole({
-      name: '',
-    });
+    setNewRole({ name: '' });
     setEditMode(false);
     setCurrentRoleId(null);
   };
@@ -56,12 +60,14 @@ const RoleManagement = () => {
     }
 
     try {
-      const action = editMode ? updateRole({ id: currentRoleId, name: newRole.name }) : createRole({ name: newRole.name });
+      const action = editMode
+        ? updateRole({ id: currentRoleId, name: newRole.name })
+        : createRole({ name: newRole.name, createdByUserId: currentUser.id });
       await dispatch(action).unwrap();
-      await dispatch(fetchRoles()); // Refetch roles to sync state
+      await dispatch(hasRole('SuperAdmin') ? fetchRoles() : fetchRolesByUserId(currentUser.id));
       handleCloseModal();
     } catch (error) {
-      // Error is already handled in usersSlice
+      // Errors are handled in rolesSlice
     }
   };
 
@@ -70,9 +76,7 @@ const RoleManagement = () => {
       dispatch(setSnackbar({ open: true, message: 'Rôle non valide.', severity: 'error' }));
       return;
     }
-    setNewRole({
-      name: role.label,
-    });
+    setNewRole({ name: role.label, id: role.id });
     setEditMode(true);
     setCurrentRoleId(role.id);
     setOpenModal(true);
@@ -81,14 +85,20 @@ const RoleManagement = () => {
   const handleDeleteRole = async (id) => {
     try {
       await dispatch(deleteRole(id)).unwrap();
-      await dispatch(fetchRoles()); // Refetch roles after deletion
+      await dispatch(hasRole('SuperAdmin') ? fetchRoles() : fetchRolesByUserId(currentUser.id));
     } catch (error) {
-      // Error is already handled in usersSlice
+      // Errors are handled in rolesSlice
     }
   };
 
+  const DEFAULT_ROLE_IDS = [1, 2, 3, 4];
+
   const filteredRoles = roles.filter((role) =>
-    role.label.toLowerCase().includes(searchTerm.toLowerCase())
+    role.label.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (
+      (hasRole('SuperAdmin') && (DEFAULT_ROLE_IDS.includes(role.id) || role.createdByUserId === currentUser.id)) ||
+      (!hasRole('SuperAdmin') && role.createdByUserId === currentUser.id)
+    )
   );
 
   return (
@@ -117,7 +127,7 @@ const RoleManagement = () => {
           filterOptions={[]}
           filterValues={{}}
           setFilterValues={() => {}}
-          onRefresh={() => dispatch(fetchRoles())}
+          onRefresh={() => dispatch(hasRole('SuperAdmin') ? fetchRoles() : fetchRolesByUserId(currentUser.id))}
         />
 
         <TableRoles
@@ -126,6 +136,8 @@ const RoleManagement = () => {
           onEdit={handleEditRole}
           onDelete={handleDeleteRole}
           setOpenModal={setOpenModal}
+          setEditMode={setEditMode}
+          setNewRole={setNewRole}
         />
 
         <RoleForm
@@ -135,6 +147,8 @@ const RoleManagement = () => {
           setRole={setNewRole}
           onSave={handleCreateRole}
           isEditMode={editMode}
+          existingRoles={roles}
+          currentUserId={currentUser?.id}
         />
 
         <AlertUser

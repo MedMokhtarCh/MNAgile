@@ -208,9 +208,11 @@ const notificationSlice = createSlice({
         }
         state.error = action.payload;
       })
-      .addCase(markAllNotificationsAsRead.fulfilled, (state) => {
-        state.notifications = state.notifications.map((n) => ({ ...n, isRead: true }));
-      })
+    // Dans notificationSlice.js
+.addCase(markAllNotificationsAsRead.fulfilled, (state) => {
+  state.notifications = state.notifications.map(n => ({ ...n, isRead: true }));
+  state.error = null;
+})
       .addCase(markAllNotificationsAsRead.rejected, (state, action) => {
         state.error = action.payload;
       })

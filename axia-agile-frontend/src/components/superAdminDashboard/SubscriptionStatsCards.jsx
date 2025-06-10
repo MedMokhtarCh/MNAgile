@@ -3,60 +3,58 @@ import { Grid, Card, CardContent, Typography, Box } from '@mui/material';
 import { Subscriptions as SubscriptionsIcon } from '@mui/icons-material';
 
 const SubscriptionStatsCards = ({ users }) => {
-  // Define plan colors to match SuperAdminSubscriptionManagement
+  // Define plan colors (keeping your original color scheme)
   const planColors = {
     annual: { name: 'Annuel', count: 0, color: '#C8E6C9' }, // Pastel green
     semiannual: { name: 'Semestriel', count: 0, color: '#D1C4E9' }, // Pastel purple
     quarterly: { name: 'Trimestriel', count: 0, color: '#F8BBD0' }, // Pastel pink
-    monthly: { name: 'Mensuel', count: 0, color: '#FFF9C4' }, // Pastel yellow
+    monthly: { name: 'Mensuel', count: 0, color: '#FFF9C4' } // Pastel yellow
   };
 
-  // Calculate admin counts by subscription plan and status
-  const { planCounts, statusCounts } = React.useMemo(() => {
-    if (!Array.isArray(users)) {
-      return { planCounts: { ...planColors }, statusCounts: {} };
-    }
+  // Status colors with your gradient style
+  const statusColors = {
+    Active: { name: 'Validé', count: 0, gradient: 'linear-gradient(135deg, #80CBC4 0%, #4DB6AC 100%)' }, // Pastel teal
+    Pending: { name: 'En attente', count: 0, gradient: 'linear-gradient(135deg, #FFCC80 0%, #FFB300 100%)' }, // Pastel orange
+    Expired: { name: 'Expiré', count: 0, gradient: 'linear-gradient(135deg, #EF9A9A 0%, #E57373 100%)' } // Pastel red
+  };
+
+  // Calculate counts (using the improved logic)
+  const { planCounts, statusCounts, totalAdmins } = React.useMemo(() => {
+    const admins = users?.filter(user => user && user.roleId === 2 && user.email) || [];
+    const totalAdmins = admins.length;
 
     const planCounts = { ...planColors };
+    const statusCounts = { ...statusColors };
 
-    const statusCounts = {
-      Pending: { name: 'En attente', count: 0, gradient: 'linear-gradient(135deg, #FFCC80 0%, #FFB300 100%)' }, // Pastel orange
-      Validated: { name: 'Validé', count: 0, gradient: 'linear-gradient(135deg, #80CBC4 0%, #4DB6AC 100%)' }, // Pastel teal
-      Expired: { name: 'Expiré', count: 0, gradient: 'linear-gradient(135deg, #EF9A9A 0%, #E57373 100%)' }, // Pastel red
-    };
+    admins.forEach((admin) => {
+      const hasSubscription = admin.subscription;
+      const planKey = hasSubscription ? (admin.subscription.plan || '').toLowerCase() : null;
+      const statusKey = hasSubscription ? (admin.subscription.status || 'Pending') : null;
 
-    // Count admins by plan and status
-    users
-      .filter((user) => user && user.roleId === 2 && user.email && user.subscription)
-      .forEach((admin) => {
-        const planKey = (admin.subscription.plan || '').toLowerCase();
-        const statusKey = admin.subscription.status || 'Pending';
+      if (planKey && planCounts[planKey]) {
+        planCounts[planKey].count += 1;
+      }
 
-        if (planCounts[planKey]) {
-          planCounts[planKey].count += 1;
-        }
+      if (statusKey && statusCounts[statusKey]) {
+        statusCounts[statusKey].count += 1;
+      }
+    });
 
-        if (statusCounts[statusKey]) {
-          statusCounts[statusKey].count += 1;
-        }
-      });
-
-    return { planCounts, statusCounts };
+    return { planCounts, statusCounts, totalAdmins };
   }, [users]);
 
   return (
     <Box sx={{ mt: 4 }}>
-      {/* Subscription Plans Section */}
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 500 }}>
-        Répartition des admins par abonnement
+        Répartition des abonnements par plan
       </Typography>
       <Grid container spacing={2} sx={{ mb: 4 }}>
-        {Object.values(planCounts).map((plan) => (
-          <Grid item xs={12} sm={6} md={3} key={plan.name}>
+        {Object.entries(planCounts).map(([key, plan]) => (
+          <Grid item xs={12} sm={6} md={3} key={key}>
             <Card
               sx={{
-                background: plan.color, // Use solid color instead of gradient
-                color: '#000', // Black text for better contrast on pastel backgrounds
+                background: plan.color, 
+                color: '#000', 
                 boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
                 height: 120,
                 transition: 'transform 0.2s',
@@ -82,7 +80,7 @@ const SubscriptionStatsCards = ({ users }) => {
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
-                  {plan.name}
+                  {plan.name} ({totalAdmins > 0 ? ((plan.count / totalAdmins) * 100).toFixed(1) : 0}%)
                 </Typography>
               </CardContent>
             </Card>
@@ -90,13 +88,12 @@ const SubscriptionStatsCards = ({ users }) => {
         ))}
       </Grid>
 
-      {/* Subscription Status Section */}
       <Typography variant="h6" sx={{ mb: 2, fontWeight: 500 }}>
-        Répartition des admins par statut d'abonnement
+        Répartition des abonnements par statut
       </Typography>
       <Grid container spacing={2}>
-        {Object.values(statusCounts).map((status) => (
-          <Grid item xs={12} sm={6} md={4} key={status.name}>
+        {Object.entries(statusCounts).map(([key, status]) => (
+          <Grid item xs={12} sm={6} md={4} key={key}>
             <Card
               sx={{
                 background: status.gradient,
@@ -126,7 +123,7 @@ const SubscriptionStatsCards = ({ users }) => {
                   </Typography>
                 </Box>
                 <Typography variant="caption" sx={{ opacity: 0.9, fontSize: '0.75rem' }}>
-                  {status.name}
+                  {status.name} ({totalAdmins > 0 ? ((status.count / totalAdmins) * 100).toFixed(1) : 0}%)
                 </Typography>
               </CardContent>
             </Card>

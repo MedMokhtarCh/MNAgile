@@ -11,6 +11,8 @@
         public string? Entreprise { get; set; }
         public int RoleId { get; set; }
         public List<int>? ClaimIds { get; set; }
+        public decimal? CostPerHour { get; set; } 
+        public decimal? CostPerDay { get; set; } 
     }
     public class PatchUserClaimsRequest
     {

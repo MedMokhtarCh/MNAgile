@@ -60,12 +60,7 @@ export const useProject = () => {
       return;
     }
 
-    if (!currentUser?.claims?.includes('CanViewProjects')) {
-      setFormError("Vous n'avez pas les autorisations pour voir les projets.");
-      navigate('/no-access', { replace: true });
-      return;
-    }
-
+   
     // Fetch all users (as per usersSlice) and projects
     dispatch(fetchUsers()).catch((err) => {
       console.error('Failed to fetch users:', err);

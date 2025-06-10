@@ -26,6 +26,9 @@ import SuperadminManagement from "../pages/SuperadminManagement";
 import MeetingScheduler from "../pages/MeetingScheduler";
 import Subscribe from "../pages/Subscribe";
 import SuperAdminSubscriptionManagement from "../pages/SuperAdminSubscriptionManagement";
+import SprintPage from "../pages/SprintPage";
+
+
 
 const AppRoutes = () => {
   return (
@@ -34,6 +37,9 @@ const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<Login />} />
       <Route path="/Subscribe" element={<Subscribe />} />
+      
+      
+  
 
       {/* Protected profile route - any authenticated user */}
       <Route element={<ProtectedRoute />}>
@@ -43,29 +49,40 @@ const AppRoutes = () => {
       </Route>
 
       {/* Admin routes - only for admin */}
-      <Route element={<RoleProtectedRoute allowedRoles={['admin']} />}>
+        <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/UserStatisticsDashboard" element={<UserStatisticsDashboard />} />
         </Route>
       </Route>
 
       {/* Super Admin routes - only for superadmin */}
-      <Route element={<RoleProtectedRoute allowedRoles={['superadmin']} />}>
+     <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/AdminManagement" element={<AdminManagement />} />
           <Route path="/SuperAdminStatistics" element={<SuperAdminStatistics />} />
            <Route path="/SuperAdminSubscriptionManagement" element={<SuperAdminSubscriptionManagement />} />
           
           <Route path="/SuperadminManagement" element={<SuperadminManagement />} />
-          <Route path="/RoleManagement" element={<RoleManagement />} />
           <Route path="/ClaimManagement" element={<ClaimManagement />} />
+        </Route>
+      </Route>
+      {/* Admin and superadmin routes - for RoleManagement */}
+      <Route element={<ProtectedRoute />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/RoleManagement" element={<RoleManagement />} />
+        </Route>
+      </Route>
+         <Route element={<ProtectedRoute />}>
+        <Route path="/" element={<DashboardLayout />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/meetings" element={<MeetingScheduler />} />
         </Route>
       </Route>
 
       {/* User routes - for authenticated users */}
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<DashboardLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
+   
           {/* Messages route - accessible to users with discussion claims */}
           <Route
             element={
@@ -85,8 +102,10 @@ const AppRoutes = () => {
           <Route index element={<ProjectOverview />} />
           <Route path="kanban" element={<Kanban />} />
           <Route path="backlog" element={<BacklogPage />} />
+              <Route path="sprints" element={<SprintPage />} />
           <Route path="ActiveSprintPage" element={<ActiveSprintPage />} />
           <Route path="calendar" element={<Calendar />} />
+              
         </Route>
       </Route>
 
@@ -102,16 +121,17 @@ const AppRoutes = () => {
       >
         <Route path="/" element={<DashboardLayout />}>
           <Route path="/projects" element={<Projects />} />
-          <Route path="/meetings" element={<MeetingScheduler />} />
+      
         </Route>
       </Route>
+ 
 
       {/* UserManagement route - accessible to specific roles or users with user management claims */}
       <Route
         element={
           <ProtectedRoute>
             <RoleOrClaimProtectedRoute
-              allowedRoles={['admin', 'superadmin', 'chef_projet', 'user']}
+          
               requiredClaims={['CanViewUsers', 'CanCreateUsers', 'CanUpdateUsers', 'CanDeleteUsers']}
             />
           </ProtectedRoute>

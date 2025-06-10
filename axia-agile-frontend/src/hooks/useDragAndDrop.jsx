@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { arrayMove } from '@dnd-kit/sortable';
-import { updateTaskPosition, updateKanbanColumn, updateTasksOrderOptimistically, fetchAllTasks } from '../store/slices/taskSlice';
+import { updateTaskPosition, updateTasksOrderOptimistically, fetchAllTasks } from '../store/slices/taskSlice';
+import {updateKanbanColumn } from'../store/slices/kanbanColumnSlice';
 
 export const useDragAndDrop = ({ columns, tasks, projectId, dispatch, createNotification, currentUser, project, setKanbanError }) => {
   const [isDragging, setIsDragging] = useState(false);

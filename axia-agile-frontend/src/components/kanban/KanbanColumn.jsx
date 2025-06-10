@@ -83,6 +83,7 @@ function KanbanColumn({
   getAvatarColor,
   generateInitials,
   getPriorityLabel,
+ 
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: column.id.toString(),

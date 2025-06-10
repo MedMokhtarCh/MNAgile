@@ -25,7 +25,6 @@ namespace UserService.Services
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // Check for duplicate email
                 if (await _context.Users.AnyAsync(u => u.Email == user.Email))
                 {
                     _logger.LogWarning("Email already exists: {Email}", user.Email);
@@ -33,10 +32,8 @@ namespace UserService.Services
                 }
 
                 user.DateCreated = DateTime.UtcNow;
-                user.IsActive = user.IsActive; // Respect the IsActive value from input (false for signup)
+                user.IsActive = user.IsActive;
 
-                // Handle RootAdminId after saving user to ensure user.Id is assigned
-                int? tempRootAdminId = null;
                 if (user.CreatedById.HasValue)
                 {
                     var creator = await _context.Users
@@ -48,11 +45,9 @@ namespace UserService.Services
                     }
                 }
 
-                // Add user to context
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
 
-                // Set RootAdminId for self-created admin (RoleId = 2)
                 if (user.RoleId == 2 && !user.CreatedById.HasValue)
                 {
                     user.RootAdminId = user.Id;
@@ -60,12 +55,11 @@ namespace UserService.Services
                     await _context.SaveChangesAsync();
                 }
 
-                // Assign claims based on role
-                if (user.RoleId == 1) // SuperAdmin
+                if (user.RoleId == 1)
                 {
                     claimIds = await _context.Claims.Select(c => c.Id).ToListAsync();
                 }
-                else if (user.RoleId == 2) // Admin
+                else if (user.RoleId == 2)
                 {
                     var defaultAdminClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers" || c.Name == "CanCreateUsers")
@@ -73,7 +67,7 @@ namespace UserService.Services
                         .ToListAsync();
                     claimIds.AddRange(defaultAdminClaims);
                 }
-                else if (user.RoleId == 3) // ChefProjet
+                else if (user.RoleId == 3)
                 {
                     var defaultChefProjetClaims = await _context.Claims
                         .Where(c => c.Name == "CanViewUsers")
@@ -82,10 +76,8 @@ namespace UserService.Services
                     claimIds.AddRange(defaultChefProjetClaims);
                 }
 
-                // Ensure unique claim IDs
                 claimIds = claimIds.Distinct().ToList();
 
-                // Validate and assign claims
                 foreach (var claimId in claimIds)
                 {
                     if (!await _context.Claims.AnyAsync(c => c.Id == claimId))

@@ -211,6 +211,9 @@ namespace UserService.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("int");
 
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -224,21 +227,25 @@ namespace UserService.Migrations
                         new
                         {
                             Id = 1,
+                            CreatedByUserId = 0,
                             Name = "SuperAdmin"
                         },
                         new
                         {
                             Id = 2,
+                            CreatedByUserId = 0,
                             Name = "Admin"
                         },
                         new
                         {
                             Id = 3,
+                            CreatedByUserId = 0,
                             Name = "ChefProjet"
                         },
                         new
                         {
                             Id = 4,
+                            CreatedByUserId = 0,
                             Name = "User"
                         });
                 });
@@ -285,6 +292,12 @@ namespace UserService.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal?>("CostPerDay")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("CostPerHour")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int?>("CreatedById")
                         .HasColumnType("int");

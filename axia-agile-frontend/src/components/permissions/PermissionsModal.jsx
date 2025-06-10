@@ -1,17 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, IconButton } from '@mui/material';
 import { Security as SecurityIcon, Close as CloseIcon } from '@mui/icons-material';
 import PermissionForm from './PermissionForm';
 import { useDispatch } from 'react-redux';
 import { updateUserClaims, setSnackbar } from '../../store/slices/usersSlice';
 
-const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) => {
+const PermissionsModal = ({ open, onClose, user, claims }) => {
   const dispatch = useDispatch();
+  const [localClaimIds, setLocalClaimIds] = useState(user?.claimIds || []);
 
-  if (!user) return null;
+  // Update local state when user prop changes
+  React.useEffect(() => {
+    setLocalClaimIds(user?.claimIds || []);
+  }, [user]);
 
+  // Handle permission toggle locally
+  const handlePermissionChange = (permissionId) => {
+    setLocalClaimIds((prev) =>
+      prev.includes(permissionId)
+        ? prev.filter((id) => id !== permissionId)
+        : [...prev, permissionId]
+    );
+  };
+
+  // Handle save action
   const handleSave = async () => {
-    if (!user || !user.id || !Array.isArray(user.claimIds)) {
+    if (!user || !user.id || !Array.isArray(localClaimIds)) {
       console.error('PermissionsModal - Invalid user data:', user);
       dispatch(
         setSnackbar({
@@ -23,9 +37,9 @@ const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) =
       return;
     }
 
-    console.log('PermissionsModal - Saving permissions for user:', user.id, 'with claimIds:', user.claimIds);
+    console.log('PermissionsModal - Saving permissions for user:', user.id, 'with claimIds:', localClaimIds);
     try {
-      await dispatch(updateUserClaims({ id: user.id, claimIds: user.claimIds })).unwrap();
+      await dispatch(updateUserClaims({ id: user.id, claimIds: localClaimIds })).unwrap();
       console.log('PermissionsModal - Permissions saved successfully');
       dispatch(
         setSnackbar({
@@ -54,7 +68,7 @@ const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) =
           <Box display="flex" alignItems="center" gap={1}>
             <SecurityIcon />
             <Typography variant="h6">
-              Gestion des autorisations pour {user.email}
+              Gestion des autorisations pour {user?.email || 'Utilisateur'}
             </Typography>
           </Box>
           <IconButton onClick={onClose} aria-label="close">
@@ -65,9 +79,9 @@ const PermissionsModal = ({ open, onClose, user, claims, onPermissionChange }) =
       <DialogContent>
         <PermissionForm
           claims={claims}
-          selectedPermissions={user.claimIds || []}
-          onPermissionChange={onPermissionChange}
-          userRoleId={user.roleId}
+          selectedPermissions={localClaimIds}
+          onPermissionChange={handlePermissionChange}
+          userRoleId={user?.roleId}
         />
       </DialogContent>
       <DialogActions>

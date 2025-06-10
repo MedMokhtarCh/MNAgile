@@ -30,7 +30,7 @@ const Sidebar = ({ collapsed }) => {
   const { status } = useSelector((state) => state.projects);
   const { getFilteredProjects } = useProject();
 
-  // Map backend roleId to frontend role string
+  // Map backend roleId to frontend role string for role-based routes
   const role = currentUser
     ? currentUser.roleId === 3
       ? 'chef_projet'
@@ -48,6 +48,17 @@ const Sidebar = ({ collapsed }) => {
   ];
   const hasUserManagementClaims = currentUser?.claims?.some((claim) =>
     userManagementClaims.includes(claim)
+  );
+
+  // Claims for project access
+  const projectClaims = [
+    'CanViewProjects',
+    'CanAddProjects',
+    'CanEditProjects',
+    'CanDeleteProjects',
+  ];
+  const hasProjectClaims = currentUser?.claims?.some((claim) =>
+    projectClaims.includes(claim)
   );
 
   // Claims for discussion access
@@ -93,8 +104,8 @@ const Sidebar = ({ collapsed }) => {
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 3);
 
-  // If not authenticated or no valid role, don't render the sidebar
-  if (!isAuthenticated || !role) {
+  // If not authenticated, don't render the sidebar
+  if (!isAuthenticated) {
     return null;
   }
 
@@ -122,6 +133,7 @@ const Sidebar = ({ collapsed }) => {
       </div>
 
       <List>
+        {/* Dashboard: Role-based (chef_projet only) */}
         {role === 'chef_projet' && (
           <ListItem
             button
@@ -143,7 +155,8 @@ const Sidebar = ({ collapsed }) => {
           </ListItem>
         )}
 
-        {(role === 'chef_projet' || role === 'user') && (
+        {/* Projects: Claims-based */}
+        {hasProjectClaims && (
           <ListItem
             button
             component={Link}
@@ -164,7 +177,8 @@ const Sidebar = ({ collapsed }) => {
           </ListItem>
         )}
 
-        {(role === 'chef_projet' || role === 'user') && (
+        {/* Meetings: Role-based (chef_projet only) */}
+        {role === 'chef_projet' && (
           <ListItem
             button
             component={Link}
@@ -185,7 +199,7 @@ const Sidebar = ({ collapsed }) => {
           </ListItem>
         )}
 
-        {/* Messages menu item for users with discussion claims */}
+        {/* Messages: Claims-based */}
         {hasDiscussionClaims && (
           <ListItem
             button
@@ -207,7 +221,7 @@ const Sidebar = ({ collapsed }) => {
           </ListItem>
         )}
 
-        {/* User Management menu item for users with required claims */}
+        {/* User Management: Claims-based */}
         {hasUserManagementClaims && (
           <ListItem
             button
@@ -230,8 +244,8 @@ const Sidebar = ({ collapsed }) => {
         )}
       </List>
 
-      {/* Recent Projects Section */}
-      {(role === 'chef_projet' || role === 'user') && (
+      {/* Recent Projects Section: Claims-based */}
+      {hasProjectClaims && (
         <>
           <Divider sx={{ my: 2 }} />
           <Box sx={{ px: 2, mb: 1 }}>

@@ -18,7 +18,9 @@
         public List<UserClaim> UserClaims { get; set; }
         public int? CreatedById { get; set; }
         public Subscription Subscription { get; set; }
-        public int? RootAdminId { get; set; } // New field to track the root admin
-        public User? RootAdmin { get; set; } // Navigation property
+        public int? RootAdminId { get; set; }
+        public User? RootAdmin { get; set; }
+        public decimal? CostPerHour { get; set; }
+        public decimal? CostPerDay { get; set; }
     }
 }

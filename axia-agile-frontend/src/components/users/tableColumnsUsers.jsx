@@ -163,8 +163,8 @@ export const adminColumns = [
   {
     id: 'permissions',
     label: 'Autorisations',
-    width: '15%',
-    minWidth: '100px',
+    width: '17%',
+    minWidth: '110px',
     render: (admin, { onManagePermissions = () => {} }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
@@ -173,7 +173,7 @@ export const adminColumns = [
           size="small"
           color="info"
           onClick={() => onManagePermissions(admin)}
-          sx={{ cursor: 'pointer', fontSize: '0.7rem', py: 0.4 }} // Reduced font size and padding
+          sx={{ cursor: 'pointer', fontSize: '0.7rem', py: 0.4 }}
           aria-label={`Gérer les autorisations pour ${admin.email || 'cet administrateur'}`}
         />
       </Box>
@@ -243,7 +243,7 @@ export const userColumns = [
   {
     id: 'user',
     label: 'Utilisateur',
-    width: '25%',
+    width: '20%',
     minWidth: '140px',
     render: (user, { getAvatarColor = () => 'grey.400' }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -275,16 +275,25 @@ export const userColumns = [
     label: 'Rôle',
     width: '15%',
     minWidth: '100px',
-    render: (user) => (
-      <Chip
-        icon={user.roleId === 3 ? <ChefProjetIcon fontSize="small" /> : <PersonIcon fontSize="small" />}
-        label={user.roleId === 3 ? 'Chef de Projet' : 'Utilisateur'}
-        size="small"
-        color={user.roleId === 3 ? 'secondary' : 'primary'}
-        sx={{ fontWeight: 'medium', fontSize: '0.75rem', py: 0.5 }}
-        aria-label={`Rôle: ${user.roleId === 3 ? 'Chef de Projet' : 'Utilisateur'}`}
-      />
-    ),
+    render: (user, { roles = [] }) => {
+      const role = roles.find((r) => r.id === user.roleId) || { label: 'Inconnu', iconName: 'Person' };
+      return (
+        <Chip
+          icon={
+            user.roleId === 3 ? (
+              <ChefProjetIcon fontSize="small" />
+            ) : (
+              <PersonIcon fontSize="small" />
+            )
+          }
+          label={user.roleId === 3 ? 'Chef de Projet' : user.roleId === 4 ? 'Utilisateur' : role.label}
+          size="small"
+          color={user.roleId === 3 ? 'secondary' : 'primary'}
+          sx={{ fontWeight: 'medium', fontSize: '0.75rem', py: 0.5 }}
+          aria-label={`Rôle: ${user.roleId === 3 ? 'Chef de Projet' : user.roleId === 4 ? 'Utilisateur' : role.label}`}
+        />
+      );
+    },
   },
   {
     id: 'jobTitle',
@@ -293,7 +302,7 @@ export const userColumns = [
     minWidth: '100px',
     render: (user) => (
       <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
-        {user.jobTitle || 'Non renseigné'}
+        {user.jobTitle && user.jobTitle.trim() !== '' ? user.jobTitle : 'Non défini'}
       </Typography>
     ),
   },
@@ -312,10 +321,32 @@ export const userColumns = [
     ),
   },
   {
+    id: 'costPerHour',
+    label: 'Coût/Heure (D)',
+    width: '10%',
+    minWidth: '80px',
+    render: (user) => (
+      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+        {user.costPerHour ? `${user.costPerHour.toFixed(2)} D` : 'Non défini'}
+      </Typography>
+    ),
+  },
+  {
+    id: 'costPerDay',
+    label: 'Coût/Jour (D)',
+    width: '10%',
+    minWidth: '80px',
+    render: (user) => (
+      <Typography variant="body2" sx={{ fontSize: '0.8rem' }}>
+        {user.costPerDay ? `${user.costPerDay.toFixed(2)} D` : 'Non défini'}
+      </Typography>
+    ),
+  },
+  {
     id: 'permissions',
     label: 'Autorisations',
-    width: '15%',
-    minWidth: '100px',
+    width: '17%',
+    minWidth: '110px',
     render: (user, { onManagePermissions = () => {} }) => (
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         <SecurityIcon fontSize="small" sx={{ mr: 0.5, color: 'text.secondary' }} />
@@ -324,7 +355,7 @@ export const userColumns = [
           size="small"
           color="info"
           onClick={() => onManagePermissions(user)}
-          sx={{ cursor: 'pointer', fontSize: '0.7rem', py: 0.4 }} // Reduced font size and padding
+          sx={{ cursor: 'pointer', fontSize: '0.7rem', py: 0.4 }}
           aria-label={`Gérer les autorisations pour ${user.email || 'cet utilisateur'}`}
         />
       </Box>

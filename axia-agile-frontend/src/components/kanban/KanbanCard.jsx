@@ -168,25 +168,27 @@ function KanbanCard({ task, users, isOverlay = false, getPriorityLabel, getAvata
     }
   };
 
-  const handleCardClick = (e) => {
-    e.stopPropagation();
-    if (isOverlay) return;
-    setIsEditing(false);
-    setDialogMode('view');
-    setEditingTask(task);
-    setCurrentColumn(task.status);
-    setFormValues({
-      title: task.title || '',
-      description: task.description || '',
-      assignedUsers: users.filter((u) => task.assignedUserEmails?.includes(u.email)) || [],
-      priority: task.priority?.toUpperCase() || 'MEDIUM',
-      startDate: task.startDate ? task.startDate.split('T')[0] : '',
-      endDate: task.endDate ? task.endDate.split('T')[0] : '',
-      attachments: task.attachments || [],
-      backlogIds: task.backlogIds || [],
-    });
-    setDialogOpen(true);
-  };
+const handleCardClick = (e) => {
+  e.stopPropagation();
+  if (isOverlay) return;
+  setIsEditing(false);
+  setDialogMode('view');
+  setEditingTask(task);
+  setCurrentColumn(task.status);
+
+  setFormValues({
+    title: task.title || '',
+    description: task.description || '',
+    assignedUsers: users.filter((u) => task.assignedUserEmails?.includes(u.email)) || [],
+    priority: task.priority?.toUpperCase() || 'MEDIUM',
+    startDate: task.startDate ? new Date(task.startDate).toISOString().slice(0, 16) : '',
+    endDate: task.endDate ? new Date(task.endDate).toISOString().slice(0, 16) : '',
+    attachments: task.attachments || [],
+    backlogIds: task.backlogIds || [],
+    totalCost: task.totalCost ?? 0,
+  });
+  setDialogOpen(true);
+};
 
   const avatarColorFn = typeof getAvatarColor === 'function' ? getAvatarColor : defaultGetAvatarColor;
   const initialsFn = typeof generateInitials === 'function' ? generateInitials : defaultGenerateInitials;
@@ -281,6 +283,7 @@ function KanbanCard({ task, users, isOverlay = false, getPriorityLabel, getAvata
               size="small"
             />
           </Box>
+          
         </CardContent>
       </TaskCard>
       

@@ -3,20 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingPage from '../pages/LoadingPage';
 
-export const mapRoleIdToRole = (roleId) => {
-  switch (roleId) {
-    case 1:
-      return 'superadmin';
-    case 2:
-      return 'admin';
-    case 3:
-      return 'chef_projet';
-    case 4:
-      return 'user';
-    default:
-      return null;
-  }
-};
+// Supprimez la fonction mapRoleIdToRole car nous allons utiliser directement le nom du rôle
+// depuis currentUser.roleName (ou un champ similaire dans votre modèle utilisateur)
 
 export const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isInitialized, loading } = useAuth();
@@ -35,7 +23,9 @@ export const ProtectedRoute = ({ children }) => {
 export const RoleProtectedRoute = ({ allowedRoles, children }) => {
   const { isAuthenticated, currentUser, isInitialized, loading } = useAuth();
   const location = useLocation();
-  const role = currentUser ? mapRoleIdToRole(currentUser.roleId) : null;
+  
+  // Utilisez directement le nom du rôle depuis currentUser
+  const role = currentUser?.roleName || null;
 
   if (!isInitialized || loading) {
     return <LoadingPage />;
@@ -80,7 +70,7 @@ export const ClaimProtectedRoute = ({ requiredClaims, children }) => {
 export const RoleOrClaimProtectedRoute = ({ allowedRoles, requiredClaims, children }) => {
   const { isAuthenticated, currentUser, isInitialized, loading } = useAuth();
   const location = useLocation();
-  const role = currentUser ? mapRoleIdToRole(currentUser.roleId) : null;
+  const role = currentUser?.roleName || null;
 
   if (!isInitialized || loading) {
     return <LoadingPage />;

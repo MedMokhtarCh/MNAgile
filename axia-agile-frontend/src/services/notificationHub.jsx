@@ -29,6 +29,7 @@ class NotificationHubService {
         metadata: {
           projectId: notification.relatedEntityType === 'Project' ? notification.relatedEntityId : null,
           taskId: notification.relatedEntityType === 'Task' ? notification.relatedEntityId : null,
+          channelId: notification.relatedEntityType === 'Channel' ? notification.relatedEntityId : null,
     
         },
       };

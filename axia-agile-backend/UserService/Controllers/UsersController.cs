@@ -82,6 +82,16 @@ namespace UserService.Controllers
                 _logger.LogWarning("Invalid RoleId for user: {Email}", request.Email);
                 return BadRequest("Un rôle valide est requis.");
             }
+            if (request.CostPerHour.HasValue && request.CostPerHour < 0)
+            {
+                _logger.LogWarning("Invalid CostPerHour for user: {Email}", request.Email);
+                return BadRequest("Le coût par heure ne peut pas être négatif.");
+            }
+            if (request.CostPerDay.HasValue && request.CostPerDay < 0)
+            {
+                _logger.LogWarning("Invalid CostPerDay for user: {Email}", request.Email);
+                return BadRequest("Le coût par jour ne peut pas être négatif.");
+            }
 
             if (request.RoleId == 1)
             {
@@ -111,11 +121,6 @@ namespace UserService.Controllers
                 return BadRequest("Le rôle spécifié n'existe pas.");
             }
 
-            if ((request.RoleId == 3 || request.RoleId == 4) && string.IsNullOrEmpty(request.JobTitle))
-            {
-                _logger.LogWarning("JobTitle is required for role: {RoleId}", request.RoleId);
-                return BadRequest("JobTitle est requis pour ce rôle.");
-            }
             if (request.RoleId == 2 && string.IsNullOrEmpty(request.Entreprise))
             {
                 _logger.LogWarning("Entreprise is required for role: {RoleId}", request.RoleId);
@@ -134,12 +139,14 @@ namespace UserService.Controllers
                     FirstName = request.FirstName,
                     LastName = request.LastName,
                     PhoneNumber = request.PhoneNumber,
-                    JobTitle = request.JobTitle ?? "Default Job Title",
+                    JobTitle = request.JobTitle ?? "", // Allow empty JobTitle, set default if null
                     Entreprise = request.RoleId == 2 ? request.Entreprise : null,
                     RoleId = request.RoleId,
                     IsActive = true,
                     DateCreated = DateTime.UtcNow,
-                    CreatedById = currentUserId
+                    CreatedById = currentUserId,
+                    CostPerHour = request.CostPerHour,
+                    CostPerDay = request.CostPerDay
                 };
 
                 var createdUser = await _userService.CreateUserAsync(user, request.ClaimIds ?? new List<int>());
@@ -205,7 +212,6 @@ namespace UserService.Controllers
         }
 
         [HttpGet]
-
         public async Task<ActionResult<List<UserDTO>>> GetAllUsers()
         {
             var users = await _userService.GetAllUsersAsync();
@@ -223,79 +229,16 @@ namespace UserService.Controllers
                 return NotFound("Utilisateur non trouvé.");
             }
 
-            if (!string.IsNullOrEmpty(request.Email) && !_authService.IsValidEmail(request.Email))
-            {
-                _logger.LogWarning("Invalid email: {Email}", request.Email);
-                return BadRequest("Un email valide est requis.");
-            }
-            if (!string.IsNullOrEmpty(request.Password) &&
-                (request.Password.Length < 12 ||
-                 !Regex.IsMatch(request.Password, @"[A-Z]") ||
-                 !Regex.IsMatch(request.Password, @"[a-z]") ||
-                 !Regex.IsMatch(request.Password, @"[0-9]") ||
-                 !Regex.IsMatch(request.Password, @"[!@#$%^&*]")))
-            {
-                _logger.LogWarning("Invalid password for user: {Email}", user.Email);
-                return BadRequest("Le mot de passe doit contenir au moins 12 caractères, incluant majuscule, minuscule, chiffre et caractère spécial.");
-            }
-            if (!string.IsNullOrEmpty(request.PhoneNumber) && !Regex.IsMatch(request.PhoneNumber, @"^\+?[1-9]\d{1,14}$"))
-            {
-                _logger.LogWarning("Invalid phone number for user: {Email}", user.Email);
-                return BadRequest("Un numéro de téléphone valide est requis.");
-            }
-
-            if (!string.IsNullOrEmpty(request.Email) && request.Email != user.Email)
-            {
-                if (await _userService.UserExistsAsync(request.Email))
-                {
-                    _logger.LogWarning($"Email {request.Email} already exists.");
-                    return BadRequest("Un compte avec cet email existe déjà.");
-                }
-                var emailSent = await _emailService.SendAccountCreationEmailAsync(
-                    request.Email,
-                    user.FirstName,
-                    user.LastName,
-                    request.Password
-                );
-
-                if (!emailSent)
-                {
-                    _logger.LogWarning($"Échec de l'envoi de l'email de changement de compte à {request.Email}.");
-                }
-                else
-                {
-                    _logger.LogInformation($"Email de changement de compte envoyé avec succès à {request.Email}.");
-                }
-            }
-
-            if (request.RoleId != 0 && !await _userService.RoleExistsAsync(request.RoleId))
-            {
-                _logger.LogWarning($"Invalid RoleId {request.RoleId} provided.");
-                return BadRequest("Le rôle spécifié n'existe pas.");
-            }
-
-            var targetRoleId = request.RoleId != 0 ? request.RoleId : user.RoleId;
-            if (new[] { 3, 4 }.Contains(targetRoleId) &&
-                request.RoleId != 0 &&
-                string.IsNullOrEmpty(request.JobTitle) &&
-                string.IsNullOrEmpty(user.JobTitle))
-            {
-                _logger.LogWarning($"JobTitle is required for RoleId {targetRoleId}.");
-                return BadRequest("JobTitle est requis pour ce rôle.");
-            }
-            if (targetRoleId == 2 && request.Entreprise == null && user.Entreprise == null)
-            {
-                _logger.LogWarning($"Entreprise is required for RoleId {targetRoleId}.");
-                return BadRequest("Entreprise est requise pour ce rôle.");
-            }
-
+            // Update user fields with provided values, or keep existing ones
             user.Email = request.Email ?? user.Email;
             user.FirstName = request.FirstName ?? user.FirstName;
             user.LastName = request.LastName ?? user.LastName;
             user.PhoneNumber = request.PhoneNumber ?? user.PhoneNumber;
-            user.JobTitle = request.JobTitle ?? user.JobTitle ?? "Non défini";
-            user.Entreprise = targetRoleId == 2 ? (request.Entreprise ?? user.Entreprise ?? "") : user.Entreprise;
+            user.JobTitle = request.JobTitle ?? user.JobTitle ?? "";
+            user.Entreprise = request.Entreprise ?? user.Entreprise;
             user.RoleId = request.RoleId != 0 ? request.RoleId : user.RoleId;
+            user.CostPerHour = request.CostPerHour ?? user.CostPerHour;
+            user.CostPerDay = request.CostPerDay ?? user.CostPerDay;
 
             if (!string.IsNullOrEmpty(request.Password))
             {
@@ -436,44 +379,14 @@ namespace UserService.Controllers
             }
         }
 
-        private UserDTO MapUserToDTO(User user)
-        {
-            return new UserDTO
-            {
-                Id = user.Id,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                PhoneNumber = user.PhoneNumber,
-                JobTitle = user.JobTitle,
-                Entreprise = user.Entreprise,
-                IsActive = user.IsActive,
-                DateCreated = user.DateCreated,
-                LastLogin = user.LastLogin,
-                RoleId = user.RoleId,
-                CreatedById = user.CreatedById,
-                RootAdminId = user.RootAdminId,
-                ClaimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>(),
-                 Subscription = user.Subscription != null ? new Subscription
-                 {
-                     Id = user.Subscription.Id,
-                     UserId = user.Subscription.UserId,
-                     Plan = user.Subscription.Plan,
-                     Status = user.Subscription.Status,
-                     StartDate = user.Subscription.StartDate,
-                     EndDate = user.Subscription.EndDate
-                 } : null
-            };
-        }
         [HttpPatch("{id}/password")]
-        [Authorize] // N'importe quel utilisateur authentifié peut modifier son propre mot de passe
+        [Authorize]
         public async Task<ActionResult> UpdateUserPassword(int id, [FromBody] UpdatePasswordRequest request)
         {
             try
             {
                 var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value);
 
-                // Vérifier que l'utilisateur modifie son propre mot de passe
                 if (id != currentUserId)
                 {
                     return Forbid("Vous ne pouvez modifier que votre propre mot de passe.");
@@ -501,8 +414,9 @@ namespace UserService.Controllers
                 return StatusCode(500, $"Une erreur interne est survenue : {ex.Message}");
             }
         }
+
         [HttpPatch("{id}/profile")]
-        [Authorize] // Only requires authentication
+        [Authorize]
         public async Task<ActionResult<UserDTO>> UpdateOwnProfile(int id, [FromBody] UpdateOwnProfileRequest request)
         {
             try
@@ -510,7 +424,6 @@ namespace UserService.Controllers
                 var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value
                     ?? throw new InvalidOperationException("User ID not found in JWT token"));
 
-                // Ensure the user is updating their own profile
                 if (id != currentUserId)
                 {
                     _logger.LogWarning($"User {currentUserId} attempted to update profile of user {id}.");
@@ -524,7 +437,6 @@ namespace UserService.Controllers
                     return NotFound("Utilisateur non trouvé.");
                 }
 
-                // Update only provided fields
                 if (!string.IsNullOrEmpty(request.FirstName))
                     user.FirstName = request.FirstName;
                 if (!string.IsNullOrEmpty(request.LastName))
@@ -541,7 +453,6 @@ namespace UserService.Controllers
                 if (!string.IsNullOrEmpty(request.JobTitle))
                     user.JobTitle = request.JobTitle;
 
-                // Validate role-specific requirements
                 if (new[] { 3, 4 }.Contains(user.RoleId) && string.IsNullOrEmpty(user.JobTitle))
                 {
                     _logger.LogWarning($"JobTitle is required for RoleId {user.RoleId}.");
@@ -560,7 +471,38 @@ namespace UserService.Controllers
             }
         }
 
-       
+        private UserDTO MapUserToDTO(User user)
+        {
+            return new UserDTO
+            {
+                Id = user.Id,
+                Email = user.Email,
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                PhoneNumber = user.PhoneNumber,
+                JobTitle = user.JobTitle,
+                Entreprise = user.Entreprise,
+                IsActive = user.IsActive,
+                DateCreated = user.DateCreated,
+                LastLogin = user.LastLogin,
+                RoleId = user.RoleId,
+                CreatedById = user.CreatedById,
+                RootAdminId = user.RootAdminId,
+                ClaimIds = user.UserClaims?.Select(uc => uc.ClaimId).ToList() ?? new List<int>(),
+                Subscription = user.Subscription != null ? new Subscription
+                {
+                    Id = user.Subscription.Id,
+                    UserId = user.Subscription.UserId,
+                    Plan = user.Subscription.Plan,
+                    Status = user.Subscription.Status,
+                    StartDate = user.Subscription.StartDate,
+                    EndDate = user.Subscription.EndDate
+                } : null,
+                CostPerHour = user.CostPerHour, 
+                CostPerDay = user.CostPerDay 
+            };
+        }
+
         public class UpdateOwnProfileRequest
         {
             public string FirstName { get; set; }
@@ -573,7 +515,6 @@ namespace UserService.Controllers
         {
             public string NewPassword { get; set; }
         }
-
 
         public class UpdateUserStatusRequest
         {

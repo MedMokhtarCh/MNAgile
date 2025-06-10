@@ -9,21 +9,22 @@ namespace UserService.DTOs
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string PhoneNumber { get; set; }
-        public string JobTitle { get; set; }
-        public string Entreprise { get; set; }
+        public string? JobTitle { get; set; }
+        public string? Entreprise { get; set; }
         public bool IsActive { get; set; }
         public DateTime DateCreated { get; set; }
         public DateTime? LastLogin { get; set; }
         public int RoleId { get; set; }
         public int? CreatedById { get; set; }
-        public int? RootAdminId { get; set; } 
+        public int? RootAdminId { get; set; }
         public List<int> ClaimIds { get; set; } = new List<int>();
         public List<ClaimDTO> Claims { get; set; } = new List<ClaimDTO>();
         public Subscription Subscription { get; set; }
+        public decimal? CostPerHour { get; set; } 
+        public decimal? CostPerDay { get; set; } 
     }
     public class RenewSubscriptionRequest
     {
         public string Plan { get; set; }
     }
-
 }

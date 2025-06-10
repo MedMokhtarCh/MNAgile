@@ -31,35 +31,8 @@ import ProjectFormStepper from '../components/project/ProjectFormStepper';
 import PageTitle from '../components/common/PageTitle';
 import Pagination from '../components/common/Pagination';
 import { useNavigate } from 'react-router-dom';
+import { CreateButton, FilterContainer } from '../components/project/theme';
 
-// Styled Components
-const CreateButton = styled(Button)(({ theme }) => ({
-  textTransform: 'none',
-  background: `linear-gradient(45deg, ${theme.palette.primary.main} 30%, ${theme.palette.primary.dark} 90%)`,
-  color: theme.palette.primary.contrastText,
-  padding: '12px 28px',
-  borderRadius: 12,
-  boxShadow: theme.shadows[4],
-  fontSize: 16,
-  fontWeight: 600,
-  transition: 'all 0.3s ease',
-  '&:hover': {
-    background: `linear-gradient(45deg, ${theme.palette.primary.dark} 30%, ${theme.palette.primary.main} 90%)`,
-    boxShadow: theme.shadows[8],
-    transform: 'scale(1.05)',
-  },
-  '& .MuiButton-startIcon': {
-    marginRight: 10,
-  },
-}));
-
-const FilterContainer = styled(Box)(({ theme }) => ({
-  backgroundColor: theme.palette.background.paper,
-  padding: '16px 24px',
-  borderRadius: 12,
-  boxShadow: theme.shadows[3],
-  marginBottom: 32,
-}));
 
 function Projects() {
   const theme = useTheme();

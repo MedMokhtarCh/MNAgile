@@ -86,9 +86,7 @@ const AdminDistributionChart = ({ stats }) => {
                       `Attention: ${((stats.inactiveAdmins / stats.totalAdmins) * 100).toFixed(0)}% des comptes admin sont inactifs.`
                     )}
                   </Typography>
-                  <Typography variant="body1">
-                    En moyenne, il y a {stats.totalEntreprises > 0 ? (stats.totalAdmins / stats.totalEntreprises).toFixed(1) : 0} comptes admin par entreprise.
-                  </Typography>
+                
                 </>
               ) : (
                 <Typography variant="body1">

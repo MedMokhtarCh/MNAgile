@@ -5,17 +5,18 @@ namespace TaskService.DTOs
     public class CreateTaskRequest
     {
         public string Title { get; set; }
-        public string Description { get; set; }
+        public string? Description { get; set; } // Nullable
         public string Priority { get; set; }
         public string Status { get; set; }
         public DateTime? StartDate { get; set; }
         public DateTime? EndDate { get; set; }
-        public List<string> AssignedUserEmails { get; set; } = new List<string>(); // Nullable et vide par défaut
+        public List<string> AssignedUserEmails { get; set; } = new List<string>();
         public int ProjectId { get; set; }
         public List<int>? BacklogIds { get; set; } = new List<int>();
-        public List<string>? Subtasks { get; set; } = new List<string>();
+        public List<string>? Subtasks { get; set; } = new List<string>(); // Already nullable
         public int? SprintId { get; set; }
         public int? DisplayOrder { get; set; } = 0;
+        public double? EstimatedHours { get; set; } // New field for estimated hours
 
         public void Validate()
         {
@@ -23,19 +24,17 @@ namespace TaskService.DTOs
                 throw new ArgumentException("Le titre est requis.");
             if (ProjectId <= 0)
                 throw new ArgumentException("Un ID de projet valide est requis.");
-
-            // Validation optionnelle des emails seulement si fournis
             if (AssignedUserEmails != null && AssignedUserEmails.Any(email => !string.IsNullOrEmpty(email)))
             {
                 var validEmails = AssignedUserEmails.Where(email => !string.IsNullOrEmpty(email)).ToList();
                 if (validEmails.Any(email => !IsValidEmail(email)))
                     throw new ArgumentException("Tous les emails fournis doivent être valides.");
             }
-
-            if (Subtasks != null && Subtasks.Any(s => string.IsNullOrWhiteSpace(s)))
-                throw new ArgumentException("Les sous-tâches ne peuvent pas être vides.");
+            // Removed subtasks validation to allow empty/null subtasks
             if (DisplayOrder < 0)
                 throw new ArgumentException("L'ordre d'affichage ne peut pas être négatif.");
+            if (EstimatedHours.HasValue && EstimatedHours <= 0)
+                throw new ArgumentException("Le nombre d'heures estimé doit être positif.");
         }
 
         private bool IsValidEmail(string email)

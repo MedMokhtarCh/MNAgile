@@ -8,28 +8,27 @@ import {
   Button,
   Grid,
   InputAdornment,
-  FormHelperText,
   IconButton,
   Typography,
   Box,
   Tooltip,
 } from '@mui/material';
-import { 
+import {
   Assignment as AssignmentIcon,
   Info as InfoIcon,
   Security as SecurityIcon,
   SupervisorAccount as SupervisorAccountIcon,
-  Person as PersonIcon
+  Person as PersonIcon,
 } from '@mui/icons-material';
 
-const DEFAULT_ROLE_IDS = [1, 2, 3, 4]; // Default roles that cannot be modified
+const DEFAULT_ROLE_IDS = [1, 2, 3, 4];
 
-const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
+const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode, existingRoles, currentUserId }) => {
   const [errors, setErrors] = useState({});
   const [isDefaultRole, setIsDefaultRole] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    // Check if current role is a default role
     if (isEditMode && role.id && DEFAULT_ROLE_IDS.includes(role.id)) {
       setIsDefaultRole(true);
     } else {
@@ -44,11 +43,20 @@ const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const newErrors = {};
 
     if (!role.name || !role.name.trim()) {
       newErrors.name = 'Le nom du rôle est requis';
+    } else if (
+      existingRoles.some(
+        (r) =>
+          r.label.toLowerCase() === role.name.trim().toLowerCase() &&
+          (!isEditMode || r.id !== role.id) &&
+          (DEFAULT_ROLE_IDS.includes(r.id) || r.createdByUserId === currentUserId)
+      )
+    ) {
+      newErrors.name = 'Un rôle avec ce nom existe déjà';
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -56,18 +64,20 @@ const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
       return;
     }
 
-    onSave();
+    setSubmitting(true);
+    try {
+      await onSave();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  // Get icon for role preview
   const getRoleIcon = () => {
-    // If editing existing role, use its icon
     if (isEditMode && role.id) {
-      if (role.id === 1 || role.id === 2) return <SecurityIcon fontSize="large" />;
+      if (role.id === 1 || role.id === 2) return <SecurityIcon StuIcon fontSize="large" />;
       if (role.id === 3) return <SupervisorAccountIcon fontSize="large" />;
       return <PersonIcon fontSize="large" />;
     }
-    // Default icon for new roles
     return <PersonIcon fontSize="large" />;
   };
 
@@ -108,7 +118,7 @@ const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
                 value={role.name || ''}
                 onChange={(e) => handleChange('name', e.target.value)}
                 required
-                disabled={isDefaultRole}
+                disabled={isDefaultRole || submitting}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -119,22 +129,25 @@ const RoleForm = ({ open, onClose, role, setRole, onSave, isEditMode }) => {
                 error={!!errors.name}
                 helperText={errors.name}
               />
-           
             </Grid>
           </Grid>
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} variant="outlined">
+        <Button onClick={onClose} variant="outlined" disabled={submitting}>
           Annuler
         </Button>
-        {!isDefaultRole && (
-          <Button variant="contained" onClick={handleSubmit} color="primary">
+        {!isDefaultRole ? (
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            color="primary"
+            disabled={submitting}
+          >
             {isEditMode ? 'Enregistrer' : 'Créer'}
           </Button>
-        )}
-        {isDefaultRole && (
-          <Button variant="contained" onClick={onClose} color="primary">
+        ) : (
+          <Button variant="contained" onClick={onClose} color="primary" disabled={submitting}>
             Fermer
           </Button>
         )}

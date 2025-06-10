@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -15,7 +14,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { logout } from '../../store/slices/authSlice';
 import logo from '../../assets/logo.png';
 import './Sidebar.css';
-import { mapRoleIdToRole } from '../../routes/ProtectedRoute';
+import { mapRoleIdToRole } from '../../utils/roles';
 
 const AdminSidebar = ({ collapsed }) => {
   const location = useLocation();
@@ -23,10 +22,8 @@ const AdminSidebar = ({ collapsed }) => {
   const dispatch = useDispatch();
   const { currentUser, isAuthenticated } = useSelector((state) => state.auth);
 
-  // Map backend roleId to frontend role string
   const role = currentUser ? mapRoleIdToRole(currentUser.roleId) : null;
 
-  // Claims for project access
   const projectClaims = [
     'CanViewProjects',
     'CanAddProjects',
@@ -37,7 +34,16 @@ const AdminSidebar = ({ collapsed }) => {
     projectClaims.includes(claim)
   );
 
-  // Claims for discussion access
+  const userManagementClaims = [
+    'CanViewUsers',
+    'CanCreateUsers',
+    'CanUpdateUsers',
+    'CanDeleteUsers',
+  ];
+  const hasUserManagementClaims = currentUser?.claims?.some((claim) =>
+    userManagementClaims.includes(claim)
+  );
+
   const discussionClaims = ['CanCommunicate', 'CanCreateChannel'];
   const hasDiscussionClaims = currentUser?.claims?.some((claim) =>
     discussionClaims.includes(claim)
@@ -50,7 +56,6 @@ const AdminSidebar = ({ collapsed }) => {
     navigate('/login', { replace: true });
   };
 
-  // Only render sidebar for authenticated users
   if (!isAuthenticated || !currentUser) {
     return null;
   }
@@ -79,6 +84,7 @@ const AdminSidebar = ({ collapsed }) => {
       </div>
 
       <List>
+        {/* Role-based routes for superadmin */}
         {role === 'superadmin' && (
           <>
             <ListItem
@@ -97,19 +103,6 @@ const AdminSidebar = ({ collapsed }) => {
             <ListItem
               button
               component={Link}
-              to="/AdminManagement"
-              className={`menu-item ${isActive('/AdminManagement')}`}
-            >
-              <ListItemIcon className="menu-icon">
-                <Tooltip title="Utilisateurs" placement="right">
-                  <FaUsers />
-                </Tooltip>
-              </ListItemIcon>
-              {!collapsed && <ListItemText primary="Utilisateurs" />}
-            </ListItem>
-            <ListItem
-              button
-              component={Link}
               to="/SuperAdminSubscriptionManagement"
               className={`menu-item ${isActive('/SuperAdminSubscriptionManagement')}`}
             >
@@ -119,6 +112,19 @@ const AdminSidebar = ({ collapsed }) => {
                 </Tooltip>
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Abonnements" />}
+            </ListItem>
+                       <ListItem
+              button
+              component={Link}
+              to="/AdminManagement"
+              className={`menu-item ${isActive('/AdminManagement')}`}
+            >
+              <ListItemIcon className="menu-icon">
+                <Tooltip title="Admins" placement="right">
+               <FaUsers />
+                </Tooltip>
+              </ListItemIcon>
+              {!collapsed && <ListItemText primary="Admins" />}
             </ListItem>
             <ListItem
               button
@@ -146,25 +152,10 @@ const AdminSidebar = ({ collapsed }) => {
               </ListItemIcon>
               {!collapsed && <ListItemText primary="Droits d'accès" />}
             </ListItem>
-            {/* Messages menu item for superadmin with discussion claims */}
-            {hasDiscussionClaims && (
-              <ListItem
-                button
-                component={Link}
-                to="/messages"
-                className={`menu-item ${isActive('/messages')}`}
-              >
-                <ListItemIcon className="menu-icon">
-                  <Tooltip title="Messages" placement="right">
-                    <FaRegCommentDots />
-                  </Tooltip>
-                </ListItemIcon>
-                {!collapsed && <ListItemText primary="Messages" />}
-              </ListItem>
-            )}
           </>
         )}
 
+        {/* Role-based routes for admin */}
         {role === 'admin' && (
           <>
             <ListItem
@@ -183,37 +174,39 @@ const AdminSidebar = ({ collapsed }) => {
             <ListItem
               button
               component={Link}
-              to="/UserManagement"
-              className={`menu-item ${isActive('/UserManagement')}`}
+              to="/RoleManagement"
+              className={`menu-item ${isActive('/RoleManagement')}`}
             >
               <ListItemIcon className="menu-icon">
-                <Tooltip title="Utilisateurs" placement="right">
-                  <FaUsers />
+                <Tooltip title="Rôles" placement="right">
+                  <FaShieldAlt />
                 </Tooltip>
               </ListItemIcon>
-              {!collapsed && <ListItemText primary="Utilisateurs" />}
+              {!collapsed && <ListItemText primary="Rôles" />}
             </ListItem>
-            {/* Messages menu item for admin with discussion claims */}
-            {hasDiscussionClaims && (
-              <ListItem
-                button
-                component={Link}
-                to="/messages"
-                className={`menu-item ${isActive('/messages')}`}
-              >
-                <ListItemIcon className="menu-icon">
-                  <Tooltip title="Messages" placement="right">
-                    <FaRegCommentDots />
-                  </Tooltip>
-                </ListItemIcon>
-                {!collapsed && <ListItemText primary="Messages" />}
-              </ListItem>
-            )}
+        
+            
           </>
         )}
 
-        {/* Projects menu item for users with project claims */}
-        {(role === 'chef_projet' || role === 'user' || hasProjectClaims) && (
+        {/* Claims-based routes */}
+        {hasUserManagementClaims && (
+          <ListItem
+            button
+            component={Link}
+            to="/UserManagement"
+            className={`menu-item ${isActive('/UserManagement')}`}
+          >
+            <ListItemIcon className="menu-icon">
+              <Tooltip title="Utilisateurs" placement="right">
+                <FaUsers />
+              </Tooltip>
+            </ListItemIcon>
+            {!collapsed && <ListItemText primary="Utilisateurs" />}
+          </ListItem>
+        )}
+
+        {hasProjectClaims && (
           <ListItem
             button
             component={Link}
@@ -228,8 +221,8 @@ const AdminSidebar = ({ collapsed }) => {
             {!collapsed && <ListItemText primary="Projets" />}
           </ListItem>
         )}
-        {/* Messages menu item for chef_projet or user with discussion claims */}
-        {(role === 'chef_projet' || role === 'user') && hasDiscussionClaims && (
+
+        {hasDiscussionClaims && (
           <ListItem
             button
             component={Link}

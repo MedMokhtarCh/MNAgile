@@ -57,6 +57,7 @@ function KanbanFilters({
         Filtres
       </Typography>
       <Grid container spacing={2}>
+        {/* Backlog Filter */}
         <Grid item xs={12} sm={3}>
           <Autocomplete
             options={backlogOptions}
@@ -98,6 +99,8 @@ function KanbanFilters({
             disabled={!hasBacklogViewPermission && backlogFilter === 'none'}
           />
         </Grid>
+
+        {/* Sprint Filter */}
         <Grid item xs={12} sm={3}>
           <Autocomplete
             options={sprintOptions}
@@ -123,7 +126,7 @@ function KanbanFilters({
                 ? { id: 'all', name: 'Tous les sprints' }
                 : sprintFilter === 'none'
                 ? { id: 'none', name: 'Aucun sprint' }
-                : (sprints || []).find((s) => s.id === sprintFilter) || { id: 'none', name: 'Aucun sprint' }
+                : sprints.find((s) => s.id === sprintFilter) || { id: 'none', name: 'Aucun sprint' }
             }
             onChange={(event, value) => {
               if (value) {
@@ -139,6 +142,8 @@ function KanbanFilters({
             disabled={!hasSprintViewPermission && sprintFilter === 'none'}
           />
         </Grid>
+
+        {/* User Filter */}
         <Grid item xs={12} sm={3}>
           <Autocomplete
             options={[{ email: '', name: 'Tous les utilisateurs' }, ...projectUsers]}
@@ -176,6 +181,8 @@ function KanbanFilters({
             sx={{ width: '100%' }}
           />
         </Grid>
+
+        {/* Priority Filter */}
         <Grid item xs={12} sm={3}>
           <FormControl fullWidth>
             <InputLabel id="filter-priority-label">Filtrer par priorité</InputLabel>
